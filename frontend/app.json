@@ -15,7 +15,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#10B981"
+        "backgroundColor": "#2D8B47"
       },
       "package": "com.grocereasetv.app",
       "edgeToEdgeEnabled": true
