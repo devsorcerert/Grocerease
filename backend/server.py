@@ -25,6 +25,17 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+
+def clean_mongo_doc(doc):
+    """Remove MongoDB _id field from document"""
+    if isinstance(doc, dict) and "_id" in doc:
+        del doc["_id"]
+    return doc
+
+def clean_mongo_docs(docs):
+    """Remove MongoDB _id field from list of documents"""
+    return [clean_mongo_doc(doc) for doc in docs]
+
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
@@ -215,7 +226,7 @@ async def get_product(product_id: str):
     product = await db.products.find_one({"id": product_id})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    return clean_mongo_doc(product)
 
 @api_router.post("/products")
 async def create_product(product: ProductCreate, user_id: str = Depends(get_current_user)):
@@ -321,20 +332,20 @@ async def create_order(order_data: OrderCreate, user_id: str = Depends(get_curre
 @api_router.get("/orders")
 async def get_orders(user_id: str = Depends(get_current_user)):
     orders = await db.orders.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
-    return orders
+    return clean_mongo_docs(orders)
 
 # Video Routes
 @api_router.get("/videos")
 async def get_videos():
     videos = await db.videos.find().sort("created_at", -1).to_list(100)
-    return videos
+    return clean_mongo_docs(videos)
 
 @api_router.get("/videos/{video_id}")
 async def get_video(video_id: str):
     video = await db.videos.find_one({"id": video_id})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    return video
+    return clean_mongo_doc(video)
 
 @api_router.post("/videos")
 async def create_video(video: VideoCreate, user_id: str = Depends(get_current_user)):
