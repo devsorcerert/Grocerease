@@ -133,6 +133,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#2D8B47',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButtonText: {
     color: '#fff',
@@ -142,10 +147,14 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#FF8C42',
+    borderRadius: 12,
   },
   secondaryButtonText: {
-    color: '#2D8B47',
+    color: '#FF8C42',
     fontSize: 14,
     textAlign: 'center',
+    fontWeight: '600',
   },
 });
