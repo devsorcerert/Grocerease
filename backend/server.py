@@ -70,6 +70,14 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+
+class ProfileUpdate(BaseModel):
+    address: str
+    city: str
+    pincode: str
 
 class UserLogin(BaseModel):
     email: EmailStr
