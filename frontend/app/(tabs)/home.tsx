@@ -138,8 +138,11 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View>
+          <View style={{flex: 1}}>
             <Text style={styles.greeting}>Hello, {user?.name}!</Text>
+            {user?.address && (
+              <Text style={styles.addressText}>📍 {user.address}, {user.city} - {user.pincode}</Text>
+            )}
             <Text style={styles.subgreeting}>Get fresh groceries delivered</Text>
           </View>
           <TouchableOpacity style={styles.notificationButton}>
@@ -154,10 +157,27 @@ export default function HomeScreen() {
             </View>
             <View style={styles.cableTVContent}>
               <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
-              <Text style={styles.cableTVSubtitle}>Unlock exclusive rewards up to ₹1000</Text>
-              <View style={styles.offerPreview}>
-                <Text style={styles.offerPreviewText}>📊 Track monthly & yearly usage</Text>
+              <Text style={styles.cableTVSubtitle}>Track spending & unlock rewards</Text>
+              
+              <View style={styles.offerPreviewCard}>
+                <View style={styles.offerPreviewItem}>
+                  <Ionicons name="calendar-outline" size={16} color="#2D8B47" />
+                  <View style={{marginLeft: 8}}>
+                    <Text style={styles.offerPreviewLabel}>Monthly</Text>
+                    <Text style={styles.offerPreviewValue}>₹0 → ₹1000</Text>
+                  </View>
+                </View>
+                <View style={styles.offerPreviewDivider} />
+                <View style={styles.offerPreviewItem}>
+                  <Ionicons name="calendar" size={16} color="#FF8C42" />
+                  <View style={{marginLeft: 8}}>
+                    <Text style={styles.offerPreviewLabel}>Yearly</Text>
+                    <Text style={styles.offerPreviewValue}>₹12k+ savings</Text>
+                  </View>
+                </View>
               </View>
+              
+              <Text style={styles.linkCTA}>👉 Link now to start tracking</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#2D8B47" />
           </TouchableOpacity>
