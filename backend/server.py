@@ -248,7 +248,7 @@ async def get_cart(user_id: str = Depends(get_current_user)):
     cart = await db.carts.find_one({"user_id": user_id})
     if not cart:
         return {"user_id": user_id, "items": []}
-    return cart
+    return clean_mongo_doc(cart)
 
 @api_router.post("/cart/add")
 async def add_to_cart(item: CartItem, user_id: str = Depends(get_current_user)):
