@@ -83,9 +83,23 @@ export default function HomeScreen() {
     }
   };
 
+  const getMonthlyOfferUsage = () => {
+    const spend = user?.monthly_spend || 0;
+    if (spend >= 25000) return { used: 3, total: 3, maxReward: 1000 };
+    if (spend >= 13000) return { used: 2, total: 3, maxReward: 500 };
+    if (spend >= 7000) return { used: 1, total: 3, maxReward: 250 };
+    return { used: 0, total: 3, maxReward: 0 };
+  };
+
+  const getYearlyStats = () => {
+    const totalSpend = user?.total_spend || 0;
+    const yearlyOffers = Math.floor(totalSpend / 25000);
+    return { offers: yearlyOffers, savings: yearlyOffers * 1000 };
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Hello, {user?.name}!</Text>
@@ -110,19 +124,150 @@ export default function HomeScreen() {
         )}
 
         {user?.cable_tv_linked && (
-          <View style={styles.rewardsCard}>
-            <Text style={styles.rewardsTitle}>Your Rewards</Text>
-            <Text style={styles.rewardsAmount}>₹{user?.current_reward || 0}</Text>
-            <Text style={styles.rewardsSubtitle}>Monthly Spend: ₹{user?.monthly_spend || 0}</Text>
-            <View style={styles.rewardsProgress}>
-              <View style={[styles.progressBar, { width: `${Math.min((user?.monthly_spend || 0) / 250, 100)}%` }]} />
+          <View style={styles.cableTVLinkedCard}>
+            <View style={styles.tvLinkedHeader}>
+              <View style={styles.tvLinkedLeft}>
+                <View style={styles.tvIconSmall}>
+                  <Ionicons name="tv" size={20} color="#10B981" />
+                </View>
+                <View>
+                  <Text style={styles.tvLinkedTitle}>Cable TV Linked</Text>
+                  <Text style={styles.tvProvider}>{user?.cable_tv_details?.service_provider}</Text>
+                </View>
+              </View>
+              <Ionicons name="checkmark-circle" size={24} color="#10B981" />
             </View>
-            <Text style={styles.rewardsHint}>Spend ₹{Math.max(7000 - (user?.monthly_spend || 0), 0)} more to unlock ₹250</Text>
+
+            <View style={styles.offerUsageSection}>
+              <Text style={styles.usageTitle}>Offer Usage Tracking</Text>
+              
+              <View style={styles.usageCard}>
+                <View style={styles.usageHeader}>
+                  <Ionicons name="calendar-outline" size={20} color="#10B981" />
+                  <Text style={styles.usageCardTitle}>This Month</Text>
+                </View>
+                <View style={styles.usageStats}>
+                  <View style={styles.usageStatItem}>
+                    <Text style={styles.usageStatValue}>₹{user?.monthly_spend || 0}</Text>
+                    <Text style={styles.usageStatLabel}>Spent</Text>
+                  </View>
+                  <View style={styles.usageStatDivider} />
+                  <View style={styles.usageStatItem}>
+                    <Text style={styles.usageStatValue}>₹{user?.current_reward || 0}</Text>
+                    <Text style={styles.usageStatLabel}>Reward</Text>
+                  </View>
+                  <View style={styles.usageStatDivider} />
+                  <View style={styles.usageStatItem}>
+                    <Text style={styles.usageStatValue}>{getMonthlyOfferUsage().used}/{getMonthlyOfferUsage().total}</Text>
+                    <Text style={styles.usageStatLabel}>Tiers</Text>
+                  </View>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${Math.min((user?.monthly_spend || 0) / 250, 100)}%` }]} />
+                </View>
+                <Text style={styles.nextTierText}>
+                  {getMonthlyOfferUsage().used === 3 
+                    ? '🎉 Maximum tier unlocked!' 
+                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0)} more for next tier`}
+                </Text>
+              </View>
+
+              <View style={styles.usageCard}>
+                <View style={styles.usageHeader}>
+                  <Ionicons name="calendar" size={20} color="#F59E0B" />
+                  <Text style={styles.usageCardTitle}>This Year</Text>
+                </View>
+                <View style={styles.usageStats}>
+                  <View style={styles.usageStatItem}>
+                    <Text style={styles.usageStatValue}>₹{user?.total_spend || 0}</Text>
+                    <Text style={styles.usageStatLabel}>Total Spent</Text>
+                  </View>
+                  <View style={styles.usageStatDivider} />
+                  <View style={styles.usageStatItem}>
+                    <Text style={styles.usageStatValue}>{getYearlyStats().offers}</Text>
+                    <Text style={styles.usageStatLabel}>Max Offers</Text>
+                  </View>
+                  <View style={styles.usageStatDivider} />
+                  <View style={styles.usageStatItem}>
+                    <Text style={styles.usageStatValue}>₹{getYearlyStats().savings}</Text>
+                    <Text style={styles.usageStatLabel}>Saved</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
           </View>
         )}
 
+        {/* FMCG Brand Banners */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Featured Products</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Brand Offers</Text>
+            <Text style={styles.sectionSubtitle}>Exclusive deals from top brands</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bannersScroll}>
+            <View style={[styles.brandBanner, { backgroundColor: '#FEE2E2' }]}>
+              <Text style={styles.bannerBrand}>Amul</Text>
+              <Text style={styles.bannerOffer}>20% OFF</Text>
+              <Text style={styles.bannerText}>On all dairy products</Text>
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>PROVISION</Text>
+              </View>
+            </View>
+            <View style={[styles.brandBanner, { backgroundColor: '#DBEAFE' }]}>
+              <Text style={styles.bannerBrand}>Britannia</Text>
+              <Text style={styles.bannerOffer}>Buy 2 Get 1</Text>
+              <Text style={styles.bannerText}>On biscuits & cookies</Text>
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>PROVISION</Text>
+              </View>
+            </View>
+            <View style={[styles.brandBanner, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={styles.bannerBrand}>Tata Tea</Text>
+              <Text style={styles.bannerOffer}>₹50 OFF</Text>
+              <Text style={styles.bannerText}>On 500g pack</Text>
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>PROVISION</Text>
+              </View>
+            </View>
+            <View style={[styles.brandBanner, { backgroundColor: '#E0E7FF' }]}>
+              <Text style={styles.bannerBrand}>Nestlé</Text>
+              <Text style={styles.bannerOffer}>15% OFF</Text>
+              <Text style={styles.bannerText}>On coffee range</Text>
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>PROVISION</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+
+        {/* Product Categories */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Shop by Category</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+            {categories.slice(0, 8).map((cat) => (
+              <TouchableOpacity key={cat.id} style={styles.categoryItem}>
+                <View style={styles.categoryIcon}>
+                  <Ionicons name={cat.icon} size={32} color="#10B981" />
+                </View>
+                <Text style={styles.categoryName} numberOfLines={2}>{cat.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Featured Products */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Featured Products</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.productGrid}>
             {products.map((product) => (
               <View key={product.id} style={styles.productCard}>
@@ -130,11 +275,55 @@ export default function HomeScreen() {
                   <Ionicons name="bag-outline" size={32} color="#10B981" />
                 </View>
                 <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
-                <Text style={styles.productPrice}>₹{product.price}</Text>
+                <Text style={styles.productUnit}>{product.unit}</Text>
+                <View style={styles.productFooter}>
+                  <Text style={styles.productPrice}>₹{product.price}</Text>
+                  <TouchableOpacity style={styles.addBtn}>
+                    <Ionicons name="add" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
         </View>
+
+        {/* GrocerEase TV Section */}
+        <View style={styles.section}>
+          <View style={styles.tvSectionHeader}>
+            <View style={styles.tvHeaderLeft}>
+              <Ionicons name="tv" size={28} color="#EF4444" />
+              <View style={styles.tvHeaderText}>
+                <Text style={styles.tvSectionTitle}>GrocerEase TV</Text>
+                <Text style={styles.tvSectionSubtitle}>Cooking shows & recipes</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/videos')}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.videosScroll}>
+            {videos.map((video) => (
+              <TouchableOpacity key={video.id} style={styles.videoCard} onPress={() => router.push('/(tabs)/videos')}>
+                <View style={styles.videoThumbnail}>
+                  <Ionicons name="play-circle" size={40} color="#fff" />
+                  {video.is_live && (
+                    <View style={styles.liveBadge}>
+                      <View style={styles.liveDot} />
+                      <Text style={styles.liveText}>LIVE</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.videoInfo}>
+                  <Text style={styles.videoTitle} numberOfLines={2}>{video.title}</Text>
+                  <Text style={styles.videoDuration}>{video.duration}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       <Modal visible={showCableTVModal} animationType="slide" transparent>
