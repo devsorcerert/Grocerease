@@ -113,13 +113,13 @@ export default function HomeScreen() {
         {!user?.cable_tv_linked && (
           <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
             <View style={styles.cableTVIcon}>
-              <Ionicons name="tv" size={32} color="#10B981" />
+              <Ionicons name="tv" size={32} color="#2D8B47" />
             </View>
             <View style={styles.cableTVContent}>
               <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
               <Text style={styles.cableTVSubtitle}>Unlock exclusive rewards up to ₹1000</Text>
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#10B981" />
+            <Ionicons name="chevron-forward" size={24} color="#2D8B47" />
           </TouchableOpacity>
         )}
 
@@ -128,14 +128,14 @@ export default function HomeScreen() {
             <View style={styles.tvLinkedHeader}>
               <View style={styles.tvLinkedLeft}>
                 <View style={styles.tvIconSmall}>
-                  <Ionicons name="tv" size={20} color="#10B981" />
+                  <Ionicons name="tv" size={20} color="#2D8B47" />
                 </View>
                 <View>
                   <Text style={styles.tvLinkedTitle}>Cable TV Linked</Text>
                   <Text style={styles.tvProvider}>{user?.cable_tv_details?.service_provider}</Text>
                 </View>
               </View>
-              <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+              <Ionicons name="checkmark-circle" size={24} color="#2D8B47" />
             </View>
 
             <View style={styles.offerUsageSection}>
@@ -143,7 +143,7 @@ export default function HomeScreen() {
               
               <View style={styles.usageCard}>
                 <View style={styles.usageHeader}>
-                  <Ionicons name="calendar-outline" size={20} color="#10B981" />
+                  <Ionicons name="calendar-outline" size={20} color="#2D8B47" />
                   <Text style={styles.usageCardTitle}>This Month</Text>
                 </View>
                 <View style={styles.usageStats}>
@@ -252,7 +252,7 @@ export default function HomeScreen() {
             {categories.slice(0, 8).map((cat) => (
               <TouchableOpacity key={cat.id} style={styles.categoryItem}>
                 <View style={styles.categoryIcon}>
-                  <Ionicons name={cat.icon} size={32} color="#10B981" />
+                  <Ionicons name={cat.icon} size={32} color="#2D8B47" />
                 </View>
                 <Text style={styles.categoryName} numberOfLines={2}>{cat.name}</Text>
               </TouchableOpacity>
@@ -272,7 +272,7 @@ export default function HomeScreen() {
             {products.map((product) => (
               <View key={product.id} style={styles.productCard}>
                 <View style={styles.productImagePlaceholder}>
-                  <Ionicons name="bag-outline" size={32} color="#10B981" />
+                  <Ionicons name="bag-outline" size={32} color="#2D8B47" />
                 </View>
                 <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
                 <Text style={styles.productUnit}>{product.unit}</Text>
@@ -363,7 +363,7 @@ export default function HomeScreen() {
                     {provider.name}
                   </Text>
                   {serviceProvider === provider.name && (
-                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                    <Ionicons name="checkmark-circle" size={20} color="#2D8B47" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   usageStatLabel: { fontSize: 11, color: '#6B7280', marginTop: 4 },
   usageStatDivider: { width: 1, backgroundColor: '#E5E7EB' },
   progressBarContainer: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginBottom: 8 },
-  progressBar: { height: '100%', backgroundColor: '#10B981', borderRadius: 3 },
+  progressBar: { height: '100%', backgroundColor: '#2D8B47', borderRadius: 3 },
   nextTierText: { fontSize: 11, color: '#6B7280', textAlign: 'center' },
 
   // Brand Banners
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   sectionSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  viewAllText: { fontSize: 14, color: '#10B981', fontWeight: '600' },
+  viewAllText: { fontSize: 14, color: '#2D8B47', fontWeight: '600' },
   bannersScroll: { marginTop: 8 },
   brandBanner: { width: width * 0.7, padding: 20, borderRadius: 16, marginRight: 12, position: 'relative' },
   bannerBrand: { fontSize: 22, fontWeight: 'bold', color: '#111', marginBottom: 4 },
@@ -440,8 +440,8 @@ const styles = StyleSheet.create({
   productName: { fontSize: 13, color: '#111', marginBottom: 2, fontWeight: '500' },
   productUnit: { fontSize: 11, color: '#9CA3AF', marginBottom: 8 },
   productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#10B981' },
-  addBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
+  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#2D8B47' },
+  addBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#2D8B47', alignItems: 'center', justifyContent: 'center' },
 
   // GrocerEase TV Section
   tvSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
@@ -466,9 +466,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 12 },
   providerList: { maxHeight: 200, marginBottom: 16 },
   providerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8 },
-  providerItemSelected: { borderColor: '#10B981', backgroundColor: '#ECFDF5' },
+  providerItemSelected: { borderColor: '#2D8B47', backgroundColor: '#ECFDF5' },
   providerText: { fontSize: 16, color: '#111' },
-  providerTextSelected: { color: '#10B981', fontWeight: '600' },
-  submitButton: { backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 12 },
+  providerTextSelected: { color: '#2D8B47', fontWeight: '600' },
+  submitButton: { backgroundColor: '#2D8B47', paddingVertical: 16, borderRadius: 12 },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });

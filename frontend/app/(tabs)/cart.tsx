@@ -121,7 +121,7 @@ export default function CartScreen() {
           return (
             <View key={item.product_id} style={styles.cartItem}>
               <View style={styles.productImage}>
-                <Ionicons name="bag-outline" size={32} color="#10B981" />
+                <Ionicons name="bag-outline" size={32} color="#2D8B47" />
               </View>
               <View style={styles.productDetails}>
                 <Text style={styles.productName}>{product.name}</Text>
@@ -132,14 +132,14 @@ export default function CartScreen() {
                   style={styles.quantityButton}
                   onPress={() => handleUpdateQuantity(item.product_id, item.quantity - 1)}
                 >
-                  <Ionicons name="remove" size={16} color="#10B981" />
+                  <Ionicons name="remove" size={16} color="#2D8B47" />
                 </TouchableOpacity>
                 <Text style={styles.quantityText}>{item.quantity}</Text>
                 <TouchableOpacity 
                   style={styles.quantityButton}
                   onPress={() => handleUpdateQuantity(item.product_id, item.quantity + 1)}
                 >
-                  <Ionicons name="add" size={16} color="#10B981" />
+                  <Ionicons name="add" size={16} color="#2D8B47" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -187,18 +187,18 @@ const styles = StyleSheet.create({
   productImage: { width: 60, height: 60, backgroundColor: '#E5E7EB', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   productDetails: { flex: 1, marginLeft: 12 },
   productName: { fontSize: 16, fontWeight: '600', color: '#111' },
-  productPrice: { fontSize: 14, color: '#10B981', marginTop: 4 },
+  productPrice: { fontSize: 14, color: '#2D8B47', marginTop: 4 },
   quantityControl: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  quantityButton: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
+  quantityButton: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#2D8B47', alignItems: 'center', justifyContent: 'center' },
   quantityText: { fontSize: 16, fontWeight: '600', color: '#111', minWidth: 24, textAlign: 'center' },
   summary: { padding: 16, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   summaryText: { fontSize: 16, color: '#6B7280' },
   summaryValue: { fontSize: 16, color: '#111' },
-  discountText: { color: '#10B981' },
+  discountText: { color: '#2D8B47' },
   totalText: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#111' },
-  checkoutButton: { backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 12, marginTop: 12 },
+  checkoutButton: { backgroundColor: '#2D8B47', paddingVertical: 16, borderRadius: 12, marginTop: 12 },
   checkoutButtonDisabled: { opacity: 0.5 },
   checkoutButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });

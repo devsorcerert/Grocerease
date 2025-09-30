@@ -69,7 +69,7 @@ export default function CategoriesScreen() {
         {products.map((product) => (
           <View key={product.id} style={styles.productItem}>
             <View style={styles.productImage}>
-              <Ionicons name="bag-outline" size={40} color="#10B981" />
+              <Ionicons name="bag-outline" size={40} color="#2D8B47" />
             </View>
             <View style={styles.productInfo}>
               <Text style={styles.productName}>{product.name}</Text>
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: 'bold', color: '#111' },
   categoryList: { padding: 16, maxHeight: 60 },
   categoryChip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: '#F3F4F6', marginRight: 8 },
-  categoryChipActive: { backgroundColor: '#10B981' },
+  categoryChipActive: { backgroundColor: '#2D8B47' },
   categoryChipText: { fontSize: 14, color: '#6B7280', fontWeight: '500' },
   categoryChipTextActive: { color: '#fff' },
   productList: { flex: 1, padding: 16 },
@@ -101,6 +101,6 @@ const styles = StyleSheet.create({
   productInfo: { flex: 1, marginLeft: 12 },
   productName: { fontSize: 16, fontWeight: '600', color: '#111' },
   productUnit: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#10B981', marginTop: 4 },
-  addButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
+  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#2D8B47', marginTop: 4 },
+  addButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#2D8B47', alignItems: 'center', justifyContent: 'center' },
 });

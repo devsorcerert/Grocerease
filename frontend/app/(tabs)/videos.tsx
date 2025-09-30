@@ -89,6 +89,6 @@ const styles = StyleSheet.create({
   videoTitle: { fontSize: 18, fontWeight: 'bold', color: '#111', marginBottom: 4 },
   videoDescription: { fontSize: 14, color: '#6B7280', marginBottom: 8 },
   videoDuration: { fontSize: 12, color: '#9CA3AF', marginBottom: 12 },
-  addIngredientsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10B981', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8 },
+  addIngredientsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2D8B47', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8 },
   addIngredientsText: { color: '#fff', fontSize: 14, fontWeight: '600', marginLeft: 8 },
 });

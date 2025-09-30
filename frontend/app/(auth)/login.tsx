@@ -91,8 +91,8 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, padding: 16, fontSize: 16 },
-  button: { backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 12, marginTop: 8 },
+  button: { backgroundColor: '#2D8B47', paddingVertical: 16, borderRadius: 12, marginTop: 8 },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  linkText: { color: '#10B981', fontSize: 14, textAlign: 'center', marginTop: 16 },
+  linkText: { color: '#2D8B47', fontSize: 14, textAlign: 'center', marginTop: 16 },
 });

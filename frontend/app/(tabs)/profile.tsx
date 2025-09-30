@@ -113,7 +113,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: { alignItems: 'center', padding: 32, backgroundColor: '#F9FAFB' },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#2D8B47', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   avatarText: { fontSize: 32, fontWeight: 'bold', color: '#fff' },
   name: { fontSize: 24, fontWeight: 'bold', color: '#111', marginBottom: 4 },
   email: { fontSize: 14, color: '#6B7280' },
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   orderCard: { backgroundColor: '#F9FAFB', padding: 16, borderRadius: 12, marginBottom: 12 },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   orderId: { fontSize: 14, fontWeight: '600', color: '#111' },
-  orderStatus: { fontSize: 12, color: '#10B981', textTransform: 'capitalize' },
+  orderStatus: { fontSize: 12, color: '#2D8B47', textTransform: 'capitalize' },
   orderTotal: { fontSize: 18, fontWeight: 'bold', color: '#111', marginBottom: 4 },
   orderDate: { fontSize: 12, color: '#6B7280' },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },

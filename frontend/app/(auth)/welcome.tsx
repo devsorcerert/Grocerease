@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 42,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: '#2D8B47',
     marginBottom: 8,
   },
   tagline: {
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   primaryButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#2D8B47',
     paddingVertical: 16,
     borderRadius: 12,
     marginBottom: 12,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   secondaryButtonText: {
-    color: '#10B981',
+    color: '#2D8B47',
     fontSize: 14,
     textAlign: 'center',
   },
