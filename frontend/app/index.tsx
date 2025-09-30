@@ -19,7 +19,11 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#2D8B47" />
+      <View style={styles.logoContainer}>
+        <Text style={styles.logoGreen}>Grocer</Text>
+        <Text style={styles.logoOrange}>ease</Text>
+      </View>
+      <ActivityIndicator size="large" color="#2D8B47" style={styles.loader} />
     </View>
   );
 }
@@ -30,5 +34,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  logoGreen: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#2D8B47',
+  },
+  logoOrange: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#FF8C42',
+  },
+  loader: {
+    marginTop: 16,
   },
 });
