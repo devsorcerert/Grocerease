@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   categoriesScroll: { marginTop: 8 },
   categoryItem: { alignItems: 'center', marginRight: 16, width: 80 },
   categoryIcon: { width: 70, height: 70, backgroundColor: '#ECFDF5', borderRadius: 35, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  categoryName: { fontSize: 11, color: '#111', textAlign: 'center', height: 32 },
+  categoryName: { fontSize: 11, color: '#111', textAlign: 'center', minHeight: 32, lineHeight: 14, flexWrap: 'wrap' },
 
   // Products
   productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
