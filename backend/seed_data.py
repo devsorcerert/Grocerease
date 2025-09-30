@@ -140,12 +140,12 @@ async def seed_admin():
     
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     
-    existing_admin = await db.users.find_one({"email": "admin@grocerease.com"})
+    existing_admin = await db.users.find_one({"email": "admin@grocereasetv.com"})
     if not existing_admin:
         admin_user = {
             "id": str(uuid.uuid4()),
             "name": "Admin",
-            "email": "admin@grocerease.com",
+            "email": "admin@grocereasetv.com",
             "password": pwd_context.hash("admin123"),
             "phone": "9999999999",
             "cable_tv_linked": False,
@@ -157,7 +157,7 @@ async def seed_admin():
             "created_at": datetime.utcnow()
         }
         await db.users.insert_one(admin_user)
-        print("Admin user created: admin@grocerease.com / admin123")
+        print("Admin user created: admin@grocereasetv.com / admin123")
 
 async def main():
     print("Seeding database...")
