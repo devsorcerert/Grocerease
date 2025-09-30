@@ -287,7 +287,7 @@ async def update_cart_item(item: CartItem, user_id: str = Depends(get_current_us
             break
     
     await db.carts.update_one({"user_id": user_id}, {"$set": {"items": cart["items"]}})
-    return cart
+    return clean_mongo_doc(cart)
 
 @api_router.delete("/cart/clear")
 async def clear_cart(user_id: str = Depends(get_current_user)):
