@@ -1,5 +1,7 @@
 import axios from 'axios';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Use environment variable or fallback to localhost
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -11,9 +13,23 @@ const api = axios.create({
   },
 });
 
+// Storage helper - uses SecureStore on native, AsyncStorage on web
+const getToken = async () => {
+  try {
+    if (Platform.OS === 'web') {
+      return await AsyncStorage.getItem('token');
+    } else {
+      return await SecureStore.getItemAsync('token');
+    }
+  } catch (error) {
+    console.error('Error getting token:', error);
+    return null;
+  }
+};
+
 // Add auth token to requests
 api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('token');
+  const token = await getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
