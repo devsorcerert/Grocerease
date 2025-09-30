@@ -3,25 +3,38 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBar } from 'expo-status-bar';
+import api from '../../utils/api';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const router = useRouter();
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
-      Alert.alert('Error', 'Please fill required fields');
+    if (!name || !email || !password || !phone || !address || !city || !pincode) {
+      Alert.alert('Error', 'Please fill all required fields');
       return;
     }
 
     setLoading(true);
     try {
+      // First register the user
       await register(name, email, password, phone);
+      
+      // Then update with additional details
+      await api.post('/auth/update-profile', {
+        address,
+        city,
+        pincode
+      });
+      
       router.replace('/(tabs)/home');
     } catch (error: any) {
       Alert.alert('Registration Failed', error.response?.data?.detail || 'Something went wrong');
