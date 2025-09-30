@@ -5,12 +5,33 @@ import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useCartStore } from '../../store/cartStore';
 
 const { width } = Dimensions.get('window');
+
+// Icon mapping for categories
+const categoryIconMap: { [key: string]: any } = {
+  'Fruits & Vegetables': 'leaf',
+  'Dairy & Breakfast': 'cafe',
+  'Munchies': 'fast-food',
+  'Cold Drinks & Juices': 'beer',
+  'Instant & Frozen': 'snow',
+  'Tea, Coffee & More': 'cafe-outline',
+  'Bakery & Biscuits': 'restaurant',
+  'Sweet Tooth': 'ice-cream',
+  'Atta, Rice & Dal': 'nutrition',
+  'Masala & Spices': 'flame',
+  'Sauces & Spreads': 'water',
+  'Chicken, Meat & Fish': 'fish',
+  'Cleaning Essentials': 'water-outline',
+  'Personal Care': 'body',
+  'Home & Kitchen': 'home',
+};
 
 export default function HomeScreen() {
   const { user, refreshUser } = useAuth();
   const router = useRouter();
+  const { addToCart } = useCartStore();
   const [showCableTVModal, setShowCableTVModal] = useState(false);
   const [userIdNuid, setUserIdNuid] = useState('');
   const [phone, setPhone] = useState('');
@@ -83,6 +104,22 @@ export default function HomeScreen() {
     }
   };
 
+  const handleAddToCart = async (productId: string) => {
+    try {
+      await addToCart(productId, 1);
+      Alert.alert('Success', 'Product added to cart!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add product to cart');
+    }
+  };
+
+  const handleCategoryClick = (categoryName: string) => {
+    router.push({
+      pathname: '/(tabs)/categories',
+      params: { selectedCategory: categoryName }
+    });
+  };
+
   const getMonthlyOfferUsage = () => {
     const spend = user?.monthly_spend || 0;
     if (spend >= 25000) return { used: 3, total: 3, maxReward: 1000 };
@@ -118,6 +155,9 @@ export default function HomeScreen() {
             <View style={styles.cableTVContent}>
               <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
               <Text style={styles.cableTVSubtitle}>Unlock exclusive rewards up to ₹1000</Text>
+              <View style={styles.offerPreview}>
+                <Text style={styles.offerPreviewText}>📊 Track monthly & yearly usage</Text>
+              </View>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#2D8B47" />
           </TouchableOpacity>
@@ -174,7 +214,7 @@ export default function HomeScreen() {
 
               <View style={styles.usageCard}>
                 <View style={styles.usageHeader}>
-                  <Ionicons name="calendar" size={20} color="#F59E0B" />
+                  <Ionicons name="calendar" size={20} color="#FF8C42" />
                   <Text style={styles.usageCardTitle}>This Year</Text>
                 </View>
                 <View style={styles.usageStats}>
@@ -250,9 +290,13 @@ export default function HomeScreen() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
             {categories.slice(0, 8).map((cat) => (
-              <TouchableOpacity key={cat.id} style={styles.categoryItem}>
+              <TouchableOpacity 
+                key={cat.id} 
+                style={styles.categoryItem}
+                onPress={() => handleCategoryClick(cat.name)}
+              >
                 <View style={styles.categoryIcon}>
-                  <Ionicons name={cat.icon} size={32} color="#2D8B47" />
+                  <Ionicons name={categoryIconMap[cat.name] || 'apps'} size={32} color="#2D8B47" />
                 </View>
                 <Text style={styles.categoryName} numberOfLines={2}>{cat.name}</Text>
               </TouchableOpacity>
@@ -278,7 +322,10 @@ export default function HomeScreen() {
                 <Text style={styles.productUnit}>{product.unit}</Text>
                 <View style={styles.productFooter}>
                   <Text style={styles.productPrice}>₹{product.price}</Text>
-                  <TouchableOpacity style={styles.addBtn}>
+                  <TouchableOpacity 
+                    style={styles.addBtn}
+                    onPress={() => handleAddToCart(product.id)}
+                  >
                     <Ionicons name="add" size={18} color="#fff" />
                   </TouchableOpacity>
                 </View>
@@ -336,6 +383,13 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
+            <View style={styles.benefitsBox}>
+              <Text style={styles.benefitsTitle}>📊 Benefits After Linking:</Text>
+              <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
+              <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
+              <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
+            </View>
+
             <TextInput
               style={styles.input}
               placeholder="User ID / NUID"
@@ -390,6 +444,8 @@ const styles = StyleSheet.create({
   cableTVContent: { flex: 1, marginLeft: 16 },
   cableTVTitle: { fontSize: 16, fontWeight: '600', color: '#111' },
   cableTVSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  offerPreview: { marginTop: 8, backgroundColor: '#fff', padding: 8, borderRadius: 8 },
+  offerPreviewText: { fontSize: 11, color: '#2D8B47', fontWeight: '600' },
   
   // Cable TV Linked Card with Usage Tracking
   cableTVLinkedCard: { backgroundColor: '#F9FAFB', padding: 16, margin: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
@@ -458,13 +514,18 @@ const styles = StyleSheet.create({
   videoInfo: { padding: 12 },
   videoTitle: { fontSize: 14, fontWeight: '600', color: '#111', marginBottom: 4 },
   videoDuration: { fontSize: 11, color: '#9CA3AF' },
+  
+  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '85%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111' },
+  benefitsBox: { backgroundColor: '#ECFDF5', padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#2D8B47' },
+  benefitsTitle: { fontSize: 14, fontWeight: 'bold', color: '#2D8B47', marginBottom: 8 },
+  benefitsText: { fontSize: 12, color: '#2D8B47', marginVertical: 2 },
   input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 16 },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 12 },
-  providerList: { maxHeight: 200, marginBottom: 16 },
+  providerList: { maxHeight: 180, marginBottom: 16 },
   providerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8 },
   providerItemSelected: { borderColor: '#2D8B47', backgroundColor: '#ECFDF5' },
   providerText: { fontSize: 16, color: '#111' },
