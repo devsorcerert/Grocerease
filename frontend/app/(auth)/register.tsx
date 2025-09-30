@@ -67,8 +67,32 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone (Optional)</Text>
-            <TextInput style={styles.input} placeholder="Enter your phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <Text style={styles.label}>Phone Number *</Text>
+            <TextInput style={styles.input} placeholder="Enter your phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Address *</Text>
+            <TextInput 
+              style={[styles.input, styles.multilineInput]} 
+              placeholder="Enter your delivery address" 
+              value={address} 
+              onChangeText={setAddress}
+              multiline
+              numberOfLines={2}
+            />
+          </View>
+
+          <View style={styles.rowInputs}>
+            <View style={[styles.inputGroup, styles.halfWidth]}>
+              <Text style={styles.label}>City *</Text>
+              <TextInput style={styles.input} placeholder="City" value={city} onChangeText={setCity} />
+            </View>
+
+            <View style={[styles.inputGroup, styles.halfWidth]}>
+              <Text style={styles.label}>Pincode *</Text>
+              <TextInput style={styles.input} placeholder="Pincode" value={pincode} onChangeText={setPincode} keyboardType="number-pad" maxLength={6} />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
