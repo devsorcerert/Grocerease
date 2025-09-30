@@ -396,6 +396,79 @@ async def get_service_providers():
     ]
     return providers
 
+# Brand Banners (FMCG Integration Provision)
+@api_router.get("/brand-banners")
+async def get_brand_banners():
+    """
+    API endpoint for FMCG brand promotional banners
+    Future integration: Connect with brand management system
+    """
+    banners = [
+        {
+            "id": "1",
+            "brand": "Amul",
+            "offer_text": "20% OFF",
+            "description": "On all dairy products",
+            "banner_image": "",  # Provision for brand banner image
+            "background_color": "#FEE2E2",
+            "valid_until": "2025-12-31",
+            "category": "Dairy & Breakfast",
+            "is_active": True
+        },
+        {
+            "id": "2",
+            "brand": "Britannia",
+            "offer_text": "Buy 2 Get 1",
+            "description": "On biscuits & cookies",
+            "banner_image": "",
+            "background_color": "#DBEAFE",
+            "valid_until": "2025-12-31",
+            "category": "Bakery & Biscuits",
+            "is_active": True
+        },
+        {
+            "id": "3",
+            "brand": "Tata Tea",
+            "offer_text": "₹50 OFF",
+            "description": "On 500g pack",
+            "banner_image": "",
+            "background_color": "#FEF3C7",
+            "valid_until": "2025-12-31",
+            "category": "Tea, Coffee & More",
+            "is_active": True
+        },
+        {
+            "id": "4",
+            "brand": "Nestlé",
+            "offer_text": "15% OFF",
+            "description": "On coffee range",
+            "banner_image": "",
+            "background_color": "#E0E7FF",
+            "valid_until": "2025-12-31",
+            "category": "Tea, Coffee & More",
+            "is_active": True
+        },
+    ]
+    # Filter only active banners
+    active_banners = [b for b in banners if b.get("is_active", True)]
+    return active_banners
+
+# Admin: Create/Update Brand Banner
+@api_router.post("/brand-banners")
+async def create_brand_banner(banner: dict, user_id: str = Depends(get_current_user)):
+    """Admin endpoint to create brand promotional banners"""
+    user = await db.users.find_one({"id": user_id})
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    banner_dict = {
+        "id": str(uuid.uuid4()),
+        **banner,
+        "created_at": datetime.utcnow()
+    }
+    await db.brand_banners.insert_one(banner_dict)
+    return clean_mongo_doc(banner_dict)
+
 app.include_router(api_router)
 
 app.add_middleware(
