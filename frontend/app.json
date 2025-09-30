@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "GrocerEase",
-    "slug": "grocerease",
+    "name": "GrocerEase TV",
+    "slug": "grocereasetv",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "grocerease",
+    "scheme": "grocereasetv",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.grocerease.app"
+      "bundleIdentifier": "com.grocereasetv.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#10B981"
       },
-      "package": "com.grocerease.app",
+      "package": "com.grocereasetv.app",
       "edgeToEdgeEnabled": true
     },
     "web": {
