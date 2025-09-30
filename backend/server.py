@@ -204,6 +204,10 @@ async def get_products(category: Optional[str] = None, search: Optional[str] = N
         query["name"] = {"$regex": search, "$options": "i"}
     
     products = await db.products.find(query).to_list(1000)
+    # Remove MongoDB _id field
+    for product in products:
+        if "_id" in product:
+            del product["_id"]
     return products
 
 @api_router.get("/products/{product_id}")
