@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
 
 interface User {
@@ -24,6 +26,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Storage helper - uses SecureStore on native, AsyncStorage on web
+const storage = {
+  setItem: async (key: string, value: string) => {
+    if (Platform.OS === 'web') {
+      await AsyncStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  },
+  getItem: async (key: string) => {
+    if (Platform.OS === 'web') {
+      return await AsyncStorage.getItem(key);
+    } else {
+      return await SecureStore.getItemAsync(key);
+    }
+  },
+  removeItem: async (key: string) => {
+    if (Platform.OS === 'web') {
+      await AsyncStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,14 +61,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      const token = await SecureStore.getItemAsync('token');
+      const token = await storage.getItem('token');
       if (token) {
         const response = await api.get('/auth/me');
         setUser(response.data);
       }
     } catch (error) {
       console.log('Auth check failed', error);
-      await SecureStore.deleteItemAsync('token');
+      try {
+        await storage.removeItem('token');
+      } catch (e) {
+        console.log('Failed to remove token', e);
+      }
     } finally {
       setLoading(false);
     }
@@ -49,24 +80,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
-    await SecureStore.setItemAsync('token', response.data.token);
+    await storage.setItem('token', response.data.token);
     setUser(response.data.user);
   };
 
   const register = async (name: string, email: string, password: string, phone?: string) => {
     const response = await api.post('/auth/register', { name, email, password, phone });
-    await SecureStore.setItemAsync('token', response.data.token);
+    await storage.setItem('token', response.data.token);
     setUser(response.data.user);
   };
 
   const googleLogin = async (idToken: string, name: string, email: string, photo?: string) => {
     const response = await api.post('/auth/google', { id_token: idToken, name, email, photo });
-    await SecureStore.setItemAsync('token', response.data.token);
+    await storage.setItem('token', response.data.token);
     setUser(response.data.user);
   };
 
   const logout = async () => {
-    await SecureStore.deleteItemAsync('token');
+    await storage.removeItem('token');
     setUser(null);
   };
 
