@@ -68,11 +68,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  logoGreen: {
     fontSize: 42,
     fontWeight: 'bold',
     color: '#2D8B47',
-    marginBottom: 8,
+  },
+  logoOrange: {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#FF8C42',
   },
   tagline: {
     fontSize: 16,
