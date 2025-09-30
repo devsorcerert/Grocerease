@@ -270,7 +270,7 @@ async def add_to_cart(item: CartItem, user_id: str = Depends(get_current_user)):
     cart["updated_at"] = datetime.utcnow()
     
     await db.carts.update_one({"user_id": user_id}, {"$set": cart}, upsert=True)
-    return cart
+    return clean_mongo_doc(cart)
 
 @api_router.post("/cart/update")
 async def update_cart_item(item: CartItem, user_id: str = Depends(get_current_user)):
