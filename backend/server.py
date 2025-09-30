@@ -138,6 +138,9 @@ async def register(user: UserRegister):
         "email": user.email,
         "password": hash_password(user.password),
         "phone": user.phone,
+        "address": user.address,
+        "city": user.city,
+        "pincode": user.pincode,
         "cable_tv_linked": False,
         "cable_tv_details": None,
         "monthly_spend": 0.0,
@@ -149,7 +152,19 @@ async def register(user: UserRegister):
     await db.users.insert_one(user_dict)
     token = create_access_token({"user_id": user_dict["id"]})
     
-    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"]}}
+    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"], "phone": user_dict["phone"], "address": user_dict["address"], "city": user_dict["city"], "pincode": user_dict["pincode"]}}
+
+@api_router.post("/auth/update-profile")
+async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "address": profile.address,
+            "city": profile.city,
+            "pincode": profile.pincode
+        }}
+    )
+    return {"success": True}
 
 @api_router.post("/auth/login")
 async def login(user: UserLogin):
