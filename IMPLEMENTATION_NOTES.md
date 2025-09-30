@@ -160,7 +160,7 @@ Current: Mock payment (no actual charges)
 ## Admin Panel
 
 An admin user has been created:
-- **Email:** admin@grocerease.com
+- **Email:** admin@grocereasetv.com
 - **Password:** admin123
 
 Admin can:
