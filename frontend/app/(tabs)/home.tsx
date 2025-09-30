@@ -1,22 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+
+const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { user, refreshUser } = useAuth();
+  const router = useRouter();
   const [showCableTVModal, setShowCableTVModal] = useState(false);
   const [userIdNuid, setUserIdNuid] = useState('');
   const [phone, setPhone] = useState('');
   const [serviceProvider, setServiceProvider] = useState('');
   const [providers, setProviders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [videos, setVideos] = useState<any[]>([]);
 
   useEffect(() => {
     fetchProviders();
     fetchFeaturedProducts();
+    fetchCategories();
+    fetchVideos();
   }, []);
 
   const fetchProviders = async () => {
@@ -34,6 +42,24 @@ export default function HomeScreen() {
       setProducts(response.data.slice(0, 6));
     } catch (error) {
       console.error('Failed to fetch products:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get('/categories');
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
+  const fetchVideos = async () => {
+    try {
+      const response = await api.get('/videos');
+      setVideos(response.data.slice(0, 3));
+    } catch (error) {
+      console.error('Failed to fetch videos:', error);
     }
   };
 
