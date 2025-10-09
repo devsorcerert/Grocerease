@@ -380,6 +380,69 @@ async def add_to_cart(item: CartItem, user_id: str = Depends(get_current_user)):
     await db.carts.update_one({"user_id": user_id}, {"$set": cart}, upsert=True)
     return clean_mongo_doc(cart)
 
+@api_router.post("/cart/add-bulk")
+async def add_bulk_ingredients_to_cart(ingredients: dict, user_id: str = Depends(get_current_user)):
+    """
+    Bulk add ingredients from GrocerEase TV videos to cart
+    Infrastructure ready for real ingredient-product mapping APIs
+    """
+    try:
+        cart = await db.carts.find_one({"user_id": user_id})
+        
+        if not cart:
+            cart = {"user_id": user_id, "items": []}
+        
+        added_count = 0
+        failed_ingredients = []
+        
+        for ingredient in ingredients.get("ingredient_list", []):
+            product_id = ingredient.get("product_id")
+            quantity = ingredient.get("quantity", 1)
+            
+            if not product_id:
+                # Infrastructure provision: Future API integration for ingredient-product mapping
+                failed_ingredients.append({
+                    "name": ingredient.get("name", "Unknown"),
+                    "reason": "Product mapping not available - API integration required"
+                })
+                continue
+                
+            # Verify product exists
+            product = await db.products.find_one({"id": product_id})
+            if not product:
+                failed_ingredients.append({
+                    "name": ingredient.get("name", product_id),
+                    "reason": "Product not found in database"
+                })
+                continue
+            
+            # Add to cart logic
+            item_exists = False
+            for cart_item in cart["items"]:
+                if cart_item["product_id"] == product_id:
+                    cart_item["quantity"] += quantity
+                    item_exists = True
+                    break
+            
+            if not item_exists:
+                cart["items"].append({"product_id": product_id, "quantity": quantity})
+            
+            added_count += 1
+        
+        cart["updated_at"] = datetime.utcnow()
+        await db.carts.update_one({"user_id": user_id}, {"$set": cart}, upsert=True)
+        
+        return {
+            "success": True,
+            "cart": clean_mongo_doc(cart),
+            "added_count": added_count,
+            "failed_ingredients": failed_ingredients,
+            "message": f"Successfully added {added_count} ingredients to cart"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add ingredients: {str(e)}")
+
 @api_router.post("/cart/update")
 async def update_cart_item(item: CartItem, user_id: str = Depends(get_current_user)):
     cart = await db.carts.find_one({"user_id": user_id})
