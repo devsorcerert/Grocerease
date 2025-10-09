@@ -281,7 +281,74 @@ async def create_product(product: ProductCreate, user_id: str = Depends(get_curr
         "created_at": datetime.utcnow()
     }
     await db.products.insert_one(product_dict)
-    return product_dict
+    return clean_mongo_doc(product_dict)
+
+@api_router.post("/products/bulk")
+async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    products_to_insert = []
+    for product_data in upload.products:
+        product_dict = {
+            "id": str(uuid.uuid4()),
+            **product_data,
+            "created_at": datetime.utcnow()
+        }
+        products_to_insert.append(product_dict)
+    
+    if products_to_insert:
+        await db.products.insert_many(products_to_insert)
+    
+    return {"success": True, "count": len(products_to_insert), "message": f"{len(products_to_insert)} products uploaded"}
+
+@api_router.get("/products/analytics")
+async def get_product_analytics(user_id: str = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Get all products for analytics
+    all_products = await db.products.find().to_list(10000)
+    
+    # Calculate KPIs
+    total_products = len(all_products)
+    total_stock_value = sum(p.get("price", 0) * p.get("stock", 0) for p in all_products)
+    low_stock_items = len([p for p in all_products if p.get("stock", 0) < p.get("min_stock_level", 10)])
+    out_of_stock = len([p for p in all_products if p.get("stock", 0) == 0])
+    active_products = len([p for p in all_products if p.get("is_active", True)])
+    
+    # Category breakdown
+    category_stats = {}
+    for product in all_products:
+        cat = product.get("category", "Uncategorized")
+        if cat not in category_stats:
+            category_stats[cat] = {"count": 0, "stock_value": 0}
+        category_stats[cat]["count"] += 1
+        category_stats[cat]["stock_value"] += product.get("price", 0) * product.get("stock", 0)
+    
+    return {
+        "total_products": total_products,
+        "active_products": active_products,
+        "total_stock_value": round(total_stock_value, 2),
+        "low_stock_items": low_stock_items,
+        "out_of_stock": out_of_stock,
+        "categories": category_stats,
+        "avg_price": round(sum(p.get("price", 0) for p in all_products) / total_products if total_products > 0 else 0, 2)
+    }
+
+@api_router.delete("/products/{product_id}")
+async def delete_product(product_id: str, user_id: str = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = await db.products.delete_one({"id": product_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    return {"success": True, "message": "Product deleted"}
 
 # Cart Routes
 @api_router.get("/cart")
