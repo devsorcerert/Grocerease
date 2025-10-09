@@ -82,57 +82,95 @@ async def seed_videos():
     # Clear existing videos
     await db.videos.delete_many({})
     
+    # Get some product IDs for mapping ingredients
+    products_cursor = db.products.find({})
+    products = await products_cursor.to_list(length=None)
+    
+    # Create a mapping for common ingredients
+    ingredient_mapping = {}
+    for product in products:
+        name = product['name'].lower()
+        if 'tomato' in name:
+            ingredient_mapping['tomato'] = product['id']
+        elif 'paneer' in name:
+            ingredient_mapping['paneer'] = product['id']
+        elif 'butter' in name:
+            ingredient_mapping['butter'] = product['id']
+        elif 'rice' in name and 'basmati' in name:
+            ingredient_mapping['basmati_rice'] = product['id']
+        elif 'bread' in name:
+            ingredient_mapping['bread'] = product['id']
+        elif 'milk' in name and 'toned' in name:
+            ingredient_mapping['milk'] = product['id']
+    
     videos = [
         {
             "id": str(uuid.uuid4()),
             "title": "Paneer Butter Masala Recipe",
-            "description": "Learn to cook delicious Paneer Butter Masala",
+            "description": "Learn to cook delicious Paneer Butter Masala with one-click shopping",
             "thumbnail": PLACEHOLDER_IMAGE,
             "stream_url": None,
             "duration": "15:30",
             "is_live": False,
             "ingredients": [
-                {"product_id": "", "name": "Paneer", "quantity": "200g"},
-                {"product_id": "", "name": "Tomato", "quantity": "4 pcs"},
-                {"product_id": "", "name": "Butter", "quantity": "50g"},
-                {"product_id": "", "name": "Cream", "quantity": "100ml"},
+                {"product_id": ingredient_mapping.get('paneer', ''), "name": "Mother Dairy Paneer", "quantity": 1},
+                {"product_id": ingredient_mapping.get('tomato', ''), "name": "Fresh Tomato", "quantity": 1},
+                {"product_id": ingredient_mapping.get('butter', ''), "name": "Amul Butter", "quantity": 1},
+                {"product_id": "", "name": "Heavy Cream", "quantity": 1},  # Not mapped - for demo
             ],
             "created_at": datetime.utcnow()
         },
         {
             "id": str(uuid.uuid4()),
             "title": "Quick Vegetable Biryani",
-            "description": "30-minute vegetable biryani recipe",
+            "description": "30-minute vegetable biryani recipe - shop ingredients instantly!",
             "thumbnail": PLACEHOLDER_IMAGE,
             "stream_url": None,
             "duration": "25:00",
             "is_live": False,
             "ingredients": [
-                {"product_id": "", "name": "Basmati Rice", "quantity": "1 kg"},
-                {"product_id": "", "name": "Mixed Vegetables", "quantity": "500g"},
-                {"product_id": "", "name": "Biryani Masala", "quantity": "2 tbsp"},
+                {"product_id": ingredient_mapping.get('basmati_rice', ''), "name": "India Gate Basmati Rice", "quantity": 1},
+                {"product_id": ingredient_mapping.get('tomato', ''), "name": "Fresh Tomato", "quantity": 1},
+                {"product_id": "", "name": "Biryani Masala", "quantity": 1},  # Not mapped - shows API integration needed
+                {"product_id": "", "name": "Mixed Vegetables", "quantity": 1},  # Not mapped
             ],
             "created_at": datetime.utcnow()
         },
         {
             "id": str(uuid.uuid4()),
             "title": "Live: Morning Breakfast Ideas",
-            "description": "Join us live for quick breakfast recipes",
+            "description": "Join us live for quick breakfast recipes with instant shopping",
             "thumbnail": PLACEHOLDER_IMAGE,
             "stream_url": None,
             "duration": "LIVE",
             "is_live": True,
             "ingredients": [
-                {"product_id": "", "name": "Bread", "quantity": "4 slices"},
-                {"product_id": "", "name": "Butter", "quantity": "50g"},
-                {"product_id": "", "name": "Milk", "quantity": "200ml"},
+                {"product_id": ingredient_mapping.get('bread', ''), "name": "Britannia Brown Bread", "quantity": 1},
+                {"product_id": ingredient_mapping.get('butter', ''), "name": "Amul Butter", "quantity": 1},
+                {"product_id": ingredient_mapping.get('milk', ''), "name": "Amul Taaza Toned Milk", "quantity": 1},
+            ],
+            "created_at": datetime.utcnow()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "title": "Infrastructure Demo Recipe",
+            "description": "Shows mixed mapped/unmapped ingredients for API integration demo",
+            "thumbnail": PLACEHOLDER_IMAGE,
+            "stream_url": None,
+            "duration": "20:00",
+            "is_live": False,
+            "ingredients": [
+                {"product_id": ingredient_mapping.get('tomato', ''), "name": "Fresh Tomato", "quantity": 2},
+                {"product_id": "", "name": "Special Spice Mix", "quantity": 1},  # Requires API integration
+                {"product_id": ingredient_mapping.get('butter', ''), "name": "Amul Butter", "quantity": 1},
+                {"product_id": "", "name": "Exotic Herb", "quantity": 1},  # Requires API integration
             ],
             "created_at": datetime.utcnow()
         }
     ]
     
     await db.videos.insert_many(videos)
-    print(f"Inserted {len(videos)} videos")
+    print(f"Inserted {len(videos)} videos with ingredient mapping")
 
 async def seed_admin():
     # Create an admin user if not exists
