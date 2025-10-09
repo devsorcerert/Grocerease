@@ -154,12 +154,8 @@ export default function AdminPanel() {
         };
         input.click();
       } else {
-        // Mobile file picker
-        const result = await DocumentPicker.pick({
-          type: [DocumentPicker.types.xlsx, DocumentPicker.types.xls],
-        });
-        // Process file for mobile
-        Alert.alert('Info', 'Mobile Excel import will be implemented with file system');
+        // Mobile - Use native file picker
+        Alert.alert('Info', 'Please use the web version for Excel import. Mobile import coming soon!');
       }
     } catch (error) {
       console.error('File picker error:', error);
