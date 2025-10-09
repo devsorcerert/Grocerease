@@ -123,8 +123,6 @@ export default function CartScreen() {
   }
 
   const subtotal = calculateSubtotal();
-  const reward = calculateReward();
-  const total = Math.max(subtotal - reward, 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -174,22 +172,62 @@ export default function CartScreen() {
           <Text style={styles.summaryText}>Subtotal</Text>
           <Text style={styles.summaryValue}>₹{subtotal.toFixed(2)}</Text>
         </View>
-        {reward > 0 && (
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryText}>Reward</Text>
-            <Text style={[styles.summaryValue, styles.discountText]}>-₹{reward}</Text>
-          </View>
+        
+        {/* Auto-Rewards Display */}
+        {rewardCalculation && (
+          <>
+            <View style={styles.rewardsBanner}>
+              <View style={styles.rewardsBannerHeader}>
+                <Ionicons name="gift" size={20} color="#2D8B47" />
+                <Text style={styles.rewardsBannerTitle}>Auto-Applied Rewards 🎉</Text>
+              </View>
+              <Text style={styles.rewardsBannerSubtitle}>
+                Infrastructure ready for advanced reward algorithms
+              </Text>
+            </View>
+            
+            <View style={styles.summaryRow}>
+              <View style={styles.rewardDetails}>
+                <Text style={styles.summaryText}>Current Tier Rewards</Text>
+                <Text style={styles.tierBadge}>{rewardCalculation.new_tier_info?.tier_name || 'Base'}</Text>
+              </View>
+              <Text style={[styles.summaryValue, styles.discountText]}>
+                -₹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
+              </Text>
+            </View>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryText}>Will Earn (Cashback)</Text>
+              <Text style={[styles.summaryValue, styles.earnText]}>
+                +₹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
+              </Text>
+            </View>
+            
+            <View style={styles.infrastructureNote}>
+              <Ionicons name="information-circle-outline" size={16} color="#6B7280" />
+              <Text style={styles.infrastructureText}>
+                Ready for real API integration with external reward systems
+              </Text>
+            </View>
+          </>
         )}
-        <View style={styles.summaryRow}>
-          <Text style={styles.totalText}>Total</Text>
-          <Text style={styles.totalValue}>₹{total.toFixed(2)}</Text>
+        
+        <View style={[styles.summaryRow, styles.totalRow]}>
+          <Text style={styles.totalText}>Final Total</Text>
+          <Text style={styles.totalValue}>
+            ₹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
+          </Text>
         </View>
+        
         <TouchableOpacity 
           style={[styles.checkoutButton, loading && styles.checkoutButtonDisabled]}
           onPress={handleCheckout}
           disabled={loading}
         >
-          <Text style={styles.checkoutButtonText}>{loading ? 'Processing...' : 'Proceed to Checkout'}</Text>
+          <Ionicons name="card" size={20} color="#fff" style={styles.checkoutIcon} />
+          <Text style={styles.checkoutButtonText}>
+            {loading ? 'Processing...' : 'Complete Order with Auto-Rewards'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
