@@ -255,10 +255,58 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   summaryText: { fontSize: 16, color: '#6B7280' },
   summaryValue: { fontSize: 16, color: '#111' },
-  discountText: { color: '#2D8B47' },
+  discountText: { color: '#2D8B47', fontWeight: '600' },
+  earnText: { color: '#FF8C42', fontWeight: '600' },
+  totalRow: { borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 12, marginTop: 8 },
   totalText: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#111' },
-  checkoutButton: { backgroundColor: '#2D8B47', paddingVertical: 16, borderRadius: 12, marginTop: 12 },
+  
+  // Auto-Rewards UI
+  rewardsBanner: { 
+    backgroundColor: '#ECFDF5', 
+    padding: 12, 
+    borderRadius: 8, 
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2D8B47'
+  },
+  rewardsBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  rewardsBannerTitle: { fontSize: 14, fontWeight: '600', color: '#2D8B47' },
+  rewardsBannerSubtitle: { fontSize: 11, color: '#6B7280', fontStyle: 'italic' },
+  
+  rewardDetails: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tierBadge: { 
+    backgroundColor: '#FF8C42', 
+    color: '#fff', 
+    fontSize: 10, 
+    fontWeight: 'bold', 
+    paddingHorizontal: 6, 
+    paddingVertical: 2, 
+    borderRadius: 4 
+  },
+  
+  infrastructureNote: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    backgroundColor: '#F9FAFB', 
+    padding: 8, 
+    borderRadius: 6, 
+    marginBottom: 8 
+  },
+  infrastructureText: { fontSize: 11, color: '#6B7280', flex: 1, fontStyle: 'italic' },
+  
+  checkoutButton: { 
+    backgroundColor: '#2D8B47', 
+    paddingVertical: 16, 
+    borderRadius: 12, 
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8
+  },
   checkoutButtonDisabled: { opacity: 0.5 },
+  checkoutIcon: { marginRight: 4 },
   checkoutButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });
