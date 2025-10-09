@@ -145,9 +145,20 @@ export default function HomeScreen() {
             )}
             <Text style={styles.subgreeting}>Get fresh groceries delivered</Text>
           </View>
-          <TouchableOpacity style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={24} color="#111" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            {user?.is_admin && (
+              <TouchableOpacity 
+                style={styles.adminButton} 
+                onPress={() => router.push('/admin')}
+              >
+                <Ionicons name="shield-checkmark" size={20} color="#FF8C42" />
+                <Text style={styles.adminButtonText}>Admin</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.notificationButton}>
+              <Ionicons name="notifications-outline" size={24} color="#111" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {!user?.cable_tv_linked && (
