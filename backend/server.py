@@ -569,40 +569,151 @@ async def clear_cart(user_id: str = Depends(get_current_user)):
     await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
     return {"success": True}
 
+# Auto-Rewards Calculation
+def calculate_spending_tiers_and_rewards(current_monthly_spend: float, order_total: float) -> dict:
+    """
+    Calculate automatic rewards based on spending tiers
+    Infrastructure ready for advanced reward algorithms and external reward APIs
+    """
+    new_monthly_spend = current_monthly_spend + order_total
+    
+    # Current tier system - can be enhanced with external reward APIs
+    tiers = [
+        {"threshold": 25000, "reward": 1000, "tier_name": "Platinum"},
+        {"threshold": 13000, "reward": 500, "tier_name": "Gold"},
+        {"threshold": 7000, "reward": 250, "tier_name": "Silver"},
+        {"threshold": 0, "reward": 0, "tier_name": "Base"}
+    ]
+    
+    current_tier = {"threshold": 0, "reward": 0, "tier_name": "Base"}
+    for tier in tiers:
+        if new_monthly_spend >= tier["threshold"]:
+            current_tier = tier
+            break
+    
+    # Calculate additional rewards for order
+    order_reward_percentage = 0.01  # 1% cashback base
+    if current_tier["tier_name"] == "Platinum":
+        order_reward_percentage = 0.05  # 5% for platinum
+    elif current_tier["tier_name"] == "Gold":
+        order_reward_percentage = 0.03  # 3% for gold
+    elif current_tier["tier_name"] == "Silver":
+        order_reward_percentage = 0.02  # 2% for silver
+    
+    order_cashback = order_total * order_reward_percentage
+    
+    return {
+        "new_monthly_spend": new_monthly_spend,
+        "current_tier": current_tier,
+        "order_cashback": order_cashback,
+        "total_available_reward": current_tier["reward"],
+        "rewards_breakdown": {
+            "tier_reward": current_tier["reward"],
+            "order_cashback": order_cashback,
+            "infrastructure_ready": True
+        }
+    }
+
+@api_router.post("/checkout/calculate-rewards")
+async def calculate_checkout_rewards(checkout_data: dict, user_id: str = Depends(get_current_user)):
+    """
+    Calculate rewards that will be auto-applied during checkout
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    subtotal = checkout_data.get("subtotal", 0)
+    current_monthly_spend = user.get("monthly_spend", 0.0)
+    current_reward_balance = user.get("current_reward", 0.0)
+    
+    rewards_info = calculate_spending_tiers_and_rewards(current_monthly_spend, subtotal)
+    
+    # Auto-apply available rewards (up to order total)
+    max_applicable_reward = min(current_reward_balance, subtotal)
+    
+    # Calculate final totals
+    reward_applied = max_applicable_reward
+    final_total = subtotal - reward_applied
+    
+    return {
+        "subtotal": subtotal,
+        "current_reward_balance": current_reward_balance,
+        "rewards_auto_applied": reward_applied,
+        "final_total": final_total,
+        "new_tier_info": rewards_info["current_tier"],
+        "order_cashback_earned": rewards_info["order_cashback"],
+        "infrastructure_ready": True,
+        "breakdown": {
+            "original_amount": subtotal,
+            "rewards_applied": reward_applied,
+            "amount_to_pay": final_total,
+            "cashback_earning": rewards_info["order_cashback"]
+        }
+    }
+
 # Order Routes
 @api_router.post("/orders")
 async def create_order(order_data: OrderCreate, user_id: str = Depends(get_current_user)):
+    """
+    Create order with automatic rewards application
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Calculate rewards and apply them automatically
+    rewards_info = calculate_spending_tiers_and_rewards(
+        user.get("monthly_spend", 0.0), 
+        order_data.subtotal
+    )
+    
+    # Auto-apply rewards (user's available reward balance)
+    current_reward_balance = user.get("current_reward", 0.0)
+    reward_applied = min(current_reward_balance, order_data.subtotal)
+    final_total = order_data.subtotal - reward_applied
+    
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        **order_data.dict(),
+        "items": order_data.items,
+        "subtotal": order_data.subtotal,
+        "reward_applied": reward_applied,
+        "total": final_total,
+        "payment_method": order_data.payment_method,
+        "tier_info": rewards_info["current_tier"],
+        "order_cashback_earned": rewards_info["order_cashback"],
+        "rewards_auto_applied": True,
         "status": "pending",
         "created_at": datetime.utcnow()
     }
+    
     await db.orders.insert_one(order_dict)
     
-    user = await db.users.find_one({"id": user_id})
-    new_spend = user.get("monthly_spend", 0.0) + order_data.total
-    
-    reward = 0.0
-    if new_spend >= 25000:
-        reward = 1000.0
-    elif new_spend >= 13000:
-        reward = 500.0
-    elif new_spend >= 7000:
-        reward = 250.0
+    # Update user spending and rewards
+    new_reward_balance = (current_reward_balance - reward_applied) + rewards_info["order_cashback"]
     
     await db.users.update_one(
         {"id": user_id},
         {"$set": {
-            "monthly_spend": new_spend,
-            "total_spend": user.get("total_spend", 0.0) + order_data.total,
-            "current_reward": reward
+            "monthly_spend": rewards_info["new_monthly_spend"],
+            "total_spend": user.get("total_spend", 0.0) + order_data.subtotal,
+            "current_reward": rewards_info["total_available_reward"] + rewards_info["order_cashback"]
         }}
     )
     
+    # Clear cart
     await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
-    return order_dict
+    
+    return {
+        **clean_mongo_doc(order_dict),
+        "rewards_breakdown": {
+            "rewards_used": reward_applied,
+            "cashback_earned": rewards_info["order_cashback"],
+            "new_reward_balance": new_reward_balance,
+            "new_tier": rewards_info["current_tier"]["tier_name"]
+        }
+    }
 
 @api_router.get("/orders")
 async def get_orders(user_id: str = Depends(get_current_user)):
