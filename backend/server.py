@@ -240,11 +240,115 @@ async def get_me(user_id: str = Depends(get_current_user)):
 # Cable TV Routes
 @api_router.post("/cable-tv/link")
 async def link_cable_tv(data: CableTVLink, user_id: str = Depends(get_current_user)):
+    """
+    Cable TV linking with infrastructure ready for real API integration
+    Future: Will integrate with actual cable TV provider APIs for verification
+    """
+    try:
+        # Infrastructure provision: Real API integration placeholder
+        verification_result = await verify_cable_tv_details(data.dict())
+        
+        cable_tv_details = {
+            **data.dict(),
+            "verification_status": verification_result.get("status", "mock_success"),
+            "api_response": verification_result.get("response", "Mock verification - API integration pending"),
+            "linked_at": datetime.utcnow(),
+            "sync_enabled": True,  # Provision for real-time spending sync
+            "last_sync": datetime.utcnow()
+        }
+        
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "cable_tv_linked": True,
+                "cable_tv_details": cable_tv_details
+            }}
+        )
+        
+        return {
+            "success": True,
+            "message": "Cable TV linked successfully",
+            "verification_status": cable_tv_details["verification_status"],
+            "infrastructure_ready": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cable TV linking failed: {str(e)}")
+
+async def verify_cable_tv_details(cable_details: dict) -> dict:
+    """
+    Infrastructure function ready for real cable TV API integration
+    Current: Mock verification
+    Future: Real API calls to cable TV providers
+    """
+    # Mock verification - Replace with real API calls
+    service_provider = cable_details.get("service_provider", "")
+    user_id_nuid = cable_details.get("user_id_nuid", "")
+    phone = cable_details.get("phone", "")
+    
+    # Provision for real API integration
+    if service_provider and user_id_nuid and phone:
+        # Mock successful verification
+        return {
+            "status": "verified",
+            "response": f"Mock verification successful for {service_provider}",
+            "api_integration_required": True,
+            "supported_providers": ["Tata Sky", "Airtel Digital TV", "Dish TV", "Sun Direct", "Hathway", "DEN Networks"]
+        }
+    else:
+        return {
+            "status": "failed",
+            "response": "Invalid cable TV details provided",
+            "api_integration_required": True
+        }
+
+@api_router.get("/cable-tv/sync-status")
+async def get_cable_tv_sync_status(user_id: str = Depends(get_current_user)):
+    """
+    Get cable TV sync status - ready for real API integration
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user or not user.get("cable_tv_linked"):
+        raise HTTPException(status_code=404, detail="Cable TV not linked")
+    
+    cable_details = user.get("cable_tv_details", {})
+    
+    return {
+        "linked": True,
+        "service_provider": cable_details.get("service_provider"),
+        "verification_status": cable_details.get("verification_status", "unknown"),
+        "last_sync": cable_details.get("last_sync"),
+        "sync_enabled": cable_details.get("sync_enabled", False),
+        "infrastructure_ready": True,
+        "api_integration_status": "pending"
+    }
+
+@api_router.post("/cable-tv/force-sync")
+async def force_cable_tv_sync(user_id: str = Depends(get_current_user)):
+    """
+    Force sync with cable TV provider - infrastructure ready for real API
+    """
+    user = await db.users.find_one({"id": user_id})
+    if not user or not user.get("cable_tv_linked"):
+        raise HTTPException(status_code=404, detail="Cable TV not linked")
+    
+    # Mock sync process - Replace with real API calls
+    sync_result = {
+        "status": "success",
+        "last_sync": datetime.utcnow(),
+        "spending_data": {
+            "current_month": user.get("monthly_spend", 0),
+            "sync_method": "mock",
+            "api_integration_required": True
+        }
+    }
+    
+    # Update last sync time
     await db.users.update_one(
         {"id": user_id},
-        {"$set": {"cable_tv_linked": True, "cable_tv_details": data.dict()}}
+        {"$set": {"cable_tv_details.last_sync": datetime.utcnow()}}
     )
-    return {"success": True, "message": "Cable TV linked successfully"}
+    
+    return sync_result
 
 # Product Routes
 @api_router.get("/products")
