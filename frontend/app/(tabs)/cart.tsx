@@ -19,6 +19,9 @@ export default function CartScreen() {
 
   useEffect(() => {
     fetchProductDetails();
+    if (items.length > 0) {
+      calculateRewards();
+    }
   }, [items]);
 
   const fetchProductDetails = async () => {
