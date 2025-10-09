@@ -8,9 +8,10 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function CartScreen() {
   const { items, fetchCart, updateQuantity, clearCart } = useCartStore();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [rewardCalculation, setRewardCalculation] = useState<any>(null);
 
   useEffect(() => {
     fetchCart();
