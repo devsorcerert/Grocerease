@@ -408,6 +408,7 @@ export default function HomeScreen() {
               <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
               <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
               <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
+              <Text style={styles.benefitsText}>• 🔧 Infrastructure ready for real API integration</Text>
             </View>
 
             <TextInput
