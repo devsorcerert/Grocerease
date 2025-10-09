@@ -71,12 +71,9 @@ export default function CartScreen() {
   };
 
   const handleCheckout = async () => {
-    const subtotal = calculateSubtotal();
-    const reward = calculateReward();
-    const total = Math.max(subtotal - reward, 0);
-
     setLoading(true);
     try {
+      const subtotal = calculateSubtotal();
       const orderItems = items.map(item => {
         const product = products.find(p => p.id === item.product_id);
         return {
@@ -87,18 +84,27 @@ export default function CartScreen() {
         };
       });
 
-      await api.post('/orders', {
+      // The new API automatically calculates and applies rewards
+      const response = await api.post('/orders', {
         items: orderItems,
         subtotal,
-        reward_applied: reward,
-        total,
         payment_method: 'mock',
       });
 
-      Alert.alert('Success', 'Order placed successfully!');
+      const orderData = response.data;
+      const rewardsBreakdown = orderData.rewards_breakdown;
+
+      Alert.alert(
+        'Order Successful! 🎉',
+        `Order placed successfully!\n\n💰 Rewards Used: ₹${rewardsBreakdown.rewards_used}\n🎁 Cashback Earned: ₹${rewardsBreakdown.cashback_earned}\n🏆 New Tier: ${rewardsBreakdown.new_tier}\n💳 Amount Paid: ₹${orderData.total}`,
+        [{ text: 'Great!', style: 'default' }]
+      );
+      
       clearCart();
+      refreshUser(); // Refresh user data to show updated rewards
     } catch (error) {
-      Alert.alert('Error', 'Failed to place order');
+      console.error('Checkout error:', error);
+      Alert.alert('Error', 'Failed to place order. Please try again.');
     } finally {
       setLoading(false);
     }
