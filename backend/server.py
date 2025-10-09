@@ -745,7 +745,7 @@ async def create_video(video: VideoCreate, user_id: str = Depends(get_current_us
         "created_at": datetime.utcnow()
     }
     await db.videos.insert_one(video_dict)
-    return video_dict
+    return clean_mongo_doc(video_dict)
 
 # Categories
 @api_router.get("/categories")
