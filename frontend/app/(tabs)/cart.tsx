@@ -35,6 +35,18 @@ export default function CartScreen() {
     }
   };
 
+  const calculateRewards = async () => {
+    try {
+      const subtotal = calculateSubtotal();
+      if (subtotal > 0) {
+        const response = await api.post('/checkout/calculate-rewards', { subtotal });
+        setRewardCalculation(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to calculate rewards:', error);
+    }
+  };
+
   const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
     try {
       await updateQuantity(productId, newQuantity);
