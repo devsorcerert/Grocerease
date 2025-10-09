@@ -104,6 +104,21 @@ class ProductCreate(BaseModel):
     stock: int = 100
     unit: str = "1 kg"
     description: Optional[str] = ""
+    sku: Optional[str] = None
+    barcode: Optional[str] = None
+    brand: Optional[str] = None
+    supplier: Optional[str] = None
+    min_stock_level: Optional[int] = 10
+    max_stock_level: Optional[int] = 1000
+    discount_percentage: Optional[float] = 0.0
+    is_active: Optional[bool] = True
+    tags: Optional[List[str]] = []
+    weight: Optional[float] = None
+    dimensions: Optional[str] = None
+    shelf_life_days: Optional[int] = None
+
+class BulkProductUpload(BaseModel):
+    products: List[dict]
 
 class CartItem(BaseModel):
     product_id: str
