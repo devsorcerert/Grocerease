@@ -227,11 +227,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "One-click add all ingredients API enhancement"
-    - "Cable TV linking API infrastructure"
-    - "Auto-rewards application in checkout"
     - "GrocerEase TV one-click ingredients feature"
+    - "Cable TV linking UI infrastructure"
     - "Auto-rewards display and application UI"
+    - "Spending tiers display enhancement"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -241,3 +240,5 @@ agent_communication:
     message: "Starting implementation of three critical features: one-click ingredients, cable TV API infrastructure, and auto-rewards system. All features will have mock infrastructure ready for future real API integration."
   - agent: "main"
     message: "IMPLEMENTATION COMPLETE: All three features successfully implemented with infrastructure ready for real API integration. Backend includes bulk ingredient API, enhanced cable TV verification system, and comprehensive auto-rewards with tier-based calculations. Frontend includes enhanced UX with infrastructure readiness indicators."
+  - agent: "testing"
+    message: "BACKEND TESTING COMPLETE: All three critical backend features tested and working correctly. 1) Bulk cart addition (/api/cart/add-bulk) handles mixed mapped/unmapped ingredients properly with infrastructure readiness. 2) Cable TV infrastructure (/api/cable-tv/*) fully functional with verification, sync status, and force sync capabilities. 3) Auto-rewards system (/api/checkout/calculate-rewards, /api/orders) working with tier-based calculations and automatic application. Fixed minor MongoDB ObjectId serialization issue. All endpoints return infrastructure_ready: true indicating readiness for real API integration."
