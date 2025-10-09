@@ -101,3 +101,129 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Implement three critical features for GrocerEase app:
+  1. "One-click add ingredients" from GrocerEase TV to cart - fully functional
+  2. Cable TV API linking (user ID/NUID, service provider) - infrastructure ready for real APIs
+  3. Auto-rewards application based on spending tiers - automatic during checkout
+  All features should have mock/placeholder infrastructure ready for future real API integration.
+
+backend:
+  - task: "One-click add all ingredients API enhancement"
+    implemented: false
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Need to enhance bulk ingredient addition to cart with better error handling and product validation"
+
+  - task: "Cable TV linking API infrastructure"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Basic cable TV linking exists, need to enhance with robust infrastructure for future real API integration"
+
+  - task: "Auto-rewards application in checkout"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Reward calculation exists in orders, need to implement auto-application during checkout process"
+
+  - task: "Enhanced spending tier calculation"
+    implemented: false
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Need to create more sophisticated spending tier system with better tracking"
+
+frontend:
+  - task: "GrocerEase TV one-click ingredients feature"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/videos.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Feature exists but needs enhancement for better UX and error handling"
+
+  - task: "Cable TV linking UI infrastructure"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/home.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "UI exists but needs enhancement to show it's ready for future API integration"
+
+  - task: "Auto-rewards display and application UI"
+    implemented: false
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/cart.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Need to implement cart checkout with auto-rewards application display"
+
+  - task: "Spending tiers display enhancement"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/home.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Basic display exists, need enhancement for better user understanding"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "One-click add all ingredients API enhancement"
+    - "Cable TV linking API infrastructure"
+    - "Auto-rewards application in checkout"
+    - "GrocerEase TV one-click ingredients feature"
+    - "Auto-rewards display and application UI"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Starting implementation of three critical features: one-click ingredients, cable TV API infrastructure, and auto-rewards system. All features will have mock infrastructure ready for future real API integration."
