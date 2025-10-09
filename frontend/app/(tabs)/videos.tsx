@@ -24,14 +24,42 @@ export default function VideosScreen() {
 
   const handleAddAllIngredients = async (video: any) => {
     try {
-      for (const ingredient of video.ingredients) {
-        if (ingredient.product_id) {
-          await addToCart(ingredient.product_id, 1);
+      // Use the new bulk ingredients API for better performance and error handling
+      const response = await api.post('/cart/add-bulk', {
+        ingredient_list: video.ingredients.map((ingredient: any) => ({
+          product_id: ingredient.product_id,
+          quantity: ingredient.quantity || 1,
+          name: ingredient.name || 'Unknown ingredient'
+        }))
+      });
+      
+      const { added_count, failed_ingredients } = response.data;
+      
+      if (added_count > 0) {
+        if (failed_ingredients.length > 0) {
+          Alert.alert(
+            'Partially Added', 
+            `${added_count} ingredients added to cart. ${failed_ingredients.length} items couldn't be added (product mapping required).`,
+            [
+              { text: 'OK', style: 'default' },
+              { 
+                text: 'View Details', 
+                onPress: () => {
+                  const failedItems = failed_ingredients.map((item: any) => item.name).join(', ');
+                  Alert.alert('Failed Items', `These items need product mapping: ${failedItems}`);
+                }
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Success', `All ${added_count} ingredients added to cart! 🛒`);
         }
+      } else {
+        Alert.alert('No Items Added', 'All ingredients require product mapping. API integration needed.');
       }
-      Alert.alert('Success', 'All ingredients added to cart!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to add ingredients');
+      console.error('Bulk ingredients error:', error);
+      Alert.alert('Error', 'Failed to add ingredients. Please try again.');
     }
   };
 
