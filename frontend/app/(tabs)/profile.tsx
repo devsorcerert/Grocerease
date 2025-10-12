@@ -110,6 +110,18 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
+          {/* Admin Access - Only for admin users */}
+          {user?.email === 'admin@grocereasetv.com' && (
+            <TouchableOpacity 
+              style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderColor: '#2D8B47', borderWidth: 2 }]} 
+              onPress={() => router.push('/admin')}
+            >
+              <Ionicons name="shield-checkmark" size={24} color="#2D8B47" />
+              <Text style={[styles.menuText, { color: '#2D8B47', fontWeight: '600' }]}>Admin Panel</Text>
+              <Ionicons name="chevron-forward" size={20} color="#2D8B47" />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity style={[styles.menuItem, styles.logoutItem]} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#EF4444" />
             <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
