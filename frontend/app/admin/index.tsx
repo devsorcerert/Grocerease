@@ -149,20 +149,20 @@ export default function AdminDashboard() {
           <Text style={styles.sectionTitle}>👥 Customer Metrics</Text>
           <View style={styles.kpiGrid}>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
-              <Text style={styles.kpiLabel}>Retention</Text>
-              <Text style={styles.kpiValue}>{kpis?.customerRetentionRate || 0}%</Text>
+              <Text style={styles.kpiLabel}>Retention Rate</Text>
+              <Text style={styles.kpiValue}>{kpis?.customerRetentionRate ?? '-'}%</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
               <Text style={styles.kpiLabel}>Satisfaction</Text>
-              <Text style={styles.kpiValue}>{kpis?.customerSatisfaction || 0}%</Text>
+              <Text style={styles.kpiValue}>{kpis?.customerSatisfaction ?? '-'}%</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#FEE2E2' }]}>
               <Text style={styles.kpiLabel}>CAC</Text>
-              <Text style={styles.kpiValue}>₹{kpis?.cac || 0}</Text>
+              <Text style={styles.kpiValue}>₹{kpis?.cac ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#FFF7ED' }]}>
               <Text style={styles.kpiLabel}>CLV</Text>
-              <Text style={styles.kpiValue}>₹{kpis?.clv || 0}</Text>
+              <Text style={styles.kpiValue}>₹{kpis?.clv ?? '-'}</Text>
             </View>
           </View>
         </View>
@@ -172,35 +172,35 @@ export default function AdminDashboard() {
           <Text style={styles.sectionTitle}>📦 Inventory Metrics</Text>
           <View style={styles.kpiGrid}>
             <View style={[styles.kpiCard, { backgroundColor: '#EFF6FF' }]}>
-              <Text style={styles.kpiLabel}>Turnover</Text>
-              <Text style={styles.kpiValue}>{kpis?.inventoryTurnover || 0}x</Text>
+              <Text style={styles.kpiLabel}>Inventory Turnover</Text>
+              <Text style={styles.kpiValue}>{kpis?.inventoryTurnover ?? '-'}x</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#F3E8FF' }]}>
               <Text style={styles.kpiLabel}>Total Products</Text>
-              <Text style={styles.kpiValue}>{kpis?.totalProducts || 0}</Text>
+              <Text style={styles.kpiValue}>{kpis?.totalProducts ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#FEE2E2' }]}>
               <Text style={styles.kpiLabel}>Out of Stock</Text>
-              <Text style={styles.kpiValue}>{kpis?.outOfStock || 0}</Text>
+              <Text style={styles.kpiValue}>{kpis?.outOfStock ?? '-'}</Text>
             </View>
           </View>
         </View>
 
         {/* TV Integration */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📺 GrocerEase TV</Text>
+          <Text style={styles.sectionTitle}>📺 GrocerEase TV Integration</Text>
           <View style={styles.kpiGrid}>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
               <Text style={styles.kpiLabel}>Orders via QR</Text>
-              <Text style={styles.kpiValue}>{kpis?.ordersViaQR || 0}</Text>
+              <Text style={styles.kpiValue}>{kpis?.ordersViaQR ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#EFF6FF' }]}>
-              <Text style={styles.kpiLabel}>TV Users</Text>
-              <Text style={styles.kpiValue}>{kpis?.tvUsersLinked || 0}</Text>
+              <Text style={styles.kpiLabel}>TV Users Linked</Text>
+              <Text style={styles.kpiValue}>{kpis?.tvUsersLinked ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
               <Text style={styles.kpiLabel}>QR Conversion</Text>
-              <Text style={styles.kpiValue}>{kpis?.qrConversionRate || 0}%</Text>
+              <Text style={styles.kpiValue}>{kpis?.qrConversionRate ?? '-'}%</Text>
             </View>
           </View>
         </View>
@@ -211,11 +211,15 @@ export default function AdminDashboard() {
           <View style={styles.kpiGrid}>
             <View style={[styles.kpiCard, { backgroundColor: '#F3E8FF', flex: 1 }]}>
               <Text style={styles.kpiLabel}>Top Brand</Text>
-              <Text style={styles.kpiValue}>{kpis?.topBrand || 'N/A'}</Text>
+              <Text style={styles.kpiValue}>{kpis?.topBrand ?? 'N/A'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#EFF6FF', flex: 1 }]}>
               <Text style={styles.kpiLabel}>Avg Consumption</Text>
-              <Text style={styles.kpiValue}>{kpis?.avgBrandConsumption || 0}</Text>
+              <Text style={styles.kpiValue}>{kpis?.avgBrandConsumption ?? '-'}</Text>
+            </View>
+            <View style={[styles.kpiCard, { backgroundColor: '#FFF7ED', flex: 1 }]}>
+              <Text style={styles.kpiLabel}>Pricing Index</Text>
+              <Text style={styles.kpiValue}>{kpis?.competitivePricingIndex ?? '-'}</Text>
             </View>
           </View>
         </View>
