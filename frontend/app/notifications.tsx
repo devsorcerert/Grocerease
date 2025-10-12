@@ -149,51 +149,61 @@ export default function NotificationsScreen() {
         <>
           <ScrollView style={styles.content}>
             {notifications.map((notification) => (
-              <TouchableOpacity
+              <View
                 key={notification.id}
                 style={[
                   styles.notificationCard,
                   !notification.read && styles.unreadCard
                 ]}
-                onPress={() => handleNotificationPress(notification)}
-                activeOpacity={0.7}
               >
-                <View style={styles.notificationHeader}>
-                  <View style={[
-                    styles.notificationIcon,
-                    { backgroundColor: `${getNotificationColor(notification.type)}20` }
-                  ]}>
-                    <Ionicons 
-                      name={getNotificationIcon(notification.type) as any} 
-                      size={20} 
-                      color={getNotificationColor(notification.type)} 
-                    />
-                  </View>
-                  <View style={styles.notificationContent}>
-                    <Text style={[
-                      styles.notificationTitle,
-                      !notification.read && styles.unreadTitle
+                <TouchableOpacity
+                  onPress={() => handleNotificationPress(notification)}
+                  activeOpacity={0.7}
+                  disabled={!!notification.action}
+                >
+                  <View style={styles.notificationHeader}>
+                    <View style={[
+                      styles.notificationIcon,
+                      { backgroundColor: `${getNotificationColor(notification.type)}20` }
                     ]}>
-                      {notification.title}
-                    </Text>
-                    <Text style={styles.notificationMessage}>
-                      {notification.message}
-                    </Text>
-                    <Text style={styles.notificationTime}>
-                      {new Date(notification.timestamp).toLocaleString()}
-                    </Text>
+                      <Ionicons 
+                        name={getNotificationIcon(notification.type) as any} 
+                        size={20} 
+                        color={getNotificationColor(notification.type)} 
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={[
+                        styles.notificationTitle,
+                        !notification.read && styles.unreadTitle
+                      ]}>
+                        {notification.title}
+                      </Text>
+                      <Text style={styles.notificationMessage}>
+                        {notification.message}
+                      </Text>
+                      <Text style={styles.notificationTime}>
+                        {new Date(notification.timestamp).toLocaleString()}
+                      </Text>
+                    </View>
+                    {!notification.read && (
+                      <View style={styles.unreadIndicator} />
+                    )}
                   </View>
-                  {!notification.read && (
-                    <View style={styles.unreadIndicator} />
-                  )}
-                </View>
+                </TouchableOpacity>
                 
                 {notification.action && (
                   <View style={styles.actionSection}>
                     <TouchableOpacity 
                       style={styles.actionButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
+                      onPress={() => {
+                        // Mark as read
+                        setNotifications(prev => 
+                          prev.map(n => 
+                            n.id === notification.id ? { ...n, read: true } : n
+                          )
+                        );
+                        // Navigate to route
                         if (notification.action?.route) {
                           router.push(notification.action.route as any);
                         }
@@ -206,7 +216,7 @@ export default function NotificationsScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
-              </TouchableOpacity>
+              </View>
             ))}
           </ScrollView>
 
