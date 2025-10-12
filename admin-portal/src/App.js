@@ -33,7 +33,7 @@ function App() {
   }
 
   return (
-    <Router>
+    <Router basename="/admin">
       <div className="app-container">
         <nav className="sidebar">
           <div className="sidebar-header">
