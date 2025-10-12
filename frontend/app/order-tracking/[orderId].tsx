@@ -249,89 +249,102 @@ export default function OrderTrackingScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Google Maps with Geofencing */}
-        <View style={styles.mapContainer}>
-          <MapView
-            style={styles.map}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={{
-              latitude: trackingData.delivery_location.latitude,
-              longitude: trackingData.delivery_location.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-          >
-            {/* Delivery Location Marker */}
-            <Marker
-              coordinate={trackingData.delivery_location}
-              title="Delivery Location"
-              description={trackingData.delivery_address}
-              pinColor="#2D8B47"
+        {/* Google Maps with Geofencing (Native only) */}
+        {Platform.OS !== 'web' && MapView ? (
+          <View style={styles.mapContainer}>
+            <MapView
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              initialRegion={{
+                latitude: trackingData.delivery_location.latitude,
+                longitude: trackingData.delivery_location.longitude,
+                latitudeDelta: 0.0922,
+                longitudeDelta: 0.0421,
+              }}
             >
-              <View style={styles.markerContainer}>
-                <Ionicons name="home" size={30} color="#2D8B47" />
-              </View>
-            </Marker>
-
-            {/* Geofence Circle (5km radius) */}
-            <Circle
-              center={trackingData.delivery_location}
-              radius={GEOFENCE_RADIUS}
-              fillColor="rgba(45, 139, 71, 0.1)"
-              strokeColor="rgba(45, 139, 71, 0.5)"
-              strokeWidth={2}
-            />
-
-            {/* Assigned Store Marker */}
-            {trackingData.assigned_store && (
+              {/* Delivery Location Marker */}
               <Marker
-                coordinate={trackingData.assigned_store.location}
-                title={trackingData.assigned_store.name}
-                description={`${trackingData.assigned_store.distance.toFixed(2)}km away`}
-                pinColor="#FF8C42"
+                coordinate={trackingData.delivery_location}
+                title="Delivery Location"
+                description={trackingData.delivery_address}
+                pinColor="#2D8B47"
               >
-                <View style={styles.storeMarkerContainer}>
-                  <Ionicons name="storefront" size={30} color="#FF8C42" />
+                <View style={styles.markerContainer}>
+                  <Ionicons name="home" size={30} color="#2D8B47" />
                 </View>
               </Marker>
-            )}
 
-            {/* Delivery Partner Location */}
-            {trackingData.delivery_partner && (
-              <Marker
-                coordinate={trackingData.delivery_partner.current_location}
-                title={trackingData.delivery_partner.name}
-                description={`ETA: ${trackingData.delivery_partner.estimated_arrival}`}
-              >
-                <View style={styles.deliveryMarkerContainer}>
-                  <Ionicons name="bicycle" size={30} color="#fff" />
-                </View>
-              </Marker>
-            )}
-
-            {/* Route Line */}
-            {trackingData.delivery_partner && trackingData.assigned_store && (
-              <Polyline
-                coordinates={[
-                  trackingData.assigned_store.location,
-                  trackingData.delivery_partner.current_location,
-                  trackingData.delivery_location,
-                ]}
-                strokeColor="#2D8B47"
-                strokeWidth={3}
-                lineDashPattern={[1, 10]}
+              {/* Geofence Circle (5km radius) */}
+              <Circle
+                center={trackingData.delivery_location}
+                radius={GEOFENCE_RADIUS}
+                fillColor="rgba(45, 139, 71, 0.1)"
+                strokeColor="rgba(45, 139, 71, 0.5)"
+                strokeWidth={2}
               />
-            )}
-          </MapView>
 
-          {/* Geofence Info Overlay */}
-          <View style={styles.geofenceInfo}>
-            <Ionicons name="shield-checkmark" size={20} color="#2D8B47" />
-            <Text style={styles.geofenceText}>
-              5km Geofence Active • Order from nearest store
+              {/* Assigned Store Marker */}
+              {trackingData.assigned_store && (
+                <Marker
+                  coordinate={trackingData.assigned_store.location}
+                  title={trackingData.assigned_store.name}
+                  description={`${trackingData.assigned_store.distance.toFixed(2)}km away`}
+                  pinColor="#FF8C42"
+                >
+                  <View style={styles.storeMarkerContainer}>
+                    <Ionicons name="storefront" size={30} color="#FF8C42" />
+                  </View>
+                </Marker>
+              )}
+
+              {/* Delivery Partner Location */}
+              {trackingData.delivery_partner && (
+                <Marker
+                  coordinate={trackingData.delivery_partner.current_location}
+                  title={trackingData.delivery_partner.name}
+                  description={`ETA: ${trackingData.delivery_partner.estimated_arrival}`}
+                >
+                  <View style={styles.deliveryMarkerContainer}>
+                    <Ionicons name="bicycle" size={30} color="#fff" />
+                  </View>
+                </Marker>
+              )}
+
+              {/* Route Line */}
+              {trackingData.delivery_partner && trackingData.assigned_store && (
+                <Polyline
+                  coordinates={[
+                    trackingData.assigned_store.location,
+                    trackingData.delivery_partner.current_location,
+                    trackingData.delivery_location,
+                  ]}
+                  strokeColor="#2D8B47"
+                  strokeWidth={3}
+                  lineDashPattern={[1, 10]}
+                />
+              )}
+            </MapView>
+
+            {/* Geofence Info Overlay */}
+            <View style={styles.geofenceInfo}>
+              <Ionicons name="shield-checkmark" size={20} color="#2D8B47" />
+              <Text style={styles.geofenceText}>
+                5km Geofence Active • Order from nearest store
+              </Text>
+            </View>
+          </View>
+        ) : (
+          /* Web fallback - Show map info without actual map */
+          <View style={styles.mapPlaceholder}>
+            <Ionicons name="map" size={48} color="#9CA3AF" />
+            <Text style={styles.mapPlaceholderText}>
+              📍 Interactive map with geofencing available on mobile app
+            </Text>
+            <Text style={styles.mapPlaceholderSubtext}>
+              Download the mobile app to see real-time delivery tracking with Google Maps
             </Text>
           </View>
-        </View>
+        )}
 
         {/* Assigned Store Info */}
         {trackingData.assigned_store && (
