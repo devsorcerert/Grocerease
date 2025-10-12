@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
+import { useNavigation } from '@react-navigation/native'; // 👈 For native navigation
 
 interface User {
   id: string;
@@ -26,7 +27,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Storage helper - uses SecureStore on native, AsyncStorage on web
+// Unified storage handler
 const storage = {
   setItem: async (key: string, value: string) => {
     if (Platform.OS === 'web') {
@@ -54,6 +55,7 @@ const storage = {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation<any>();
 
   useEffect(() => {
     checkAuth();
@@ -63,16 +65,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await storage.getItem('token');
       if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         const response = await api.get('/auth/me');
         setUser(response.data);
       }
     } catch (error) {
       console.log('Auth check failed', error);
-      try {
-        await storage.removeItem('token');
-      } catch (e) {
-        console.log('Failed to remove token', e);
-      }
+      await storage.removeItem('token');
+      delete api.defaults.headers.common['Authorization'];
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -80,34 +81,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
-    await storage.setItem('token', response.data.token);
+    const token = response.data.token;
+    await storage.setItem('token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(response.data.user);
   };
 
   const register = async (name: string, email: string, password: string, phone?: string) => {
     const response = await api.post('/auth/register', { name, email, password, phone });
-    await storage.setItem('token', response.data.token);
+    const token = response.data.token;
+    await storage.setItem('token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(response.data.user);
   };
 
   const googleLogin = async (idToken: string, name: string, email: string, photo?: string) => {
     const response = await api.post('/auth/google', { id_token: idToken, name, email, photo });
-    await storage.setItem('token', response.data.token);
+    const token = response.data.token;
+    await storage.setItem('token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(response.data.user);
   };
 
   const logout = async () => {
     try {
-      console.log('Logout: Starting logout process...');
-      await storage.removeItem('token');
-      console.log('Logout: Token removed');
-      setUser(null);
-      console.log('Logout: User set to null');
-      
-      // Force reload to ensure clean state
-      if (typeof window !== 'undefined') {
-        window.location.href = '/';
+      console.log('Logout: starting...');
+
+      // Attempt server-side logout if supported
+      try {
+        await api.post('/auth/logout');
+      } catch (err) {
+        console.log('Server logout skipped or failed:', err.message);
       }
+
+      // Remove token from all storages
+      await AsyncStorage.removeItem('token');
+      await SecureStore.deleteItemAsync('token').catch(() => {});
+
+      // Remove auth header
+      delete api.defaults.headers.common['Authorization'];
+
+      // Clear user state
+      setUser(null);
+
+      console.log('Logout: user cleared & token removed');
+
+      // Redirect depending on platform
+      if (Platform.OS === 'web') {
+        window.location.href = '/';
+      } else {
+        // Reset navigation to login screen on native
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      }
+
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -123,7 +152,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, googleLogin, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );
