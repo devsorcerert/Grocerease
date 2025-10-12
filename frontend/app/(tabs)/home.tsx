@@ -571,26 +571,32 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 16,
+    textAlign: 'center',
   },
   savingsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
   savingsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   savingsLabel: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.9)',
     marginLeft: 8,
+    flexShrink: 1,
   },
   savingsValue: {
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+    flexShrink: 0,
   },
   progressBar: {
     height: 6,
@@ -606,14 +612,17 @@ const styles = StyleSheet.create({
   },
   trustIndicators: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   trustText: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
     marginLeft: 8,
     flex: 1,
+    lineHeight: 16,
+    flexWrap: 'wrap',
   },
   offerPreviewCard: { 
     flexDirection: 'row', 
