@@ -190,37 +190,6 @@ export default function HomeScreen() {
                 <Text style={styles.linkButtonText}>Link Now</Text>
               </TouchableOpacity>
             </View>
-            
-            <View style={styles.savingsSection}>
-              <Text style={styles.savingsTitle}>Your Potential Savings</Text>
-              
-              <View style={styles.savingsRow}>
-                <View style={styles.savingsLeft}>
-                  <Ionicons name="time-outline" size={16} color="#fff" />
-                  <Text style={styles.savingsLabel}>Monthly Slot</Text>
-                  <Text style={styles.savingsValue}>₹{user?.monthly_spend || 0} / ₹1,000</Text>
-                </View>
-              </View>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${Math.min((user?.monthly_spend || 0) / 1000 * 100, 100)}%` }]} />
-              </View>
-              
-              <View style={styles.savingsRow}>
-                <View style={styles.savingsLeft}>
-                  <Ionicons name="calendar-outline" size={16} color="#fff" />
-                  <Text style={styles.savingsLabel}>Annual Slot</Text>
-                  <Text style={styles.savingsValue}>₹{user?.total_spend || 0} / ₹12,000</Text>
-                </View>
-              </View>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${Math.min((user?.total_spend || 0) / 12000 * 100, 100)}%` }]} />
-              </View>
-              
-              <View style={styles.trustIndicators}>
-                <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                <Text style={styles.trustText}>Instant verification • No extra charges • Secure & Private</Text>
-              </View>
-            </View>
           </TouchableOpacity>
         )}
 
