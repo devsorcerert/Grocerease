@@ -242,12 +242,12 @@ async def refresh_token(request: dict):
                 "token": new_access_token,
                 "refresh_token": new_refresh_token
             }
-        except Exception as decode_error:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
         
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Token refresh failed")
 
 @api_router.post("/auth/google")
