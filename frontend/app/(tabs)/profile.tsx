@@ -29,8 +29,15 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: async () => {
         try {
+          console.log('Starting logout process...');
           await logout();
-          router.replace('/(auth)/welcome');
+          console.log('Logout completed, navigating...');
+          
+          // Force navigation to welcome screen
+          setTimeout(() => {
+            router.replace('/(auth)/welcome');
+          }, 100);
+          
         } catch (error) {
           console.error('Logout failed:', error);
           Alert.alert('Error', 'Logout failed. Please try again.');
