@@ -23,8 +23,15 @@ export default function VideosScreen() {
   };
 
   const handleAddAllIngredients = async (video: any) => {
+    if (!video.ingredients || video.ingredients.length === 0) {
+      Alert.alert('No Ingredients', 'This video has no ingredients to add.');
+      return;
+    }
+
     try {
-      // Use the new bulk ingredients API for better performance and error handling
+      console.log('Adding ingredients:', video.ingredients);
+      
+      // Use the bulk ingredients API
       const response = await api.post('/cart/add-bulk', {
         ingredient_list: video.ingredients.map((ingredient: any) => ({
           product_id: ingredient.product_id,
@@ -33,13 +40,19 @@ export default function VideosScreen() {
         }))
       });
       
+      console.log('Bulk add response:', response.data);
+      
       const { added_count, failed_ingredients } = response.data;
       
       if (added_count > 0) {
-        if (failed_ingredients.length > 0) {
+        // Refresh cart to show updated items
+        const { fetchCart } = useCartStore.getState();
+        fetchCart();
+        
+        if (failed_ingredients && failed_ingredients.length > 0) {
           Alert.alert(
             'Partially Added', 
-            `${added_count} ingredients added to cart. ${failed_ingredients.length} items couldn't be added (product mapping required).`,
+            `${added_count} ingredients added to cart! 🛒\n\n${failed_ingredients.length} items couldn't be added (product mapping needed).`,
             [
               { text: 'OK', style: 'default' },
               { 
@@ -52,14 +65,15 @@ export default function VideosScreen() {
             ]
           );
         } else {
-          Alert.alert('Success', `All ${added_count} ingredients added to cart! 🛒`);
+          Alert.alert('Success! 🎉', `All ${added_count} ingredients added to cart! 🛒`);
         }
       } else {
-        Alert.alert('No Items Added', 'All ingredients require product mapping. API integration needed.');
+        Alert.alert('No Items Added', 'All ingredients require product mapping. Please contact support.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Bulk ingredients error:', error);
-      Alert.alert('Error', 'Failed to add ingredients. Please try again.');
+      console.error('Error details:', error.response?.data);
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to add ingredients. Please try again.');
     }
   };
 
