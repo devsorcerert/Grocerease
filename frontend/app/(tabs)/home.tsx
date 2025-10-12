@@ -504,7 +504,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   cableTvCard: { 
-    flexDirection: 'column', 
+    flexDirection: 'column',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     backgroundColor: '#667eea', 
     padding: 20, 
     margin: 16, 
