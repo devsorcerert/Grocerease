@@ -189,7 +189,8 @@ async def login(user: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_access_token({"user_id": db_user["id"]})
-    return {"token": token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
+    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
 
 @api_router.post("/auth/logout")
 async def logout(user_id: str = Depends(get_current_user)):
