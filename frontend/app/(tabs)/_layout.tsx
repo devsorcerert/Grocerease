@@ -46,8 +46,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="videos"
         options={{
-          title: 'Videos',
-          tabBarIcon: ({ color, size }) => <Ionicons name="play-circle" size={size} color={color} />,
+          title: 'GrocerEase TV',
+          tabBarIcon: ({ color, size }) => <Ionicons name="tv" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
