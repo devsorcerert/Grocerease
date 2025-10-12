@@ -481,9 +481,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   topBanner: { backgroundColor: '#2D8B47' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16 },
-  greeting: { fontSize: 24, fontWeight: 'bold', color: '#111' },
-  addressText: { fontSize: 12, color: '#2D8B47', marginTop: 4, fontWeight: '500' },
-  subgreeting: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  greeting: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
+  addressText: { fontSize: 12, color: '#fff', marginTop: 4, fontWeight: '500' },
+  subgreeting: { fontSize: 14, color: '#fff', marginTop: 4 },
   headerActions: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   // Admin styles removed - separate web dashboard created
   notificationButton: { padding: 8, position: 'relative' },
