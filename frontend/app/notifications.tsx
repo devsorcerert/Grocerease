@@ -190,7 +190,15 @@ export default function NotificationsScreen() {
                 
                 {notification.action && (
                   <View style={styles.actionSection}>
-                    <TouchableOpacity style={styles.actionButton}>
+                    <TouchableOpacity 
+                      style={styles.actionButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        if (notification.action?.route) {
+                          router.push(notification.action.route as any);
+                        }
+                      }}
+                    >
                       <Text style={styles.actionButtonText}>
                         {notification.action.label}
                       </Text>
