@@ -27,10 +27,12 @@ export default function AdminDashboard() {
   const loadKPIs = async () => {
     try {
       const response = await api.get('/admin/kpis');
+      console.log('Admin KPIs loaded:', response.data);
       setKpis(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load KPIs:', error);
-      Alert.alert('Error', 'Failed to load dashboard data');
+      console.error('Error details:', error.response?.data);
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to load dashboard data. Please ensure you\'re logged in as admin.');
     } finally {
       setLoading(false);
     }
