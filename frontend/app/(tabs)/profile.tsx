@@ -28,8 +28,13 @@ export default function ProfileScreen() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: async () => {
-        await logout();
-        router.replace('/(auth)/welcome');
+        try {
+          await logout();
+          router.replace('/(auth)/welcome');
+        } catch (error) {
+          console.error('Logout failed:', error);
+          Alert.alert('Error', 'Logout failed. Please try again.');
+        }
       }}
     ]);
   };
