@@ -592,66 +592,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  savingsSection: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-  },
-  savingsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  savingsRow: {
-    flexDirection: 'column',
-    marginBottom: 12,
-  },
-  savingsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  savingsLabel: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginLeft: 8,
-    flex: 1,
-  },
-  savingsValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
-    textAlign: 'right',
-    paddingLeft: 8,
-  },
-  progressBar: {
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 3,
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 3,
-  },
-  trustIndicators: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 8,
-    flexWrap: 'wrap',
-  },
-  trustText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginLeft: 8,
-    flex: 1,
-    lineHeight: 16,
-    flexWrap: 'wrap',
-  },
+  // Removed unused styles for cleaner code
   offerPreviewCard: { 
     flexDirection: 'row', 
     backgroundColor: '#fff', 
