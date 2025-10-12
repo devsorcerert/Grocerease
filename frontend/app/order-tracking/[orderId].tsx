@@ -1,26 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-
-// Conditionally import maps only for native platforms
-let MapView: any = null;
-let Marker: any = null;
-let Circle: any = null;
-let Polyline: any = null;
-let PROVIDER_GOOGLE: any = null;
-
-if (Platform.OS !== 'web') {
-  const Maps = require('react-native-maps');
-  MapView = Maps.default;
-  Marker = Maps.Marker;
-  Circle = Maps.Circle;
-  Polyline = Maps.Polyline;
-  PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
-}
+import OrderMap from '../../components/OrderMap';
 
 const { width, height } = Dimensions.get('window');
 const GEOFENCE_RADIUS = 5000; // 5km in meters
