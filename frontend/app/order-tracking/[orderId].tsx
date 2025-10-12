@@ -9,6 +9,17 @@ import { useAuth } from '../../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
+interface Store {
+  id: string;
+  name: string;
+  address: string;
+  location: {
+    latitude: number;
+    longitude: number;
+  };
+  distance: number; // in km
+}
+
 interface DeliveryPartner {
   id: string;
   name: string;
