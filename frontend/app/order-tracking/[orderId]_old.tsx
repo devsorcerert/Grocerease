@@ -3,12 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Lin
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Circle, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Circle, Polyline } from 'react-native-maps';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
-const GEOFENCE_RADIUS = 5000; // 5km in meters
 
 interface Store {
   id: string;
@@ -18,7 +17,7 @@ interface Store {
     latitude: number;
     longitude: number;
   };
-  distance: number;
+  distance: number; // in km
 }
 
 interface DeliveryPartner {
@@ -52,38 +51,17 @@ interface OrderTrackingData {
   }>;
 }
 
-// Helper: Calculate distance between two coordinates (Haversine formula)
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371; // Earth's radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
-
 export default function OrderTrackingScreen() {
   const { orderId } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuth();
   const [trackingData, setTrackingData] = useState<OrderTrackingData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [nearbyStores, setNearbyStores] = useState<Store[]>([]);
-
-  // Mock store locations (in real app, fetch from backend)
-  const allStores: Store[] = [
-    { id: '1', name: 'GrocerEase Store - Andheri', address: 'Andheri West, Mumbai', location: { latitude: 19.1136, longitude: 72.8697 }, distance: 0 },
-    { id: '2', name: 'GrocerEase Store - Bandra', address: 'Bandra West, Mumbai', location: { latitude: 19.0596, longitude: 72.8295 }, distance: 0 },
-    { id: '3', name: 'GrocerEase Store - Malad', address: 'Malad West, Mumbai', location: { latitude: 19.1867, longitude: 72.8483 }, distance: 0 },
-    { id: '4', name: 'GrocerEase Store - Powai', address: 'Powai, Mumbai', location: { latitude: 19.1176, longitude: 72.9060 }, distance: 0 },
-    { id: '5', name: 'GrocerEase Store - Dadar', address: 'Dadar East, Mumbai', location: { latitude: 19.0189, longitude: 72.8478 }, distance: 0 },
-  ];
 
   useEffect(() => {
     fetchTrackingData();
-    const interval = setInterval(fetchTrackingData, 30000);
+    // Set up polling for real-time updates
+    const interval = setInterval(fetchTrackingData, 30000); // Every 30 seconds
     return () => clearInterval(interval);
   }, [orderId]);
 
@@ -91,29 +69,12 @@ export default function OrderTrackingScreen() {
     try {
       const response = await api.get(`/orders/${orderId}/tracking`);
       setTrackingData(response.data);
-      findNearbyStores(response.data.delivery_location);
     } catch (error) {
       console.error('Failed to fetch tracking data:', error);
-      
-      // Mock delivery location (user's current location or delivery address)
-      const deliveryLoc = { latitude: 19.0760, longitude: 72.8777 }; // Mumbai
-      
-      // Find nearest store within 5km
-      const storesWithDistance = allStores.map(store => ({
-        ...store,
-        distance: calculateDistance(deliveryLoc.latitude, deliveryLoc.longitude, store.location.latitude, store.location.longitude)
-      })).filter(store => store.distance <= 5) // Filter stores within 5km
-        .sort((a, b) => a.distance - b.distance); // Sort by nearest
-      
-      const nearestStore = storesWithDistance[0] || allStores[0]; // Fallback to first store
-      
-      setNearbyStores(storesWithDistance);
-      
+      // Mock data for demonstration - Infrastructure ready for real API
       setTrackingData({
         order_id: orderId as string,
         status: 'out_for_delivery',
-        delivery_location: deliveryLoc,
-        assigned_store: nearestStore,
         delivery_partner: {
           id: 'dp_001',
           name: 'Rajesh Kumar',
@@ -121,32 +82,23 @@ export default function OrderTrackingScreen() {
           vehicle: 'Bike - MH 12 AB 1234',
           rating: 4.8,
           current_location: {
-            latitude: nearestStore.location.latitude + 0.01, // Simulate movement
-            longitude: nearestStore.location.longitude + 0.01
+            latitude: 19.0760,
+            longitude: 72.8777
           },
           estimated_arrival: '15 minutes'
         },
         delivery_address: user?.address || 'Your delivery address',
-        estimated_delivery: '2025-01-15T14:30:00Z',
+        estimated_delivery: '2024-01-15T14:30:00Z',
         tracking_updates: [
-          { timestamp: '2025-01-15T12:00:00Z', status: 'confirmed', message: `Order confirmed at ${nearestStore.name}` },
-          { timestamp: '2025-01-15T12:30:00Z', status: 'preparing', message: 'Items being picked and packed' },
-          { timestamp: '2025-01-15T13:00:00Z', status: 'picked_up', message: `Order picked up from ${nearestStore.name} (${nearestStore.distance.toFixed(2)}km away)` },
-          { timestamp: '2025-01-15T13:15:00Z', status: 'out_for_delivery', message: 'On the way to your location' },
+          { timestamp: '2024-01-15T12:00:00Z', status: 'confirmed', message: 'Order confirmed and being prepared' },
+          { timestamp: '2024-01-15T12:30:00Z', status: 'preparing', message: 'Items being picked and packed' },
+          { timestamp: '2024-01-15T13:00:00Z', status: 'picked_up', message: 'Order picked up by delivery partner' },
+          { timestamp: '2024-01-15T13:15:00Z', status: 'out_for_delivery', message: 'On the way to your location' },
         ]
       });
     } finally {
       setLoading(false);
     }
-  };
-
-  const findNearbyStores = (deliveryLocation: { latitude: number; longitude: number }) => {
-    const stores = allStores.map(store => ({
-      ...store,
-      distance: calculateDistance(deliveryLocation.latitude, deliveryLocation.longitude, store.location.latitude, store.location.longitude)
-    })).filter(store => store.distance <= 5).sort((a, b) => a.distance - b.distance);
-    
-    setNearbyStores(stores);
   };
 
   const openGoogleMaps = () => {
@@ -169,8 +121,15 @@ export default function OrderTrackingScreen() {
 
   const callDeliveryPartner = () => {
     if (!trackingData?.delivery_partner?.phone) return;
+    
     const phoneUrl = `tel:${trackingData.delivery_partner.phone}`;
-    Linking.openURL(phoneUrl);
+    Linking.canOpenURL(phoneUrl).then(supported => {
+      if (supported) {
+        Linking.openURL(phoneUrl);
+      } else {
+        Alert.alert('Error', 'Unable to make phone call');
+      }
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -233,111 +192,7 @@ export default function OrderTrackingScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        {/* Google Maps with Geofencing */}
-        <View style={styles.mapContainer}>
-          <MapView
-            style={styles.map}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={{
-              latitude: trackingData.delivery_location.latitude,
-              longitude: trackingData.delivery_location.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-          >
-            {/* Delivery Location Marker */}
-            <Marker
-              coordinate={trackingData.delivery_location}
-              title="Delivery Location"
-              description={trackingData.delivery_address}
-              pinColor="#2D8B47"
-            >
-              <View style={styles.markerContainer}>
-                <Ionicons name="home" size={30} color="#2D8B47" />
-              </View>
-            </Marker>
-
-            {/* Geofence Circle (5km radius) */}
-            <Circle
-              center={trackingData.delivery_location}
-              radius={GEOFENCE_RADIUS}
-              fillColor="rgba(45, 139, 71, 0.1)"
-              strokeColor="rgba(45, 139, 71, 0.5)"
-              strokeWidth={2}
-            />
-
-            {/* Assigned Store Marker */}
-            {trackingData.assigned_store && (
-              <Marker
-                coordinate={trackingData.assigned_store.location}
-                title={trackingData.assigned_store.name}
-                description={`${trackingData.assigned_store.distance.toFixed(2)}km away`}
-                pinColor="#FF8C42"
-              >
-                <View style={styles.storeMarkerContainer}>
-                  <Ionicons name="storefront" size={30} color="#FF8C42" />
-                </View>
-              </Marker>
-            )}
-
-            {/* Delivery Partner Location */}
-            {trackingData.delivery_partner && (
-              <Marker
-                coordinate={trackingData.delivery_partner.current_location}
-                title={trackingData.delivery_partner.name}
-                description={`ETA: ${trackingData.delivery_partner.estimated_arrival}`}
-              >
-                <View style={styles.deliveryMarkerContainer}>
-                  <Ionicons name="bicycle" size={30} color="#fff" />
-                </View>
-              </Marker>
-            )}
-
-            {/* Route Line */}
-            {trackingData.delivery_partner && trackingData.assigned_store && (
-              <Polyline
-                coordinates={[
-                  trackingData.assigned_store.location,
-                  trackingData.delivery_partner.current_location,
-                  trackingData.delivery_location,
-                ]}
-                strokeColor="#2D8B47"
-                strokeWidth={3}
-                lineDashPattern={[1, 10]}
-              />
-            )}
-          </MapView>
-
-          {/* Geofence Info Overlay */}
-          <View style={styles.geofenceInfo}>
-            <Ionicons name="shield-checkmark" size={20} color="#2D8B47" />
-            <Text style={styles.geofenceText}>
-              5km Geofence Active • Order from nearest store
-            </Text>
-          </View>
-        </View>
-
-        {/* Assigned Store Info */}
-        {trackingData.assigned_store && (
-          <View style={styles.storeCard}>
-            <View style={styles.storeHeader}>
-              <Ionicons name="storefront" size={24} color="#FF8C42" />
-              <View style={styles.storeInfo}>
-                <Text style={styles.storeTitle}>Fulfilling Store</Text>
-                <Text style={styles.storeName}>{trackingData.assigned_store.name}</Text>
-                <Text style={styles.storeAddress}>{trackingData.assigned_store.address}</Text>
-                <View style={styles.distanceBadge}>
-                  <Ionicons name="location-outline" size={14} color="#2D8B47" />
-                  <Text style={styles.distanceText}>
-                    {trackingData.assigned_store.distance.toFixed(2)}km away (within 5km geofence)
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
+      <View style={styles.content}>
         {/* Order Status */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
@@ -386,6 +241,13 @@ export default function OrderTrackingScreen() {
                 <Text style={[styles.actionText, styles.mapButtonText]}>Track on Maps</Text>
               </TouchableOpacity>
             </View>
+
+            <View style={styles.infrastructureNote}>
+              <Ionicons name="information-circle-outline" size={16} color="#6B7280" />
+              <Text style={styles.infrastructureText}>
+                🚀 Infrastructure ready for real-time GPS tracking integration
+              </Text>
+            </View>
           </View>
         )}
 
@@ -413,24 +275,6 @@ export default function OrderTrackingScreen() {
           ))}
         </View>
 
-        {/* Nearby Stores (within geofence) */}
-        {nearbyStores.length > 0 && (
-          <View style={styles.nearbyStoresCard}>
-            <Text style={styles.nearbyStoresTitle}>
-              🎯 Stores within 5km Geofence ({nearbyStores.length})
-            </Text>
-            {nearbyStores.map((store) => (
-              <View key={store.id} style={styles.nearbyStoreItem}>
-                <Ionicons name="storefront-outline" size={18} color="#6B7280" />
-                <View style={styles.nearbyStoreInfo}>
-                  <Text style={styles.nearbyStoreName}>{store.name}</Text>
-                  <Text style={styles.nearbyStoreDistance}>{store.distance.toFixed(2)}km away</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* Delivery Address */}
         <View style={styles.addressCard}>
           <View style={styles.addressHeader}>
@@ -439,7 +283,7 @@ export default function OrderTrackingScreen() {
           </View>
           <Text style={styles.addressText}>{trackingData.delivery_address}</Text>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -457,77 +301,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   
-  content: { flex: 1 },
-  
-  mapContainer: { height: 300, backgroundColor: '#E5E7EB', position: 'relative' },
-  map: { flex: 1 },
-  
-  markerContainer: {
-    backgroundColor: '#fff',
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#2D8B47',
-  },
-  storeMarkerContainer: {
-    backgroundColor: '#fff',
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#FF8C42',
-  },
-  deliveryMarkerContainer: {
-    backgroundColor: '#2D8B47',
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  
-  geofenceInfo: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  geofenceText: { fontSize: 13, fontWeight: '600', color: '#111', marginLeft: 8 },
-  
-  storeCard: { 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    marginTop: 16,
-    marginHorizontal: 16,
-    borderRadius: 16, 
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  storeHeader: { flexDirection: 'row', alignItems: 'flex-start' },
-  storeInfo: { flex: 1, marginLeft: 12 },
-  storeTitle: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
-  storeName: { fontSize: 16, fontWeight: 'bold', color: '#111', marginBottom: 4 },
-  storeAddress: { fontSize: 13, color: '#6B7280', marginBottom: 8 },
-  distanceBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
-  distanceText: { fontSize: 11, fontWeight: '600', color: '#2D8B47', marginLeft: 4 },
+  content: { flex: 1, padding: 16 },
   
   statusCard: { 
     backgroundColor: '#fff', 
     padding: 20, 
     borderRadius: 16, 
-    marginTop: 16,
-    marginHorizontal: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -552,8 +332,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', 
     padding: 20, 
     borderRadius: 16, 
-    marginTop: 16,
-    marginHorizontal: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -577,7 +356,7 @@ const styles = StyleSheet.create({
   rating: { fontSize: 14, fontWeight: '600', color: '#111', marginLeft: 4 },
   arrivalTime: { fontSize: 14, color: '#FF8C42', fontWeight: '600', marginBottom: 16 },
   
-  partnerActions: { flexDirection: 'row', gap: 12 },
+  partnerActions: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   actionButton: { 
     flex: 1, 
     flexDirection: 'row', 
@@ -593,12 +372,20 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 14, fontWeight: '600', color: '#2D8B47', marginLeft: 6 },
   mapButtonText: { color: '#fff' },
   
+  infrastructureNote: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F3F4F6', 
+    padding: 12, 
+    borderRadius: 8 
+  },
+  infrastructureText: { fontSize: 11, color: '#6B7280', marginLeft: 8, flex: 1 },
+  
   timelineCard: { 
     backgroundColor: '#fff', 
     padding: 20, 
     borderRadius: 16, 
-    marginTop: 16,
-    marginHorizontal: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -615,31 +402,10 @@ const styles = StyleSheet.create({
   timelineMessage: { fontSize: 13, color: '#6B7280', marginTop: 2 },
   timelineTime: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
   
-  nearbyStoresCard: { 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 16, 
-    marginTop: 16,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  nearbyStoresTitle: { fontSize: 16, fontWeight: 'bold', color: '#111', marginBottom: 12 },
-  nearbyStoreItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  nearbyStoreInfo: { flex: 1, marginLeft: 12 },
-  nearbyStoreName: { fontSize: 14, fontWeight: '500', color: '#111' },
-  nearbyStoreDistance: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  
   addressCard: { 
     backgroundColor: '#fff', 
     padding: 20, 
     borderRadius: 16,
-    marginTop: 16,
-    marginHorizontal: 16,
-    marginBottom: 32,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
