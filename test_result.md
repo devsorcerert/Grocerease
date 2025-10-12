@@ -267,10 +267,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "GrocerEase TV one-click ingredients feature"
-    - "Cable TV linking UI infrastructure"
-    - "Auto-rewards display and application UI"
-    - "Spending tiers display enhancement"
+    - "Admin Portal Backend APIs"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
