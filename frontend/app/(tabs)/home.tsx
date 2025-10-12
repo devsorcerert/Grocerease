@@ -163,34 +163,49 @@ export default function HomeScreen() {
 
         {!user?.cable_tv_linked && (
           <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
-            <View style={styles.cableTVIcon}>
-              <Ionicons name="tv" size={32} color="#2D8B47" />
+            <View style={styles.cableTVHeader}>
+              <View style={styles.cableTVMainContent}>
+                <View style={styles.cableTVTitleRow}>
+                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTVGiftIcon} />
+                  <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
+                </View>
+                <Text style={styles.cableTVSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
+              </View>
+              <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
+                <Text style={styles.linkButtonText}>Link Now</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.cableTVContent}>
-              <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
-              <Text style={styles.cableTVSubtitle}>Track spending & unlock rewards</Text>
+            
+            <View style={styles.savingsSection}>
+              <Text style={styles.savingsTitle}>Your Potential Savings</Text>
               
-              <View style={styles.offerPreviewCard}>
-                <View style={styles.offerPreviewItem}>
-                  <Ionicons name="calendar-outline" size={16} color="#2D8B47" />
-                  <View style={{marginLeft: 8}}>
-                    <Text style={styles.offerPreviewLabel}>Monthly</Text>
-                    <Text style={styles.offerPreviewValue}>₹0 → ₹1000</Text>
-                  </View>
+              <View style={styles.savingsRow}>
+                <View style={styles.savingsLeft}>
+                  <Ionicons name="time-outline" size={20} color="#fff" />
+                  <Text style={styles.savingsLabel}>Monthly Slot</Text>
                 </View>
-                <View style={styles.offerPreviewDivider} />
-                <View style={styles.offerPreviewItem}>
-                  <Ionicons name="calendar" size={16} color="#FF8C42" />
-                  <View style={{marginLeft: 8}}>
-                    <Text style={styles.offerPreviewLabel}>Yearly</Text>
-                    <Text style={styles.offerPreviewValue}>₹12k+ savings</Text>
-                  </View>
-                </View>
+                <Text style={styles.savingsValue}>₹{user?.monthly_spend || 0} / ₹1,000</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${Math.min((user?.monthly_spend || 0) / 1000 * 100, 100)}%` }]} />
               </View>
               
-              <Text style={styles.linkCTA}>👉 Link now to start tracking</Text>
+              <View style={styles.savingsRow}>
+                <View style={styles.savingsLeft}>
+                  <Ionicons name="calendar-outline" size={20} color="#fff" />
+                  <Text style={styles.savingsLabel}>Annual Slot</Text>
+                </View>
+                <Text style={styles.savingsValue}>₹{user?.total_spend || 0} / ₹12,000</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${Math.min((user?.total_spend || 0) / 12000 * 100, 100)}%` }]} />
+              </View>
+              
+              <View style={styles.trustIndicators}>
+                <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                <Text style={styles.trustText}>Instant verification • No extra charges • Secure & Private</Text>
+              </View>
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#2D8B47" />
           </TouchableOpacity>
         )}
 
