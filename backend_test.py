@@ -406,6 +406,75 @@ class GrocerEaseAPITester:
             self.log_result("Auto-Rewards Calculate", False, "Rewards calculation failed", error_msg)
             return False
     
+    def test_logout_functionality(self):
+        """Test 4: Logout Endpoint Functionality"""
+        print("\n🚪 Testing Logout Functionality...")
+        
+        if not self.test_user_token:
+            self.log_result("Logout Test - Token Check", False, "No valid token available for logout test")
+            return False
+        
+        # Test 1: Logout with valid token
+        response = self.make_request("POST", "/auth/logout", token=self.test_user_token)
+        
+        if response and response.status_code == 200:
+            data = response.json()
+            
+            # Verify response structure
+            required_fields = ["message", "success"]
+            missing_fields = [field for field in required_fields if field not in data]
+            
+            if missing_fields:
+                self.log_result("Logout - Response Structure", False, 
+                              f"Missing fields: {missing_fields}", data)
+                return False
+            
+            if data.get("success") == True and "Logout successful" in data.get("message", ""):
+                self.log_result("Logout - Valid Token", True, 
+                              "Logout endpoint working correctly with valid token")
+            else:
+                self.log_result("Logout - Valid Token", False, 
+                              f"Unexpected logout response: {data}")
+                return False
+        else:
+            error_msg = response.text if response else "Connection failed"
+            self.log_result("Logout - Valid Token", False, "Logout failed with valid token", error_msg)
+            return False
+        
+        # Test 2: Logout with invalid token
+        invalid_response = self.make_request("POST", "/auth/logout", token="invalid_token_12345")
+        
+        if invalid_response and invalid_response.status_code == 401:
+            self.log_result("Logout - Invalid Token", True, 
+                          "Correctly rejects invalid token with 401")
+        else:
+            status_code = invalid_response.status_code if invalid_response else "No response"
+            self.log_result("Logout - Invalid Token", False, 
+                          f"Expected 401 for invalid token, got {status_code}")
+        
+        # Test 3: Logout without token
+        no_token_response = self.make_request("POST", "/auth/logout")
+        
+        if no_token_response and no_token_response.status_code == 403:
+            self.log_result("Logout - No Token", True, 
+                          "Correctly rejects request without token (403)")
+        else:
+            status_code = no_token_response.status_code if no_token_response else "No response"
+            self.log_result("Logout - No Token", False, 
+                          f"Expected 403 for no token, got {status_code}")
+        
+        # Test 4: Verify JWT behavior after logout (tokens remain valid until expiry)
+        me_response = self.make_request("GET", "/auth/me", token=self.test_user_token)
+        
+        if me_response and me_response.status_code == 200:
+            self.log_result("Logout - JWT Behavior", True, 
+                          "Token still valid after logout (expected JWT behavior)")
+        else:
+            self.log_result("Logout - JWT Behavior", False, 
+                          "Token invalidated after logout (unexpected for JWT)")
+        
+        return True
+    
     def run_all_tests(self):
         """Run all backend tests"""
         print("🚀 Starting GrocerEase Backend API Tests")
