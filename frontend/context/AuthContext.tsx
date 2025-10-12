@@ -98,8 +98,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      console.log('Logout: Starting logout process...');
       await storage.removeItem('token');
+      console.log('Logout: Token removed');
       setUser(null);
+      console.log('Logout: User set to null');
+      
+      // Force reload to ensure clean state
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
     } catch (error) {
       console.error('Logout error:', error);
     }
