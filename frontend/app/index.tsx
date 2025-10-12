@@ -29,26 +29,11 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FEFDFB',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoGreen: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#2D8B47',
-  },
-  logoOrange: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#FF8C42',
-  },
   loader: {
-    marginTop: 16,
+    marginTop: 24,
   },
 });
