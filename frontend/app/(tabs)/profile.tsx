@@ -28,20 +28,7 @@ export default function ProfileScreen() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: async () => {
-        try {
-          console.log('Starting logout process...');
-          await logout();
-          console.log('Logout completed, navigating...');
-          
-          // Force navigation to welcome screen
-          setTimeout(() => {
-            router.replace('/(auth)/welcome');
-          }, 100);
-          
-        } catch (error) {
-          console.error('Logout failed:', error);
-          Alert.alert('Error', 'Logout failed. Please try again.');
-        }
+        await logout(); // This will handle navigation automatically
       }}
     ]);
   };
