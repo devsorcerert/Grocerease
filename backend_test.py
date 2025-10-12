@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Authentication Flow Testing
-Tests the complete authentication system with refresh token functionality
+Backend API Testing Script for GrocerEase Admin Portal
+Tests admin authentication, KPI dashboard, and product management endpoints
 """
 
 import requests
@@ -9,18 +9,16 @@ import json
 import sys
 from datetime import datetime
 
-# Get backend URL from frontend .env
-BACKEND_URL = "https://grocer-dash.preview.emergentagent.com/api"
+# Configuration
+BASE_URL = "https://grocer-dash.preview.emergentagent.com/api"
+ADMIN_EMAIL = "admin@grocereasetv.com"
+ADMIN_PASSWORD = "admin123"
 
-class AuthTester:
+class AdminAPITester:
     def __init__(self):
-        self.session = requests.Session()
-        self.test_user_email = "testauth2025@grocerease.com"
-        self.test_user_password = "SecurePass123!"
-        self.test_user_name = "Auth Test User"
-        self.access_token = None
-        self.refresh_token = None
-        self.user_id = None
+        self.base_url = BASE_URL
+        self.admin_token = None
+        self.test_results = []
         
     def log(self, message, status="INFO"):
         timestamp = datetime.now().strftime("%H:%M:%S")
