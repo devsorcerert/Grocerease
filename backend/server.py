@@ -166,8 +166,9 @@ async def register(user: UserRegister):
     }
     await db.users.insert_one(user_dict)
     token = create_access_token({"user_id": user_dict["id"]})
+    refresh_token = create_access_token({"user_id": user_dict["id"], "type": "refresh"})
     
-    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"], "phone": user_dict["phone"], "address": user_dict["address"], "city": user_dict["city"], "pincode": user_dict["pincode"]}}
+    return {"token": token, "refresh_token": refresh_token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"], "phone": user_dict["phone"], "address": user_dict["address"], "city": user_dict["city"], "pincode": user_dict["pincode"]}}
 
 @api_router.post("/auth/update-profile")
 async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user)):
