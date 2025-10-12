@@ -38,6 +38,11 @@ interface OrderTrackingData {
   status: 'confirmed' | 'preparing' | 'picked_up' | 'out_for_delivery' | 'delivered';
   delivery_partner?: DeliveryPartner;
   delivery_address: string;
+  delivery_location: {
+    latitude: number;
+    longitude: number;
+  };
+  assigned_store?: Store;
   estimated_delivery: string;
   tracking_updates: Array<{
     timestamp: string;
