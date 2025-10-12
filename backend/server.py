@@ -223,26 +223,35 @@ async def refresh_token(request: dict):
         if not old_refresh_token:
             raise HTTPException(status_code=400, detail="Refresh token required")
         
-        # In a production environment, you would:
-        # 1. Validate the refresh token against database
-        # 2. Check if it's expired or revoked
-        # 3. Get user info from refresh token
-        
-        # For now, create new tokens (mock implementation)
-        # This would typically decode the refresh token to get user_id
+        # Decode and validate the refresh token
         try:
-            # Mock decode - in production, properly decode and validate refresh token
-            user_id = "mock_user_id"  # This would come from token validation
+            payload = jwt.decode(old_refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("user_id")
+            token_type = payload.get("type")
             
-            # Generate new tokens
-            new_access_token = create_access_token(data={"sub": user_id})
-            new_refresh_token = create_access_token(data={"sub": user_id, "type": "refresh"})
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid refresh token - no user_id")
+            
+            # Verify it's actually a refresh token
+            if token_type != "refresh":
+                raise HTTPException(status_code=401, detail="Invalid token type")
+            
+            # Verify user still exists
+            user = await db.users.find_one({"id": user_id})
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+            
+            # Generate new tokens with proper user_id
+            new_access_token = create_access_token({"user_id": user_id})
+            new_refresh_token = create_access_token({"user_id": user_id, "type": "refresh"})
             
             return {
                 "token": new_access_token,
                 "refresh_token": new_refresh_token
             }
-        except Exception:
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail="Refresh token expired")
+        except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
         
     except HTTPException:
