@@ -500,9 +500,10 @@ const styles = StyleSheet.create({
   },
   adminButtonText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
   notificationButton: { padding: 8 },
-  cableTVCard: { 
+  cableTvCard: { 
     flexDirection: 'column', 
-    backgroundColor: '#2D8B47', 
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    backgroundColor: '#667eea', 
     padding: 20, 
     margin: 16, 
     borderRadius: 20,
@@ -512,36 +513,40 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  cableTVHeader: {
+  cableTvHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 20,
   },
-  cableTVMainContent: {
+  cableTvMainContent: {
     flex: 1,
+    paddingRight: 12,
   },
-  cableTVTitleRow: {
+  cableTvTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+    flexWrap: 'wrap',
   },
-  cableTVGiftIcon: {
+  cableTvGiftIcon: {
     marginRight: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 12,
     padding: 4,
   },
-  cableTVTitle: { 
+  cableTvTitle: { 
     fontSize: 18, 
     fontWeight: 'bold', 
     color: '#fff',
-    flex: 1,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
-  cableTVSubtitle: { 
+  cableTvSubtitle: { 
     fontSize: 14, 
     color: 'rgba(255, 255, 255, 0.9)', 
     lineHeight: 20,
+    flexWrap: 'wrap',
   },
   linkButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
