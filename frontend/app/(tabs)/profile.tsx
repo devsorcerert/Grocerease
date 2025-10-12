@@ -94,16 +94,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          {user?.is_admin && (
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.adminItem]}
-              onPress={() => router.push('/admin')}
-            >
-              <Ionicons name="shield-checkmark" size={24} color="#FF8C42" />
-              <Text style={[styles.menuText, styles.adminText]}>Admin Panel</Text>
-              <Ionicons name="chevron-forward" size={20} color="#FF8C42" />
-            </TouchableOpacity>
-          )}
+          {/* Admin Panel access moved to separate web dashboard */}
 
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/edit')}>
             <Ionicons name="person-outline" size={24} color="#111" />
