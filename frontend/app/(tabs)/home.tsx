@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   notificationButton: { padding: 8 },
   cableTVCard: { 
     flexDirection: 'column', 
-    backgroundColor: 'linear-gradient(135deg, #2D8B47 0%, #1F5F32 100%)', 
+    backgroundColor: '#2D8B47', 
     padding: 20, 
     margin: 16, 
     borderRadius: 20,
