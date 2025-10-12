@@ -75,9 +75,12 @@ class UserRegister(BaseModel):
     pincode: Optional[str] = None
 
 class ProfileUpdate(BaseModel):
-    address: str
-    city: str
-    pincode: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
