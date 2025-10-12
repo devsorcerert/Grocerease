@@ -1,618 +1,734 @@
 diff --git a/frontend/app/(tabs)/home.tsx b/frontend/app/(tabs)/home.tsx
-index ed857e6..f38932e 100644
+index f38932e..3b5f601 100644
 --- a/frontend/app/(tabs)/home.tsx
 +++ b/frontend/app/(tabs)/home.tsx
-@@ -1,5 +1,5 @@
- import React, { useState, useEffect } from 'react';
--import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions } from 'react-native';
-+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image } from 'react-native';
- import { useAuth } from '../../context/AuthContext';
- import { Ionicons } from '@expo/vector-icons';
- import api from '../../utils/api';
+@@ -705,14 +705,98 @@ const styles = StyleSheet.create({
+   categoryName: { fontSize: 11, color: '#111', textAlign: 'center', minHeight: 32, lineHeight: 14, flexWrap: 'wrap' },
+ 
+   // Products
+-  productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
+-  productCard: { width: '48%', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12 },
+-  productImagePlaceholder: { width: '100%', height: 100, backgroundColor: '#E5E7EB', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+-  productName: { fontSize: 13, color: '#111', marginBottom: 2, fontWeight: '500' },
+-  productUnit: { fontSize: 11, color: '#9CA3AF', marginBottom: 8 },
+-  productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+-  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#2D8B47' },
+-  addBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#2D8B47', alignItems: 'center', justifyContent: 'center' },
++  productGrid: { 
++    flexDirection: 'row', 
++    flexWrap: 'wrap', 
++    justifyContent: 'space-between', 
++    paddingHorizontal: 16,
++    gap: 12,
++  },
++  productCard: { 
++    width: '48%', 
++    backgroundColor: '#fff', 
++    borderRadius: 16, 
++    marginBottom: 16,
++    shadowColor: '#000',
++    shadowOffset: { width: 0, height: 2 },
++    shadowOpacity: 0.08,
++    shadowRadius: 8,
++    elevation: 3,
++    overflow: 'hidden',
++  },
++  productImageContainer: {
++    position: 'relative',
++    width: '100%',
++    height: 120,
++  },
++  productImage: {
++    width: '100%',
++    height: '100%',
++    backgroundColor: '#F9FAFB',
++  },
++  productImagePlaceholder: { 
++    width: '100%', 
++    height: '100%', 
++    backgroundColor: '#F3F4F6', 
++    alignItems: 'center', 
++    justifyContent: 'center',
++  },
++  productBadge: {
++    position: 'absolute',
++    top: 8,
++    left: 8,
++    backgroundColor: '#2D8B47',
++    paddingHorizontal: 8,
++    paddingVertical: 4,
++    borderRadius: 12,
++  },
++  badgeText: {
++    fontSize: 10,
++    fontWeight: '600',
++    color: '#fff',
++  },
++  productInfo: {
++    padding: 12,
++  },
++  productName: { 
++    fontSize: 14, 
++    fontWeight: '600', 
++    color: '#111', 
++    marginBottom: 4,
++    lineHeight: 18,
++  },
++  productUnit: { 
++    fontSize: 11, 
++    color: '#6B7280', 
++    marginBottom: 8,
++  },
++  productFooter: { 
++    flexDirection: 'row', 
++    justifyContent: 'space-between', 
++    alignItems: 'center',
++  },
++  priceContainer: {
++    flex: 1,
++  },
++  productPrice: { 
++    fontSize: 15, 
++    fontWeight: 'bold', 
++    color: '#2D8B47',
++  },
++  originalPrice: {
++    fontSize: 11,
++    color: '#9CA3AF',
++    textDecorationLine: 'line-through',
++    marginTop: 2,
++  },
++  addBtn: { 
++    width: 28, 
++    height: 28, 
++    backgroundColor: '#FF8C42', 
++    borderRadius: 14, 
++    alignItems: 'center', 
++    justifyContent: 'center',
++  },
+ 
+   // GrocerEase TV Section
+   tvSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
 diff --git a/model.patch b/model.patch
-index 10de3c7..e69de29 100644
+index bf420df..e69de29 100644
 --- a/model.patch
 +++ b/model.patch
-@@ -1,602 +0,0 @@
+@@ -1,618 +0,0 @@
 -diff --git a/frontend/app/(tabs)/home.tsx b/frontend/app/(tabs)/home.tsx
--index d54b3cf..a60c2c2 100644
+-index ed857e6..f38932e 100644
 ---- a/frontend/app/(tabs)/home.tsx
 -+++ b/frontend/app/(tabs)/home.tsx
--@@ -162,14 +162,14 @@ export default function HomeScreen() {
--         </View>
-- 
--         {!user?.cable_tv_linked && (
---          <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
---            <View style={styles.cableTVHeader}>
---              <View style={styles.cableTVMainContent}>
---                <View style={styles.cableTVTitleRow}>
---                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTVGiftIcon} />
---                  <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
--+          <TouchableOpacity style={styles.cableTvCard} onPress={() => setShowCableTVModal(true)}>
--+            <View style={styles.cableTvHeader}>
--+              <View style={styles.cableTvMainContent}>
--+                <View style={styles.cableTvTitleRow}>
--+                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTvGiftIcon} />
--+                  <Text style={styles.cableTvTitle}>Link Your Cable TV</Text>
--                 </View>
---                <Text style={styles.cableTVSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
--+                <Text style={styles.cableTvSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
--               </View>
--               <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
--                 <Text style={styles.linkButtonText}>Link Now</Text>
--@@ -500,9 +500,10 @@ const styles = StyleSheet.create({
--   },
--   adminButtonText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
--   notificationButton: { padding: 8 },
---  cableTVCard: { 
--+  cableTvCard: { 
--     flexDirection: 'column', 
---    backgroundColor: '#2D8B47', 
--+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
--+    backgroundColor: '#667eea', 
--     padding: 20, 
--     margin: 16, 
--     borderRadius: 20,
--@@ -512,47 +513,51 @@ const styles = StyleSheet.create({
--     shadowRadius: 12,
--     elevation: 8,
--   },
---  cableTVHeader: {
--+  cableTvHeader: {
--     flexDirection: 'row',
--     justifyContent: 'space-between',
--     alignItems: 'flex-start',
--     marginBottom: 20,
--   },
---  cableTVMainContent: {
--+  cableTvMainContent: {
--     flex: 1,
--+    paddingRight: 12,
--   },
---  cableTVTitleRow: {
--+  cableTvTitleRow: {
--     flexDirection: 'row',
--     alignItems: 'center',
--     marginBottom: 8,
--+    flexWrap: 'wrap',
--   },
---  cableTVGiftIcon: {
--+  cableTvGiftIcon: {
--     marginRight: 8,
--     backgroundColor: 'rgba(255, 255, 255, 0.2)',
--     borderRadius: 12,
--     padding: 4,
--   },
---  cableTVTitle: { 
--+  cableTvTitle: { 
--     fontSize: 18, 
--     fontWeight: 'bold', 
--     color: '#fff',
---    flex: 1,
--+    flexShrink: 1,
--+    flexWrap: 'wrap',
--   },
---  cableTVSubtitle: { 
--+  cableTvSubtitle: { 
--     fontSize: 14, 
--     color: 'rgba(255, 255, 255, 0.9)', 
--     lineHeight: 20,
--+    flexWrap: 'wrap',
--   },
--   linkButton: {
---    backgroundColor: 'rgba(255, 255, 255, 0.2)',
--+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
--     paddingHorizontal: 16,
---    paddingVertical: 8,
---    borderRadius: 20,
---    borderWidth: 1,
---    borderColor: 'rgba(255, 255, 255, 0.3)',
--+    paddingVertical: 10,
--+    borderRadius: 25,
--+    minWidth: 80,
--+    alignItems: 'center',
--   },
--   linkButtonText: {
---    color: '#fff',
--+    color: '#667eea',
--     fontSize: 14,
--     fontWeight: '600',
--   },
--@@ -566,26 +571,32 @@ const styles = StyleSheet.create({
--     fontWeight: 'bold',
--     color: '#fff',
--     marginBottom: 16,
--+    textAlign: 'center',
--   },
--   savingsRow: {
--     flexDirection: 'row',
--     justifyContent: 'space-between',
--     alignItems: 'center',
--     marginBottom: 8,
--+    flexWrap: 'wrap',
--   },
--   savingsLeft: {
--     flexDirection: 'row',
--     alignItems: 'center',
--+    flex: 1,
--+    marginRight: 8,
--   },
--   savingsLabel: {
--     fontSize: 14,
--     color: 'rgba(255, 255, 255, 0.9)',
--     marginLeft: 8,
--+    flexShrink: 1,
--   },
--   savingsValue: {
--     fontSize: 14,
--     fontWeight: '600',
--     color: '#fff',
--+    flexShrink: 0,
--   },
--   progressBar: {
--     height: 6,
--@@ -601,14 +612,17 @@ const styles = StyleSheet.create({
--   },
--   trustIndicators: {
--     flexDirection: 'row',
---    alignItems: 'center',
--+    alignItems: 'flex-start',
--     marginTop: 8,
--+    flexWrap: 'wrap',
--   },
--   trustText: {
---    fontSize: 12,
--+    fontSize: 11,
--     color: 'rgba(255, 255, 255, 0.8)',
--     marginLeft: 8,
--     flex: 1,
--+    lineHeight: 16,
--+    flexWrap: 'wrap',
--   },
--   offerPreviewCard: { 
--     flexDirection: 'row', 
+-@@ -1,5 +1,5 @@
+- import React, { useState, useEffect } from 'react';
+--import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions } from 'react-native';
+-+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image } from 'react-native';
+- import { useAuth } from '../../context/AuthContext';
+- import { Ionicons } from '@expo/vector-icons';
+- import api from '../../utils/api';
 -diff --git a/model.patch b/model.patch
--index 3763243..d0c5649 100644
+-index 10de3c7..e69de29 100644
 ---- a/model.patch
 -+++ b/model.patch
--@@ -1,440 +0,0 @@
+-@@ -1,602 +0,0 @@
 --diff --git a/frontend/app/(tabs)/home.tsx b/frontend/app/(tabs)/home.tsx
---index cd1167b..d54b3cf 100644
+--index d54b3cf..a60c2c2 100644
 ----- a/frontend/app/(tabs)/home.tsx
 --+++ b/frontend/app/(tabs)/home.tsx
---@@ -163,34 +163,49 @@ export default function HomeScreen() {
+--@@ -162,14 +162,14 @@ export default function HomeScreen() {
+--         </View>
 -- 
 --         {!user?.cable_tv_linked && (
---           <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
----            <View style={styles.cableTVIcon}>
----              <Ionicons name="tv" size={32} color="#2D8B47" />
---+            <View style={styles.cableTVHeader}>
---+              <View style={styles.cableTVMainContent}>
---+                <View style={styles.cableTVTitleRow}>
---+                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTVGiftIcon} />
---+                  <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
---+                </View>
---+                <Text style={styles.cableTVSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
---+              </View>
---+              <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
---+                <Text style={styles.linkButtonText}>Link Now</Text>
---+              </TouchableOpacity>
---             </View>
----            <View style={styles.cableTVContent}>
----              <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
----              <Text style={styles.cableTVSubtitle}>Track spending & unlock rewards</Text>
---+            
---+            <View style={styles.savingsSection}>
---+              <Text style={styles.savingsTitle}>Your Potential Savings</Text>
---               
----              <View style={styles.offerPreviewCard}>
----                <View style={styles.offerPreviewItem}>
----                  <Ionicons name="calendar-outline" size={16} color="#2D8B47" />
----                  <View style={{marginLeft: 8}}>
----                    <Text style={styles.offerPreviewLabel}>Monthly</Text>
----                    <Text style={styles.offerPreviewValue}>₹0 → ₹1000</Text>
----                  </View>
---+              <View style={styles.savingsRow}>
---+                <View style={styles.savingsLeft}>
---+                  <Ionicons name="time-outline" size={20} color="#fff" />
---+                  <Text style={styles.savingsLabel}>Monthly Slot</Text>
+---          <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
+---            <View style={styles.cableTVHeader}>
+---              <View style={styles.cableTVMainContent}>
+---                <View style={styles.cableTVTitleRow}>
+---                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTVGiftIcon} />
+---                  <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
+--+          <TouchableOpacity style={styles.cableTvCard} onPress={() => setShowCableTVModal(true)}>
+--+            <View style={styles.cableTvHeader}>
+--+              <View style={styles.cableTvMainContent}>
+--+                <View style={styles.cableTvTitleRow}>
+--+                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTvGiftIcon} />
+--+                  <Text style={styles.cableTvTitle}>Link Your Cable TV</Text>
 --                 </View>
----                <View style={styles.offerPreviewDivider} />
----                <View style={styles.offerPreviewItem}>
----                  <Ionicons name="calendar" size={16} color="#FF8C42" />
----                  <View style={{marginLeft: 8}}>
----                    <Text style={styles.offerPreviewLabel}>Yearly</Text>
----                    <Text style={styles.offerPreviewValue}>₹12k+ savings</Text>
----                  </View>
---+                <Text style={styles.savingsValue}>₹{user?.monthly_spend || 0} / ₹1,000</Text>
---+              </View>
---+              <View style={styles.progressBar}>
---+                <View style={[styles.progressFill, { width: `${Math.min((user?.monthly_spend || 0) / 1000 * 100, 100)}%` }]} />
---+              </View>
---+              
---+              <View style={styles.savingsRow}>
---+                <View style={styles.savingsLeft}>
---+                  <Ionicons name="calendar-outline" size={20} color="#fff" />
---+                  <Text style={styles.savingsLabel}>Annual Slot</Text>
---                 </View>
---+                <Text style={styles.savingsValue}>₹{user?.total_spend || 0} / ₹12,000</Text>
---+              </View>
---+              <View style={styles.progressBar}>
---+                <View style={[styles.progressFill, { width: `${Math.min((user?.total_spend || 0) / 12000 * 100, 100)}%` }]} />
+---                <Text style={styles.cableTVSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
+--+                <Text style={styles.cableTvSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
 --               </View>
---               
----              <Text style={styles.linkCTA}>👉 Link now to start tracking</Text>
---+              <View style={styles.trustIndicators}>
---+                <Ionicons name="checkmark-circle" size={16} color="#fff" />
---+                <Text style={styles.trustText}>Instant verification • No extra charges • Secure & Private</Text>
---+              </View>
---             </View>
----            <Ionicons name="chevron-forward" size={24} color="#2D8B47" />
---           </TouchableOpacity>
---         )}
--- 
---@@ -485,11 +500,116 @@ const styles = StyleSheet.create({
+--               <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
+--                 <Text style={styles.linkButtonText}>Link Now</Text>
+--@@ -500,9 +500,10 @@ const styles = StyleSheet.create({
 --   },
 --   adminButtonText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
 --   notificationButton: { padding: 8 },
----  cableTVCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#ECFDF5', padding: 16, margin: 16, borderRadius: 16 },
----  cableTVIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
----  cableTVContent: { flex: 1, marginLeft: 16 },
----  cableTVTitle: { fontSize: 16, fontWeight: '600', color: '#111' },
----  cableTVSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 4 },
---+  cableTVCard: { 
---+    flexDirection: 'column', 
---+    backgroundColor: '#2D8B47', 
---+    padding: 20, 
---+    margin: 16, 
---+    borderRadius: 20,
---+    shadowColor: '#000',
---+    shadowOffset: { width: 0, height: 4 },
---+    shadowOpacity: 0.15,
---+    shadowRadius: 12,
---+    elevation: 8,
---+  },
---+  cableTVHeader: {
---+    flexDirection: 'row',
---+    justifyContent: 'space-between',
---+    alignItems: 'flex-start',
---+    marginBottom: 20,
---+  },
---+  cableTVMainContent: {
---+    flex: 1,
---+  },
---+  cableTVTitleRow: {
---+    flexDirection: 'row',
+---  cableTVCard: { 
+--+  cableTvCard: { 
+--     flexDirection: 'column', 
+---    backgroundColor: '#2D8B47', 
+--+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+--+    backgroundColor: '#667eea', 
+--     padding: 20, 
+--     margin: 16, 
+--     borderRadius: 20,
+--@@ -512,47 +513,51 @@ const styles = StyleSheet.create({
+--     shadowRadius: 12,
+--     elevation: 8,
+--   },
+---  cableTVHeader: {
+--+  cableTvHeader: {
+--     flexDirection: 'row',
+--     justifyContent: 'space-between',
+--     alignItems: 'flex-start',
+--     marginBottom: 20,
+--   },
+---  cableTVMainContent: {
+--+  cableTvMainContent: {
+--     flex: 1,
+--+    paddingRight: 12,
+--   },
+---  cableTVTitleRow: {
+--+  cableTvTitleRow: {
+--     flexDirection: 'row',
+--     alignItems: 'center',
+--     marginBottom: 8,
+--+    flexWrap: 'wrap',
+--   },
+---  cableTVGiftIcon: {
+--+  cableTvGiftIcon: {
+--     marginRight: 8,
+--     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+--     borderRadius: 12,
+--     padding: 4,
+--   },
+---  cableTVTitle: { 
+--+  cableTvTitle: { 
+--     fontSize: 18, 
+--     fontWeight: 'bold', 
+--     color: '#fff',
+---    flex: 1,
+--+    flexShrink: 1,
+--+    flexWrap: 'wrap',
+--   },
+---  cableTVSubtitle: { 
+--+  cableTvSubtitle: { 
+--     fontSize: 14, 
+--     color: 'rgba(255, 255, 255, 0.9)', 
+--     lineHeight: 20,
+--+    flexWrap: 'wrap',
+--   },
+--   linkButton: {
+---    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+--+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+--     paddingHorizontal: 16,
+---    paddingVertical: 8,
+---    borderRadius: 20,
+---    borderWidth: 1,
+---    borderColor: 'rgba(255, 255, 255, 0.3)',
+--+    paddingVertical: 10,
+--+    borderRadius: 25,
+--+    minWidth: 80,
 --+    alignItems: 'center',
---+    marginBottom: 8,
---+  },
---+  cableTVGiftIcon: {
+--   },
+--   linkButtonText: {
+---    color: '#fff',
+--+    color: '#667eea',
+--     fontSize: 14,
+--     fontWeight: '600',
+--   },
+--@@ -566,26 +571,32 @@ const styles = StyleSheet.create({
+--     fontWeight: 'bold',
+--     color: '#fff',
+--     marginBottom: 16,
+--+    textAlign: 'center',
+--   },
+--   savingsRow: {
+--     flexDirection: 'row',
+--     justifyContent: 'space-between',
+--     alignItems: 'center',
+--     marginBottom: 8,
+--+    flexWrap: 'wrap',
+--   },
+--   savingsLeft: {
+--     flexDirection: 'row',
+--     alignItems: 'center',
+--+    flex: 1,
 --+    marginRight: 8,
---+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
---+    borderRadius: 12,
---+    padding: 4,
---+  },
---+  cableTVTitle: { 
---+    fontSize: 18, 
---+    fontWeight: 'bold', 
---+    color: '#fff',
---+    flex: 1,
---+  },
---+  cableTVSubtitle: { 
---+    fontSize: 14, 
---+    color: 'rgba(255, 255, 255, 0.9)', 
---+    lineHeight: 20,
---+  },
---+  linkButton: {
---+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
---+    paddingHorizontal: 16,
---+    paddingVertical: 8,
---+    borderRadius: 20,
---+    borderWidth: 1,
---+    borderColor: 'rgba(255, 255, 255, 0.3)',
---+  },
---+  linkButtonText: {
---+    color: '#fff',
---+    fontSize: 14,
---+    fontWeight: '600',
---+  },
---+  savingsSection: {
---+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
---+    borderRadius: 16,
---+    padding: 16,
---+  },
---+  savingsTitle: {
---+    fontSize: 16,
---+    fontWeight: 'bold',
---+    color: '#fff',
---+    marginBottom: 16,
---+  },
---+  savingsRow: {
---+    flexDirection: 'row',
---+    justifyContent: 'space-between',
---+    alignItems: 'center',
---+    marginBottom: 8,
---+  },
---+  savingsLeft: {
---+    flexDirection: 'row',
---+    alignItems: 'center',
---+  },
---+  savingsLabel: {
---+    fontSize: 14,
---+    color: 'rgba(255, 255, 255, 0.9)',
---+    marginLeft: 8,
---+  },
---+  savingsValue: {
---+    fontSize: 14,
---+    fontWeight: '600',
---+    color: '#fff',
---+  },
---+  progressBar: {
---+    height: 6,
---+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
---+    borderRadius: 3,
---+    marginBottom: 16,
---+    overflow: 'hidden',
---+  },
---+  progressFill: {
---+    height: '100%',
---+    backgroundColor: '#fff',
---+    borderRadius: 3,
---+  },
---+  trustIndicators: {
---+    flexDirection: 'row',
---+    alignItems: 'center',
---+    marginTop: 8,
---+  },
---+  trustText: {
---+    fontSize: 12,
---+    color: 'rgba(255, 255, 255, 0.8)',
---+    marginLeft: 8,
---+    flex: 1,
---+  },
+--   },
+--   savingsLabel: {
+--     fontSize: 14,
+--     color: 'rgba(255, 255, 255, 0.9)',
+--     marginLeft: 8,
+--+    flexShrink: 1,
+--   },
+--   savingsValue: {
+--     fontSize: 14,
+--     fontWeight: '600',
+--     color: '#fff',
+--+    flexShrink: 0,
+--   },
+--   progressBar: {
+--     height: 6,
+--@@ -601,14 +612,17 @@ const styles = StyleSheet.create({
+--   },
+--   trustIndicators: {
+--     flexDirection: 'row',
+---    alignItems: 'center',
+--+    alignItems: 'flex-start',
+--     marginTop: 8,
+--+    flexWrap: 'wrap',
+--   },
+--   trustText: {
+---    fontSize: 12,
+--+    fontSize: 11,
+--     color: 'rgba(255, 255, 255, 0.8)',
+--     marginLeft: 8,
+--     flex: 1,
+--+    lineHeight: 16,
+--+    flexWrap: 'wrap',
+--   },
 --   offerPreviewCard: { 
 --     flexDirection: 'row', 
---     backgroundColor: '#fff', 
 --diff --git a/model.patch b/model.patch
---index 454729c..a1bed5f 100644
+--index 3763243..d0c5649 100644
 ----- a/model.patch
 --+++ b/model.patch
---@@ -1,238 +0,0 @@
----diff --git a/backend/server.py b/backend/server.py
----index 4107169..ed64243 100644
------- a/backend/server.py
----+++ b/backend/server.py
----@@ -745,7 +745,7 @@ async def create_video(video: VideoCreate, user_id: str = Depends(get_current_us
----         "created_at": datetime.utcnow()
----     }
----     await db.videos.insert_one(video_dict)
-----    return video_dict
----+    return clean_mongo_doc(video_dict)
+--@@ -1,440 +0,0 @@
+---diff --git a/frontend/app/(tabs)/home.tsx b/frontend/app/(tabs)/home.tsx
+---index cd1167b..d54b3cf 100644
+------ a/frontend/app/(tabs)/home.tsx
+---+++ b/frontend/app/(tabs)/home.tsx
+---@@ -163,34 +163,49 @@ export default function HomeScreen() {
 --- 
---- # Categories
---- @api_router.get("/categories")
+---         {!user?.cable_tv_linked && (
+---           <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
+----            <View style={styles.cableTVIcon}>
+----              <Ionicons name="tv" size={32} color="#2D8B47" />
+---+            <View style={styles.cableTVHeader}>
+---+              <View style={styles.cableTVMainContent}>
+---+                <View style={styles.cableTVTitleRow}>
+---+                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTVGiftIcon} />
+---+                  <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
+---+                </View>
+---+                <Text style={styles.cableTVSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
+---+              </View>
+---+              <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
+---+                <Text style={styles.linkButtonText}>Link Now</Text>
+---+              </TouchableOpacity>
+---             </View>
+----            <View style={styles.cableTVContent}>
+----              <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
+----              <Text style={styles.cableTVSubtitle}>Track spending & unlock rewards</Text>
+---+            
+---+            <View style={styles.savingsSection}>
+---+              <Text style={styles.savingsTitle}>Your Potential Savings</Text>
+---               
+----              <View style={styles.offerPreviewCard}>
+----                <View style={styles.offerPreviewItem}>
+----                  <Ionicons name="calendar-outline" size={16} color="#2D8B47" />
+----                  <View style={{marginLeft: 8}}>
+----                    <Text style={styles.offerPreviewLabel}>Monthly</Text>
+----                    <Text style={styles.offerPreviewValue}>₹0 → ₹1000</Text>
+----                  </View>
+---+              <View style={styles.savingsRow}>
+---+                <View style={styles.savingsLeft}>
+---+                  <Ionicons name="time-outline" size={20} color="#fff" />
+---+                  <Text style={styles.savingsLabel}>Monthly Slot</Text>
+---                 </View>
+----                <View style={styles.offerPreviewDivider} />
+----                <View style={styles.offerPreviewItem}>
+----                  <Ionicons name="calendar" size={16} color="#FF8C42" />
+----                  <View style={{marginLeft: 8}}>
+----                    <Text style={styles.offerPreviewLabel}>Yearly</Text>
+----                    <Text style={styles.offerPreviewValue}>₹12k+ savings</Text>
+----                  </View>
+---+                <Text style={styles.savingsValue}>₹{user?.monthly_spend || 0} / ₹1,000</Text>
+---+              </View>
+---+              <View style={styles.progressBar}>
+---+                <View style={[styles.progressFill, { width: `${Math.min((user?.monthly_spend || 0) / 1000 * 100, 100)}%` }]} />
+---+              </View>
+---+              
+---+              <View style={styles.savingsRow}>
+---+                <View style={styles.savingsLeft}>
+---+                  <Ionicons name="calendar-outline" size={20} color="#fff" />
+---+                  <Text style={styles.savingsLabel}>Annual Slot</Text>
+---                 </View>
+---+                <Text style={styles.savingsValue}>₹{user?.total_spend || 0} / ₹12,000</Text>
+---+              </View>
+---+              <View style={styles.progressBar}>
+---+                <View style={[styles.progressFill, { width: `${Math.min((user?.total_spend || 0) / 12000 * 100, 100)}%` }]} />
+---               </View>
+---               
+----              <Text style={styles.linkCTA}>👉 Link now to start tracking</Text>
+---+              <View style={styles.trustIndicators}>
+---+                <Ionicons name="checkmark-circle" size={16} color="#fff" />
+---+                <Text style={styles.trustText}>Instant verification • No extra charges • Secure & Private</Text>
+---+              </View>
+---             </View>
+----            <Ionicons name="chevron-forward" size={24} color="#2D8B47" />
+---           </TouchableOpacity>
+---         )}
+--- 
+---@@ -485,11 +500,116 @@ const styles = StyleSheet.create({
+---   },
+---   adminButtonText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
+---   notificationButton: { padding: 8 },
+----  cableTVCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#ECFDF5', padding: 16, margin: 16, borderRadius: 16 },
+----  cableTVIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+----  cableTVContent: { flex: 1, marginLeft: 16 },
+----  cableTVTitle: { fontSize: 16, fontWeight: '600', color: '#111' },
+----  cableTVSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+---+  cableTVCard: { 
+---+    flexDirection: 'column', 
+---+    backgroundColor: '#2D8B47', 
+---+    padding: 20, 
+---+    margin: 16, 
+---+    borderRadius: 20,
+---+    shadowColor: '#000',
+---+    shadowOffset: { width: 0, height: 4 },
+---+    shadowOpacity: 0.15,
+---+    shadowRadius: 12,
+---+    elevation: 8,
+---+  },
+---+  cableTVHeader: {
+---+    flexDirection: 'row',
+---+    justifyContent: 'space-between',
+---+    alignItems: 'flex-start',
+---+    marginBottom: 20,
+---+  },
+---+  cableTVMainContent: {
+---+    flex: 1,
+---+  },
+---+  cableTVTitleRow: {
+---+    flexDirection: 'row',
+---+    alignItems: 'center',
+---+    marginBottom: 8,
+---+  },
+---+  cableTVGiftIcon: {
+---+    marginRight: 8,
+---+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+---+    borderRadius: 12,
+---+    padding: 4,
+---+  },
+---+  cableTVTitle: { 
+---+    fontSize: 18, 
+---+    fontWeight: 'bold', 
+---+    color: '#fff',
+---+    flex: 1,
+---+  },
+---+  cableTVSubtitle: { 
+---+    fontSize: 14, 
+---+    color: 'rgba(255, 255, 255, 0.9)', 
+---+    lineHeight: 20,
+---+  },
+---+  linkButton: {
+---+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+---+    paddingHorizontal: 16,
+---+    paddingVertical: 8,
+---+    borderRadius: 20,
+---+    borderWidth: 1,
+---+    borderColor: 'rgba(255, 255, 255, 0.3)',
+---+  },
+---+  linkButtonText: {
+---+    color: '#fff',
+---+    fontSize: 14,
+---+    fontWeight: '600',
+---+  },
+---+  savingsSection: {
+---+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+---+    borderRadius: 16,
+---+    padding: 16,
+---+  },
+---+  savingsTitle: {
+---+    fontSize: 16,
+---+    fontWeight: 'bold',
+---+    color: '#fff',
+---+    marginBottom: 16,
+---+  },
+---+  savingsRow: {
+---+    flexDirection: 'row',
+---+    justifyContent: 'space-between',
+---+    alignItems: 'center',
+---+    marginBottom: 8,
+---+  },
+---+  savingsLeft: {
+---+    flexDirection: 'row',
+---+    alignItems: 'center',
+---+  },
+---+  savingsLabel: {
+---+    fontSize: 14,
+---+    color: 'rgba(255, 255, 255, 0.9)',
+---+    marginLeft: 8,
+---+  },
+---+  savingsValue: {
+---+    fontSize: 14,
+---+    fontWeight: '600',
+---+    color: '#fff',
+---+  },
+---+  progressBar: {
+---+    height: 6,
+---+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+---+    borderRadius: 3,
+---+    marginBottom: 16,
+---+    overflow: 'hidden',
+---+  },
+---+  progressFill: {
+---+    height: '100%',
+---+    backgroundColor: '#fff',
+---+    borderRadius: 3,
+---+  },
+---+  trustIndicators: {
+---+    flexDirection: 'row',
+---+    alignItems: 'center',
+---+    marginTop: 8,
+---+  },
+---+  trustText: {
+---+    fontSize: 12,
+---+    color: 'rgba(255, 255, 255, 0.8)',
+---+    marginLeft: 8,
+---+    flex: 1,
+---+  },
+---   offerPreviewCard: { 
+---     flexDirection: 'row', 
+---     backgroundColor: '#fff', 
 ---diff --git a/model.patch b/model.patch
----index 750899c..e69de29 100644
+---index 454729c..a1bed5f 100644
 ------ a/model.patch
 ---+++ b/model.patch
----@@ -1,120 +0,0 @@
+---@@ -1,238 +0,0 @@
+----diff --git a/backend/server.py b/backend/server.py
+----index 4107169..ed64243 100644
+------- a/backend/server.py
+----+++ b/backend/server.py
+----@@ -745,7 +745,7 @@ async def create_video(video: VideoCreate, user_id: str = Depends(get_current_us
+----         "created_at": datetime.utcnow()
+----     }
+----     await db.videos.insert_one(video_dict)
+-----    return video_dict
+----+    return clean_mongo_doc(video_dict)
+---- 
+---- # Categories
+---- @api_router.get("/categories")
 ----diff --git a/model.patch b/model.patch
-----index 29fda36..e69de29 100644
+----index 750899c..e69de29 100644
 ------- a/model.patch
 ----+++ b/model.patch
-----@@ -1,115 +0,0 @@
+----@@ -1,120 +0,0 @@
 -----diff --git a/model.patch b/model.patch
------index ed41f03..e69de29 100644
+-----index 29fda36..e69de29 100644
 -------- a/model.patch
 -----+++ b/model.patch
------@@ -1,110 +0,0 @@
+-----@@ -1,115 +0,0 @@
 ------diff --git a/model.patch b/model.patch
-------index 05ea72b..e69de29 100644
+------index ed41f03..e69de29 100644
 --------- a/model.patch
 ------+++ b/model.patch
-------@@ -1,105 +0,0 @@
--------diff --git a/backend/server.py b/backend/server.py
--------index a88207d..274e90e 100644
----------- a/backend/server.py
--------+++ b/backend/server.py
--------@@ -138,6 +138,9 @@ async def register(user: UserRegister):
--------         "email": user.email,
--------         "password": hash_password(user.password),
--------         "phone": user.phone,
--------+        "address": user.address,
--------+        "city": user.city,
--------+        "pincode": user.pincode,
--------         "cable_tv_linked": False,
--------         "cable_tv_details": None,
--------         "monthly_spend": 0.0,
--------@@ -149,7 +152,19 @@ async def register(user: UserRegister):
--------     await db.users.insert_one(user_dict)
--------     token = create_access_token({"user_id": user_dict["id"]})
--------     
---------    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"]}}
--------+    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"], "phone": user_dict["phone"], "address": user_dict["address"], "city": user_dict["city"], "pincode": user_dict["pincode"]}}
--------+
--------+@api_router.post("/auth/update-profile")
--------+async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user)):
--------+    await db.users.update_one(
--------+        {"id": user_id},
--------+        {"$set": {
--------+            "address": profile.address,
--------+            "city": profile.city,
--------+            "pincode": profile.pincode
--------+        }}
--------+    )
--------+    return {"success": True}
-------- 
-------- @api_router.post("/auth/login")
-------- async def login(user: UserLogin):
--------@@ -197,6 +212,9 @@ async def get_me(user_id: str = Depends(get_current_user)):
--------         "name": user["name"],
--------         "email": user["email"],
--------         "phone": user.get("phone"),
--------+        "address": user.get("address"),
--------+        "city": user.get("city"),
--------+        "pincode": user.get("pincode"),
--------         "cable_tv_linked": user.get("cable_tv_linked", False),
--------         "cable_tv_details": user.get("cable_tv_details"),
--------         "monthly_spend": user.get("monthly_spend", 0.0),
+------@@ -1,110 +0,0 @@
 -------diff --git a/model.patch b/model.patch
--------index 87fe84c..e69de29 100644
+-------index 05ea72b..e69de29 100644
 ---------- a/model.patch
 -------+++ b/model.patch
--------@@ -1,55 +0,0 @@
---------diff --git a/frontend/app/index.tsx b/frontend/app/index.tsx
---------index 60b6cda..e12f822 100644
------------ a/frontend/app/index.tsx
---------+++ b/frontend/app/index.tsx
---------@@ -1,16 +1,25 @@
----------import { Text, View, StyleSheet, Image } from "react-native";
----------
----------const EXPO_PUBLIC_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
---------+import React, { useEffect } from 'react';
---------+import { View, ActivityIndicator, StyleSheet } from 'react-native';
---------+import { useAuth } from '../context/AuthContext';
---------+import { useRouter } from 'expo-router';
--------- 
--------- export default function Index() {
----------  console.log(EXPO_PUBLIC_BACKEND_URL, "EXPO_PUBLIC_BACKEND_URL");
---------+  const { user, loading } = useAuth();
---------+  const router = useRouter();
+-------@@ -1,105 +0,0 @@
+--------diff --git a/backend/server.py b/backend/server.py
+--------index a88207d..274e90e 100644
+----------- a/backend/server.py
+--------+++ b/backend/server.py
+--------@@ -138,6 +138,9 @@ async def register(user: UserRegister):
+--------         "email": user.email,
+--------         "password": hash_password(user.password),
+--------         "phone": user.phone,
+--------+        "address": user.address,
+--------+        "city": user.city,
+--------+        "pincode": user.pincode,
+--------         "cable_tv_linked": False,
+--------         "cable_tv_details": None,
+--------         "monthly_spend": 0.0,
+--------@@ -149,7 +152,19 @@ async def register(user: UserRegister):
+--------     await db.users.insert_one(user_dict)
+--------     token = create_access_token({"user_id": user_dict["id"]})
+--------     
+---------    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"]}}
+--------+    return {"token": token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"], "phone": user_dict["phone"], "address": user_dict["address"], "city": user_dict["city"], "pincode": user_dict["pincode"]}}
 --------+
---------+  useEffect(() => {
---------+    if (!loading) {
---------+      if (user) {
---------+        router.replace('/(tabs)/home');
---------+      } else {
---------+        router.replace('/(auth)/welcome');
---------+      }
---------+    }
---------+  }, [user, loading]);
+--------+@api_router.post("/auth/update-profile")
+--------+async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user)):
+--------+    await db.users.update_one(
+--------+        {"id": user_id},
+--------+        {"$set": {
+--------+            "address": profile.address,
+--------+            "city": profile.city,
+--------+            "pincode": profile.pincode
+--------+        }}
+--------+    )
+--------+    return {"success": True}
 -------- 
---------   return (
---------     <View style={styles.container}>
----------      <Image
----------        source={require("../assets/images/app-image.png")}
----------        style={styles.image}
----------      />
---------+      <ActivityIndicator size="large" color="#10B981" />
---------     </View>
---------   );
--------- }
---------@@ -18,13 +27,8 @@ export default function Index() {
--------- const styles = StyleSheet.create({
---------   container: {
---------     flex: 1,
----------    backgroundColor: "#0c0c0c",
----------    alignItems: "center",
----------    justifyContent: "center",
----------  },
----------  image: {
----------    width: "100%",
----------    height: "100%",
----------    resizeMode: "contain",
---------+    backgroundColor: '#fff',
---------+    alignItems: 'center',
---------+    justifyContent: 'center',
---------   },
--------- });
----diff --git a/test_result.md b/test_result.md
----index f74f293..ff25679 100644
------- a/test_result.md
----+++ b/test_result.md
----@@ -112,51 +112,63 @@ user_problem_statement: |
---- backend:
----   - task: "One-click add all ingredients API enhancement"
----     implemented: true
-----    working: "NA"
----+    working: true
----     file: "/app/backend/server.py"
----     stuck_count: 0
----     priority: "high"
-----    needs_retesting: true
----+    needs_retesting: false
----     status_history:
----       - working: "NA"
----         agent: "main"
----         comment: "Implemented /api/cart/add-bulk endpoint with enhanced error handling, product validation, and infrastructure ready for ingredient-product mapping APIs. Includes detailed response with success/failure counts."
----+      - working: true
----+        agent: "testing"
----+        comment: "TESTED SUCCESSFULLY: /api/cart/add-bulk endpoint working correctly. Properly handles mixed mapped/unmapped ingredients with detailed response including success/failure counts. Infrastructure ready for real ingredient-product mapping APIs. Fixed minor MongoDB ObjectId serialization issue in video creation endpoint."
---- 
----   - task: "Cable TV linking API infrastructure"
----     implemented: true
-----    working: "NA"
----+    working: true
----     file: "/app/backend/server.py"
----     stuck_count: 0
----     priority: "high"
-----    needs_retesting: true
----+    needs_retesting: false
----     status_history:
----       - working: "NA"
----         agent: "main"
----         comment: "Enhanced cable TV linking with verification infrastructure, sync status tracking, and force sync capabilities. Ready for real API integration with mock responses for testing."
----+      - working: true
----+        agent: "testing"
----+        comment: "TESTED SUCCESSFULLY: All cable TV endpoints working correctly. /api/cable-tv/link returns infrastructure_ready: true, /api/cable-tv/sync-status shows proper verification status and API integration status, /api/cable-tv/force-sync working with mock sync capabilities. Ready for real cable TV provider API integration."
---- 
----   - task: "Auto-rewards application in checkout"
----     implemented: true
-----    working: "NA"
----+    working: true
----     file: "/app/backend/server.py"
----     stuck_count: 0
----     priority: "high"
-----    needs_retesting: true
----+    needs_retesting: false
----     status_history:
----       - working: "NA"
----         agent: "main"
----         comment: "Implemented complete auto-rewards system with /api/checkout/calculate-rewards endpoint and enhanced /api/orders endpoint. Automatic reward application, tier-based cashbacks, and detailed breakdowns."
----+      - working: true
----+        agent: "testing"
----+        comment: "TESTED SUCCESSFULLY: Auto-rewards system fully functional. /api/checkout/calculate-rewards correctly calculates tier-based rewards and cashbacks with infrastructure_ready: true. /api/orders automatically applies rewards with detailed breakdown. Tier system (Base/Silver/Gold/Platinum) working with proper cashback percentages (1%/2%/3%/5%)."
---- 
----   - task: "Enhanced spending tier calculation"
----     implemented: true
-----    working: "NA"
----+    working: true
----     file: "/app/backend/server.py"
----     stuck_count: 0
----     priority: "medium"
-----    needs_retesting: true
----+    needs_retesting: false
----     status_history:
----       - working: "NA"
----         agent: "main"
----         comment: "Implemented sophisticated spending tier system (Base/Silver/Gold/Platinum) with tier-based cashback percentages and detailed reward calculations."
----+      - working: true
----+        agent: "testing"
----+        comment: "TESTED SUCCESSFULLY: Spending tier calculation working correctly as part of auto-rewards system. Proper tier thresholds (Base: 0+, Silver: 7000+, Gold: 13000+, Platinum: 25000+) with corresponding cashback rates and reward amounts."
---- 
---- frontend:
----   - task: "GrocerEase TV one-click ingredients feature"
----@@ -215,11 +227,10 @@ metadata:
---- 
---- test_plan:
----   current_focus:
-----    - "One-click add all ingredients API enhancement"
-----    - "Cable TV linking API infrastructure"
-----    - "Auto-rewards application in checkout"
----     - "GrocerEase TV one-click ingredients feature"
----+    - "Cable TV linking UI infrastructure"
----     - "Auto-rewards display and application UI"
----+    - "Spending tiers display enhancement"
----   stuck_tasks: []
----   test_all: false
----   test_priority: "high_first"
----@@ -228,4 +239,6 @@ agent_communication:
----   - agent: "main"
----     message: "Starting implementation of three critical features: one-click ingredients, cable TV API infrastructure, and auto-rewards system. All features will have mock infrastructure ready for future real API integration."
----   - agent: "main"
-----    message: "IMPLEMENTATION COMPLETE: All three features successfully implemented with infrastructure ready for real API integration. Backend includes bulk ingredient API, enhanced cable TV verification system, and comprehensive auto-rewards with tier-based calculations. Frontend includes enhanced UX with infrastructure readiness indicators."
----\ No newline at end of file
----+    message: "IMPLEMENTATION COMPLETE: All three features successfully implemented with infrastructure ready for real API integration. Backend includes bulk ingredient API, enhanced cable TV verification system, and comprehensive auto-rewards with tier-based calculations. Frontend includes enhanced UX with infrastructure readiness indicators."
----+  - agent: "testing"
----+    message: "BACKEND TESTING COMPLETE: All three critical backend features tested and working correctly. 1) Bulk cart addition (/api/cart/add-bulk) handles mixed mapped/unmapped ingredients properly with infrastructure readiness. 2) Cable TV infrastructure (/api/cable-tv/*) fully functional with verification, sync status, and force sync capabilities. 3) Auto-rewards system (/api/checkout/calculate-rewards, /api/orders) working with tier-based calculations and automatic application. Fixed minor MongoDB ObjectId serialization issue. All endpoints return infrastructure_ready: true indicating readiness for real API integration."
----\ No newline at end of file
+-------- @api_router.post("/auth/login")
+-------- async def login(user: UserLogin):
+--------@@ -197,6 +212,9 @@ async def get_me(user_id: str = Depends(get_current_user)):
+--------         "name": user["name"],
+--------         "email": user["email"],
+--------         "phone": user.get("phone"),
+--------+        "address": user.get("address"),
+--------+        "city": user.get("city"),
+--------+        "pincode": user.get("pincode"),
+--------         "cable_tv_linked": user.get("cable_tv_linked", False),
+--------         "cable_tv_details": user.get("cable_tv_details"),
+--------         "monthly_spend": user.get("monthly_spend", 0.0),
+--------diff --git a/model.patch b/model.patch
+--------index 87fe84c..e69de29 100644
+----------- a/model.patch
+--------+++ b/model.patch
+--------@@ -1,55 +0,0 @@
+---------diff --git a/frontend/app/index.tsx b/frontend/app/index.tsx
+---------index 60b6cda..e12f822 100644
+------------ a/frontend/app/index.tsx
+---------+++ b/frontend/app/index.tsx
+---------@@ -1,16 +1,25 @@
+----------import { Text, View, StyleSheet, Image } from "react-native";
+----------
+----------const EXPO_PUBLIC_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+---------+import React, { useEffect } from 'react';
+---------+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+---------+import { useAuth } from '../context/AuthContext';
+---------+import { useRouter } from 'expo-router';
+--------- 
+--------- export default function Index() {
+----------  console.log(EXPO_PUBLIC_BACKEND_URL, "EXPO_PUBLIC_BACKEND_URL");
+---------+  const { user, loading } = useAuth();
+---------+  const router = useRouter();
+---------+
+---------+  useEffect(() => {
+---------+    if (!loading) {
+---------+      if (user) {
+---------+        router.replace('/(tabs)/home');
+---------+      } else {
+---------+        router.replace('/(auth)/welcome');
+---------+      }
+---------+    }
+---------+  }, [user, loading]);
+--------- 
+---------   return (
+---------     <View style={styles.container}>
+----------      <Image
+----------        source={require("../assets/images/app-image.png")}
+----------        style={styles.image}
+----------      />
+---------+      <ActivityIndicator size="large" color="#10B981" />
+---------     </View>
+---------   );
+--------- }
+---------@@ -18,13 +27,8 @@ export default function Index() {
+--------- const styles = StyleSheet.create({
+---------   container: {
+---------     flex: 1,
+----------    backgroundColor: "#0c0c0c",
+----------    alignItems: "center",
+----------    justifyContent: "center",
+----------  },
+----------  image: {
+----------    width: "100%",
+----------    height: "100%",
+----------    resizeMode: "contain",
+---------+    backgroundColor: '#fff',
+---------+    alignItems: 'center',
+---------+    justifyContent: 'center',
+---------   },
+--------- });
+----diff --git a/test_result.md b/test_result.md
+----index f74f293..ff25679 100644
+------- a/test_result.md
+----+++ b/test_result.md
+----@@ -112,51 +112,63 @@ user_problem_statement: |
+---- backend:
+----   - task: "One-click add all ingredients API enhancement"
+----     implemented: true
+-----    working: "NA"
+----+    working: true
+----     file: "/app/backend/server.py"
+----     stuck_count: 0
+----     priority: "high"
+-----    needs_retesting: true
+----+    needs_retesting: false
+----     status_history:
+----       - working: "NA"
+----         agent: "main"
+----         comment: "Implemented /api/cart/add-bulk endpoint with enhanced error handling, product validation, and infrastructure ready for ingredient-product mapping APIs. Includes detailed response with success/failure counts."
+----+      - working: true
+----+        agent: "testing"
+----+        comment: "TESTED SUCCESSFULLY: /api/cart/add-bulk endpoint working correctly. Properly handles mixed mapped/unmapped ingredients with detailed response including success/failure counts. Infrastructure ready for real ingredient-product mapping APIs. Fixed minor MongoDB ObjectId serialization issue in video creation endpoint."
+---- 
+----   - task: "Cable TV linking API infrastructure"
+----     implemented: true
+-----    working: "NA"
+----+    working: true
+----     file: "/app/backend/server.py"
+----     stuck_count: 0
+----     priority: "high"
+-----    needs_retesting: true
+----+    needs_retesting: false
+----     status_history:
+----       - working: "NA"
+----         agent: "main"
+----         comment: "Enhanced cable TV linking with verification infrastructure, sync status tracking, and force sync capabilities. Ready for real API integration with mock responses for testing."
+----+      - working: true
+----+        agent: "testing"
+----+        comment: "TESTED SUCCESSFULLY: All cable TV endpoints working correctly. /api/cable-tv/link returns infrastructure_ready: true, /api/cable-tv/sync-status shows proper verification status and API integration status, /api/cable-tv/force-sync working with mock sync capabilities. Ready for real cable TV provider API integration."
+---- 
+----   - task: "Auto-rewards application in checkout"
+----     implemented: true
+-----    working: "NA"
+----+    working: true
+----     file: "/app/backend/server.py"
+----     stuck_count: 0
+----     priority: "high"
+-----    needs_retesting: true
+----+    needs_retesting: false
+----     status_history:
+----       - working: "NA"
+----         agent: "main"
+----         comment: "Implemented complete auto-rewards system with /api/checkout/calculate-rewards endpoint and enhanced /api/orders endpoint. Automatic reward application, tier-based cashbacks, and detailed breakdowns."
+----+      - working: true
+----+        agent: "testing"
+----+        comment: "TESTED SUCCESSFULLY: Auto-rewards system fully functional. /api/checkout/calculate-rewards correctly calculates tier-based rewards and cashbacks with infrastructure_ready: true. /api/orders automatically applies rewards with detailed breakdown. Tier system (Base/Silver/Gold/Platinum) working with proper cashback percentages (1%/2%/3%/5%)."
+---- 
+----   - task: "Enhanced spending tier calculation"
+----     implemented: true
+-----    working: "NA"
+----+    working: true
+----     file: "/app/backend/server.py"
+----     stuck_count: 0
+----     priority: "medium"
+-----    needs_retesting: true
+----+    needs_retesting: false
+----     status_history:
+----       - working: "NA"
+----         agent: "main"
+----         comment: "Implemented sophisticated spending tier system (Base/Silver/Gold/Platinum) with tier-based cashback percentages and detailed reward calculations."
+----+      - working: true
+----+        agent: "testing"
+----+        comment: "TESTED SUCCESSFULLY: Spending tier calculation working correctly as part of auto-rewards system. Proper tier thresholds (Base: 0+, Silver: 7000+, Gold: 13000+, Platinum: 25000+) with corresponding cashback rates and reward amounts."
+---- 
+---- frontend:
+----   - task: "GrocerEase TV one-click ingredients feature"
+----@@ -215,11 +227,10 @@ metadata:
+---- 
+---- test_plan:
+----   current_focus:
+-----    - "One-click add all ingredients API enhancement"
+-----    - "Cable TV linking API infrastructure"
+-----    - "Auto-rewards application in checkout"
+----     - "GrocerEase TV one-click ingredients feature"
+----+    - "Cable TV linking UI infrastructure"
+----     - "Auto-rewards display and application UI"
+----+    - "Spending tiers display enhancement"
+----   stuck_tasks: []
+----   test_all: false
+----   test_priority: "high_first"
+----@@ -228,4 +239,6 @@ agent_communication:
+----   - agent: "main"
+----     message: "Starting implementation of three critical features: one-click ingredients, cable TV API infrastructure, and auto-rewards system. All features will have mock infrastructure ready for future real API integration."
+----   - agent: "main"
+-----    message: "IMPLEMENTATION COMPLETE: All three features successfully implemented with infrastructure ready for real API integration. Backend includes bulk ingredient API, enhanced cable TV verification system, and comprehensive auto-rewards with tier-based calculations. Frontend includes enhanced UX with infrastructure readiness indicators."
+----\ No newline at end of file
+----+    message: "IMPLEMENTATION COMPLETE: All three features successfully implemented with infrastructure ready for real API integration. Backend includes bulk ingredient API, enhanced cable TV verification system, and comprehensive auto-rewards with tier-based calculations. Frontend includes enhanced UX with infrastructure readiness indicators."
+----+  - agent: "testing"
+----+    message: "BACKEND TESTING COMPLETE: All three critical backend features tested and working correctly. 1) Bulk cart addition (/api/cart/add-bulk) handles mixed mapped/unmapped ingredients properly with infrastructure readiness. 2) Cable TV infrastructure (/api/cable-tv/*) fully functional with verification, sync status, and force sync capabilities. 3) Auto-rewards system (/api/checkout/calculate-rewards, /api/orders) working with tier-based calculations and automatic application. Fixed minor MongoDB ObjectId serialization issue. All endpoints return infrastructure_ready: true indicating readiness for real API integration."
+----\ No newline at end of file
