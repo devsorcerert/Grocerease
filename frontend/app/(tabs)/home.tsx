@@ -162,14 +162,14 @@ export default function HomeScreen() {
         </View>
 
         {!user?.cable_tv_linked && (
-          <TouchableOpacity style={styles.cableTVCard} onPress={() => setShowCableTVModal(true)}>
-            <View style={styles.cableTVHeader}>
-              <View style={styles.cableTVMainContent}>
-                <View style={styles.cableTVTitleRow}>
-                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTVGiftIcon} />
-                  <Text style={styles.cableTVTitle}>Link Your Cable TV</Text>
+          <TouchableOpacity style={styles.cableTvCard} onPress={() => setShowCableTVModal(true)}>
+            <View style={styles.cableTvHeader}>
+              <View style={styles.cableTvMainContent}>
+                <View style={styles.cableTvTitleRow}>
+                  <Ionicons name="gift" size={24} color="#fff" style={styles.cableTvGiftIcon} />
+                  <Text style={styles.cableTvTitle}>Link Your Cable TV</Text>
                 </View>
-                <Text style={styles.cableTVSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
+                <Text style={styles.cableTvSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
               </View>
               <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
                 <Text style={styles.linkButtonText}>Link Now</Text>
