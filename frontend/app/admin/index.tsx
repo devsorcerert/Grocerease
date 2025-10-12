@@ -39,7 +39,7 @@ export default function AdminIndex() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
         <Text style={styles.title}>Admin Dashboard</Text>
