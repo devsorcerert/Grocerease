@@ -12,10 +12,7 @@ export default function WelcomeScreen() {
       <StatusBar style="dark" />
       
       <View style={styles.content}>
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoGreen}>Grocer</Text>
-          <Text style={styles.logoOrange}>ease</Text>
-        </View>
+        <Logo size="large" showText={true} />
         <Text style={styles.tagline}>India's First Cable TV Powered Grocery Delivery</Text>
         
         <View style={styles.rewardBox}>
