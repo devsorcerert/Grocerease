@@ -507,6 +507,7 @@ class GrocerEaseAPITester:
         test1_success = self.test_bulk_cart_addition(ingredients)
         test2_success = self.test_cable_tv_infrastructure()
         test3_success = self.test_auto_rewards_system()
+        test4_success = self.test_logout_functionality()
         
         # Step 4: Summary
         print("\n" + "=" * 50)
