@@ -25,24 +25,51 @@ class AuthTester:
     def log(self, message, status="INFO"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] {status}: {message}")
-    
-    def authenticate_admin(self):
-        """Authenticate as admin user"""
-        print("\n🔐 Authenticating as admin...")
         
-        response = self.make_request("POST", "/auth/login", {
-            "email": ADMIN_EMAIL,
-            "password": ADMIN_PASSWORD
-        })
+    def test_register(self):
+        """Test user registration with refresh token"""
+        self.log("Testing user registration...")
         
-        if response and response.status_code == 200:
-            data = response.json()
-            self.admin_token = data.get("token")
-            self.log_result("Admin Authentication", True, "Admin login successful")
-            return True
-        else:
-            error_msg = response.text if response else "Connection failed"
-            self.log_result("Admin Authentication", False, "Admin login failed", error_msg)
+        payload = {
+            "name": self.test_user_name,
+            "email": self.test_user_email,
+            "password": self.test_user_password,
+            "phone": "+91 9876543210",
+            "address": "123 Test Street",
+            "city": "Mumbai",
+            "pincode": "400001"
+        }
+        
+        try:
+            response = self.session.post(f"{BACKEND_URL}/auth/register", json=payload)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Check if both tokens are returned
+                if "token" in data and "refresh_token" in data:
+                    self.access_token = data["token"]
+                    self.refresh_token = data["refresh_token"]
+                    self.user_id = data.get("user", {}).get("id")
+                    
+                    self.log("✅ Registration successful - both tokens received")
+                    self.log(f"   Access Token: {self.access_token[:20]}...")
+                    self.log(f"   Refresh Token: {self.refresh_token[:20]}...")
+                    return True
+                else:
+                    self.log("❌ Registration missing tokens", "ERROR")
+                    self.log(f"   Response: {data}")
+                    return False
+                    
+            elif response.status_code == 400 and "already registered" in response.text:
+                self.log("⚠️  User already exists - proceeding to login test")
+                return True
+            else:
+                self.log(f"❌ Registration failed: {response.status_code} - {response.text}", "ERROR")
+                return False
+                
+        except Exception as e:
+            self.log(f"❌ Registration error: {str(e)}", "ERROR")
             return False
     
     def create_test_user(self):
