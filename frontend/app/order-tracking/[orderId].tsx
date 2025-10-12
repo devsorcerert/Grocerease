@@ -490,6 +490,27 @@ const styles = StyleSheet.create({
   mapContainer: { height: 300, backgroundColor: '#E5E7EB', position: 'relative' },
   map: { flex: 1 },
   
+  mapPlaceholder: {
+    height: 300,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  mapPlaceholderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  mapPlaceholderSubtext: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  
   markerContainer: {
     backgroundColor: '#fff',
     padding: 8,
