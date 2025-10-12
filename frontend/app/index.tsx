@@ -20,10 +20,7 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Text style={styles.logoGreen}>Grocer</Text>
-        <Text style={styles.logoOrange}>ease</Text>
-      </View>
+      <Logo size="large" showText={true} />
       <ActivityIndicator size="large" color="#2D8B47" style={styles.loader} />
     </View>
   );
