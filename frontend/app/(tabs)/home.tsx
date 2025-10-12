@@ -107,9 +107,18 @@ export default function HomeScreen() {
   const handleAddToCart = async (productId: string) => {
     try {
       await addToCart(productId, 1);
-      Alert.alert('Success', 'Product added to cart!');
+      // Show success toast
+      Alert.alert(
+        'Added to Cart! 🛒',
+        'Product has been added to your cart successfully.',
+        [
+          { text: 'Continue Shopping', style: 'default' },
+          { text: 'View Cart', onPress: () => router.push('/(tabs)/cart') }
+        ]
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to add product to cart');
+      console.error('Failed to add to cart:', error);
+      Alert.alert('Error', 'Failed to add product to cart. Please try again.');
     }
   };
 
