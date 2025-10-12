@@ -520,7 +520,23 @@ const styles = StyleSheet.create({
     gap: 4
   },
   adminButtonText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
-  notificationButton: { padding: 8 },
+  notificationButton: { padding: 8, position: 'relative' },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
   cableTvCard: { 
     flexDirection: 'column', 
     backgroundColor: '#667eea', 
