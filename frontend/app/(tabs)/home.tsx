@@ -155,8 +155,11 @@ export default function HomeScreen() {
                 <Text style={styles.adminButtonText}>Admin</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.notificationButton}>
+            <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
               <Ionicons name="notifications-outline" size={24} color="#111" />
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>3</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
