@@ -213,7 +213,8 @@ export default function NotificationsScreen() {
           </View>
         </>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
