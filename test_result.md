@@ -170,6 +170,18 @@ backend:
         agent: "testing"
         comment: "TESTED SUCCESSFULLY: Spending tier calculation working correctly as part of auto-rewards system. Proper tier thresholds (Base: 0+, Silver: 7000+, Gold: 13000+, Platinum: 25000+) with corresponding cashback rates and reward amounts."
 
+  - task: "Logout functionality and token invalidation"
+    implemented: false
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL ISSUE IDENTIFIED: Logout endpoint (/api/auth/logout) is NOT IMPLEMENTED in the backend. Authentication system uses JWT tokens but lacks proper logout functionality for token invalidation. This is a significant security gap. Current auth flow: registration ✅, login ✅, protected endpoints ✅, invalid token handling ✅, but logout ❌. Complete authentication flow is incomplete without logout capability."
+
 frontend:
   - task: "GrocerEase TV one-click ingredients feature"
     implemented: true
