@@ -12,54 +12,19 @@ from datetime import datetime
 # Get backend URL from frontend .env
 BACKEND_URL = "https://fresh-delivery-13.preview.emergentagent.com/api"
 
-class GrocerEaseAPITester:
+class AuthTester:
     def __init__(self):
-        self.base_url = BASE_URL
-        self.admin_token = None
-        self.test_user_token = None
-        self.test_user_id = None
-        self.test_results = []
+        self.session = requests.Session()
+        self.test_user_email = "testauth2025@grocerease.com"
+        self.test_user_password = "SecurePass123!"
+        self.test_user_name = "Auth Test User"
+        self.access_token = None
+        self.refresh_token = None
+        self.user_id = None
         
-    def log_result(self, test_name, success, message, details=None):
-        """Log test results"""
-        result = {
-            "test": test_name,
-            "success": success,
-            "message": message,
-            "details": details,
-            "timestamp": datetime.now().isoformat()
-        }
-        self.test_results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name} - {message}")
-        if details and not success:
-            print(f"   Details: {details}")
-    
-    def make_request(self, method, endpoint, data=None, headers=None, token=None):
-        """Make HTTP request with proper error handling"""
-        url = f"{self.base_url}{endpoint}"
-        
-        if headers is None:
-            headers = {"Content-Type": "application/json"}
-        
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-            
-        try:
-            if method.upper() == "GET":
-                response = requests.get(url, headers=headers, timeout=30)
-            elif method.upper() == "POST":
-                response = requests.post(url, json=data, headers=headers, timeout=30)
-            elif method.upper() == "PUT":
-                response = requests.put(url, json=data, headers=headers, timeout=30)
-            elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers, timeout=30)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-                
-            return response
-        except requests.exceptions.RequestException as e:
-            return None, str(e)
+    def log(self, message, status="INFO"):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] {status}: {message}")
     
     def authenticate_admin(self):
         """Authenticate as admin user"""
