@@ -239,11 +239,13 @@ metadata:
 
 test_plan:
   current_focus:
+    - "Logout functionality and token invalidation"
     - "GrocerEase TV one-click ingredients feature"
     - "Cable TV linking UI infrastructure"
     - "Auto-rewards display and application UI"
     - "Spending tiers display enhancement"
-  stuck_tasks: []
+  stuck_tasks:
+    - "Logout functionality and token invalidation"
   test_all: false
   test_priority: "high_first"
 
