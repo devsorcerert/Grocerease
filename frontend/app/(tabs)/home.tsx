@@ -565,6 +565,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     flexWrap: 'wrap',
   },
+  cableTvDescription: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 16,
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
   linkButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingHorizontal: 16,
