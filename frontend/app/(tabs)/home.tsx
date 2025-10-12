@@ -145,7 +145,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <View style={styles.topBanner}>
         <View style={styles.header}>
           <View style={{flex: 1}}>
             <Text style={styles.greeting}>Hello, {user?.name}!</Text>
@@ -157,13 +157,16 @@ export default function HomeScreen() {
           <View style={styles.headerActions}>
             {/* Admin access removed - now available via separate web dashboard */}
             <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={24} color="#111" />
+              <Ionicons name="notifications-outline" size={24} color="#fff" />
               <View style={styles.notificationBadge}>
                 <Text style={styles.notificationBadgeText}>3</Text>
               </View>
             </TouchableOpacity>
           </View>
         </View>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
 
         {!user?.cable_tv_linked && (
           <TouchableOpacity style={styles.cableTvCard} onPress={() => setShowCableTVModal(true)}>
