@@ -92,19 +92,27 @@ export default function AdminDashboard() {
           <View style={styles.kpiGrid}>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
               <Text style={styles.kpiLabel}>NPS Score</Text>
-              <Text style={styles.kpiValue}>{kpis?.nps || 0}</Text>
+              <Text style={styles.kpiValue}>{kpis?.nps ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#EFF6FF' }]}>
-              <Text style={styles.kpiLabel}>Delivery Time</Text>
-              <Text style={styles.kpiValue}>{kpis?.avgDeliveryTime || 0}m</Text>
+              <Text style={styles.kpiLabel}>Avg Delivery Time</Text>
+              <Text style={styles.kpiValue}>{kpis?.avgDeliveryTime ?? '-'}m</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
-              <Text style={styles.kpiLabel}>Efficiency</Text>
-              <Text style={styles.kpiValue}>{kpis?.deliveryEfficiency || 0}%</Text>
+              <Text style={styles.kpiLabel}>Delivery Efficiency</Text>
+              <Text style={styles.kpiValue}>{kpis?.deliveryEfficiency ?? '-'}%</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#FFF7ED' }]}>
-              <Text style={styles.kpiLabel}>Deliveries</Text>
-              <Text style={styles.kpiValue}>{kpis?.totalDeliveries || 0}</Text>
+              <Text style={styles.kpiLabel}>Order Accuracy</Text>
+              <Text style={styles.kpiValue}>{kpis?.orderAccuracyRate ?? '-'}%</Text>
+            </View>
+            <View style={[styles.kpiCard, { backgroundColor: '#EFF6FF' }]}>
+              <Text style={styles.kpiLabel}>Fulfilment Speed</Text>
+              <Text style={styles.kpiValue}>{kpis?.fulfilmentSpeed ?? '-'}m</Text>
+            </View>
+            <View style={[styles.kpiCard, { backgroundColor: '#F3E8FF' }]}>
+              <Text style={styles.kpiLabel}>Total Deliveries</Text>
+              <Text style={styles.kpiValue}>{kpis?.totalDeliveries ?? '-'}</Text>
             </View>
           </View>
         </View>
