@@ -114,7 +114,7 @@ export default function ProfileScreen() {
           {user?.email === 'admin@grocereasetv.com' && (
             <TouchableOpacity 
               style={[styles.menuItem, { backgroundColor: '#ECFDF5', borderColor: '#2D8B47', borderWidth: 2 }]} 
-              onPress={() => router.push('/admin')}
+              onPress={() => router.push('/admin/')}
             >
               <Ionicons name="shield-checkmark" size={24} color="#2D8B47" />
               <Text style={[styles.menuText, { color: '#2D8B47', fontWeight: '600' }]}>Admin Panel</Text>
