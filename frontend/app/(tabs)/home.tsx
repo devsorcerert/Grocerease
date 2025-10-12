@@ -404,6 +404,17 @@ export default function HomeScreen() {
                       <Ionicons name="add" size={16} color="#fff" />
                     </TouchableOpacity>
                   </View>
+                  
+                  {/* Quantity Controls */}
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity style={styles.quantityBtn}>
+                      <Ionicons name="remove" size={14} color="#6B7280" />
+                    </TouchableOpacity>
+                    <Text style={styles.quantityText}>1</Text>
+                    <TouchableOpacity style={styles.quantityBtn}>
+                      <Ionicons name="add" size={14} color="#6B7280" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </TouchableOpacity>
             ))}
