@@ -190,6 +190,25 @@ async def login(user: UserLogin):
     token = create_access_token({"user_id": db_user["id"]})
     return {"token": token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
 
+@api_router.post("/auth/logout")
+async def logout(user_id: str = Depends(get_current_user)):
+    """
+    Logout endpoint - In JWT implementation, logout is handled client-side
+    by removing the token. Server-side logout would require token blacklisting.
+    """
+    try:
+        # Log the logout event for audit purposes
+        print(f"User {user_id} logged out at {datetime.utcnow()}")
+        
+        # In a production environment, you might want to:
+        # 1. Add token to blacklist in database/Redis
+        # 2. Record logout event for analytics
+        # 3. Clean up any user sessions
+        
+        return {"message": "Logout successful", "success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Logout failed")
+
 @api_router.post("/auth/google")
 async def google_auth(auth_data: GoogleAuthRequest):
     db_user = await db.users.find_one({"email": auth_data.email})
