@@ -479,6 +479,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+  topBanner: { backgroundColor: '#2D8B47' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16 },
   greeting: { fontSize: 24, fontWeight: 'bold', color: '#111' },
   addressText: { fontSize: 12, color: '#2D8B47', marginTop: 4, fontWeight: '500' },
