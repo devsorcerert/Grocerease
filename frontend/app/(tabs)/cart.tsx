@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 export default function CartScreen() {
   const { items, fetchCart, updateQuantity, clearCart } = useCartStore();
   const { user, refreshUser } = useAuth();
+  const router = useRouter();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [rewardCalculation, setRewardCalculation] = useState<any>(null);
