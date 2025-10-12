@@ -274,7 +274,8 @@ async def google_auth(auth_data: GoogleAuthRequest):
         db_user = user_dict
     
     token = create_access_token({"user_id": db_user["id"]})
-    return {"token": token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
+    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
 
 @api_router.get("/auth/me")
 async def get_me(user_id: str = Depends(get_current_user)):
