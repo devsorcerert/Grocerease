@@ -123,19 +123,23 @@ export default function AdminDashboard() {
           <View style={styles.kpiGrid}>
             <View style={[styles.kpiCard, { backgroundColor: '#FFF7ED' }]}>
               <Text style={styles.kpiLabel}>Total Revenue</Text>
-              <Text style={styles.kpiValue}>₹{kpis?.totalRevenue || 0}</Text>
+              <Text style={styles.kpiValue}>₹{kpis?.totalRevenue ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#FFF7ED' }]}>
               <Text style={styles.kpiLabel}>AOV</Text>
-              <Text style={styles.kpiValue}>₹{kpis?.aov || 0}</Text>
+              <Text style={styles.kpiValue}>₹{kpis?.aov ?? '-'}</Text>
+            </View>
+            <View style={[styles.kpiCard, { backgroundColor: '#FFF7ED' }]}>
+              <Text style={styles.kpiLabel}>Revenue/Delivery</Text>
+              <Text style={styles.kpiValue}>₹{kpis?.revenuePerDelivery ?? '-'}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#ECFDF5' }]}>
               <Text style={styles.kpiLabel}>Gross Margin</Text>
-              <Text style={styles.kpiValue}>{kpis?.grossMargin || 0}%</Text>
+              <Text style={styles.kpiValue}>{kpis?.grossMargin ?? '-'}%</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: '#FEE2E2' }]}>
               <Text style={styles.kpiLabel}>Cost/Delivery</Text>
-              <Text style={styles.kpiValue}>₹{kpis?.costPerDelivery || 0}</Text>
+              <Text style={styles.kpiValue}>₹{kpis?.costPerDelivery ?? '-'}</Text>
             </View>
           </View>
         </View>
