@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://fresh-delivery-13.preview.emergentagent.com/api"
+BASE_URL = "https://grocer-dash.preview.emergentagent.com/api"
 
 class LogoutFunctionalityTester:
     def __init__(self):
