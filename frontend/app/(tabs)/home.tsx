@@ -359,23 +359,41 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.productGrid}>
-            {products.map((product) => (
-              <View key={product.id} style={styles.productCard}>
-                <View style={styles.productImagePlaceholder}>
-                  <Ionicons name="bag-outline" size={32} color="#2D8B47" />
+            {products.slice(0, 6).map((product, index) => (
+              <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => console.log('Product selected:', product.name)}>
+                <View style={styles.productImageContainer}>
+                  {product.image ? (
+                    <Image 
+                      source={{ uri: product.image }} 
+                      style={styles.productImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.productImagePlaceholder}>
+                      <Ionicons name="bag-outline" size={28} color="#2D8B47" />
+                    </View>
+                  )}
+                  <View style={styles.productBadge}>
+                    <Text style={styles.badgeText}>Fresh</Text>
+                  </View>
                 </View>
-                <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
-                <Text style={styles.productUnit}>{product.unit}</Text>
-                <View style={styles.productFooter}>
-                  <Text style={styles.productPrice}>₹{product.price}</Text>
-                  <TouchableOpacity 
-                    style={styles.addBtn}
-                    onPress={() => handleAddToCart(product.id)}
-                  >
-                    <Ionicons name="add" size={18} color="#fff" />
-                  </TouchableOpacity>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
+                  <Text style={styles.productUnit}>{product.unit}</Text>
+                  <View style={styles.productFooter}>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.productPrice}>₹{product.price}</Text>
+                      <Text style={styles.originalPrice}>₹{(product.price * 1.2).toFixed(0)}</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.addBtn}
+                      onPress={() => handleAddToCart(product.id)}
+                    >
+                      <Ionicons name="add" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
