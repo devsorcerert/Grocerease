@@ -481,18 +481,7 @@ const styles = StyleSheet.create({
   addressText: { fontSize: 12, color: '#2D8B47', marginTop: 4, fontWeight: '500' },
   subgreeting: { fontSize: 14, color: '#6B7280', marginTop: 4 },
   headerActions: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  adminButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFF7ED', 
-    paddingHorizontal: 8, 
-    paddingVertical: 6, 
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF8C42',
-    gap: 4
-  },
-  adminButtonText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
+  // Admin styles removed - separate web dashboard created
   notificationButton: { padding: 8, position: 'relative' },
   notificationBadge: {
     position: 'absolute',
