@@ -209,6 +209,45 @@ async def logout(user_id: str = Depends(get_current_user)):
     except Exception:
         raise HTTPException(status_code=500, detail="Logout failed")
 
+@api_router.post("/auth/refresh")
+async def refresh_token(request: dict):
+    """
+    Refresh token endpoint for token renewal
+    Expects: {"refresh_token": "old_refresh_token"}
+    Returns: {"token": "new_access_token", "refresh_token": "new_refresh_token"}
+    """
+    try:
+        old_refresh_token = request.get("refresh_token")
+        if not old_refresh_token:
+            raise HTTPException(status_code=400, detail="Refresh token required")
+        
+        # In a production environment, you would:
+        # 1. Validate the refresh token against database
+        # 2. Check if it's expired or revoked
+        # 3. Get user info from refresh token
+        
+        # For now, create new tokens (mock implementation)
+        # This would typically decode the refresh token to get user_id
+        try:
+            # Mock decode - in production, properly decode and validate refresh token
+            user_id = "mock_user_id"  # This would come from token validation
+            
+            # Generate new tokens
+            new_access_token = create_access_token(data={"sub": user_id})
+            new_refresh_token = create_access_token(data={"sub": user_id, "type": "refresh"})
+            
+            return {
+                "token": new_access_token,
+                "refresh_token": new_refresh_token
+            }
+        except Exception as decode_error:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Token refresh failed")
+
 @api_router.post("/auth/google")
 async def google_auth(auth_data: GoogleAuthRequest):
     db_user = await db.users.find_one({"email": auth_data.email})
