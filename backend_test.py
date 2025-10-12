@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """
-GrocerEase Backend API Testing Suite
-Testing three critical features:
-1. One-Click Add Ingredients (Bulk Cart Addition)
-2. Cable TV API Infrastructure  
-3. Auto-Rewards System
+Backend Authentication Flow Testing
+Tests the complete authentication system with refresh token functionality
 """
 
 import requests
@@ -12,10 +9,8 @@ import json
 import sys
 from datetime import datetime
 
-# Configuration
-BASE_URL = "https://fresh-delivery-13.preview.emergentagent.com/api"
-ADMIN_EMAIL = "admin@grocereasetv.com"
-ADMIN_PASSWORD = "admin123"
+# Get backend URL from frontend .env
+BACKEND_URL = "https://fresh-delivery-13.preview.emergentagent.com/api"
 
 class GrocerEaseAPITester:
     def __init__(self):
