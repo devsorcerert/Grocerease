@@ -146,8 +146,6 @@ const styles = StyleSheet.create({
   orderDate: { fontSize: 12, color: '#6B7280' },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
   menuText: { flex: 1, fontSize: 16, color: '#111', marginLeft: 12 },
-  adminItem: { backgroundColor: '#FFF7ED', paddingHorizontal: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#FF8C42' },
-  adminText: { color: '#FF8C42', fontWeight: '600' },
   logoutItem: { marginTop: 8 },
   logoutText: { color: '#EF4444' },
 });
