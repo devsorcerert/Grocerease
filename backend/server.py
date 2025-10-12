@@ -206,7 +206,7 @@ async def logout(user_id: str = Depends(get_current_user)):
         # 3. Clean up any user sessions
         
         return {"message": "Logout successful", "success": True}
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Logout failed")
 
 @api_router.post("/auth/google")
