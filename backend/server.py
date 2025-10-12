@@ -175,14 +175,25 @@ async def register(user: UserRegister):
 
 @api_router.post("/auth/update-profile")
 async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user)):
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {
-            "address": profile.address,
-            "city": profile.city,
-            "pincode": profile.pincode
-        }}
-    )
+    update_data = {}
+    if profile.name is not None:
+        update_data["name"] = profile.name
+    if profile.email is not None:
+        update_data["email"] = profile.email
+    if profile.phone is not None:
+        update_data["phone"] = profile.phone
+    if profile.address is not None:
+        update_data["address"] = profile.address
+    if profile.city is not None:
+        update_data["city"] = profile.city
+    if profile.pincode is not None:
+        update_data["pincode"] = profile.pincode
+    
+    if update_data:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": update_data}
+        )
     return {"success": True}
 
 @api_router.post("/auth/login")
