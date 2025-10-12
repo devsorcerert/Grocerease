@@ -93,19 +93,19 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/edit')}>
             <Ionicons name="person-outline" size={24} color="#111" />
             <Text style={styles.menuText}>Edit Profile</Text>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/cable-tv-settings')}>
             <Ionicons name="tv-outline" size={24} color="#111" />
             <Text style={styles.menuText}>Cable TV Settings</Text>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/help-support')}>
             <Ionicons name="help-circle-outline" size={24} color="#111" />
             <Text style={styles.menuText}>Help & Support</Text>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
