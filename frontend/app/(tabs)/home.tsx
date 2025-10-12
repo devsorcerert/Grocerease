@@ -192,10 +192,10 @@ export default function HomeScreen() {
               
               <View style={styles.savingsRow}>
                 <View style={styles.savingsLeft}>
-                  <Ionicons name="calendar-outline" size={20} color="#fff" />
+                  <Ionicons name="calendar-outline" size={16} color="#fff" />
                   <Text style={styles.savingsLabel}>Annual Slot</Text>
+                  <Text style={styles.savingsValue}>₹{user?.total_spend || 0} / ₹12,000</Text>
                 </View>
-                <Text style={styles.savingsValue}>₹{user?.total_spend || 0} / ₹12,000</Text>
               </View>
               <View style={styles.progressBar}>
                 <View style={[styles.progressFill, { width: `${Math.min((user?.total_spend || 0) / 12000 * 100, 100)}%` }]} />
