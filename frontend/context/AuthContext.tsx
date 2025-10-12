@@ -97,8 +97,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await storage.removeItem('token');
-    setUser(null);
+    try {
+      await storage.removeItem('token');
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const refreshUser = async () => {
