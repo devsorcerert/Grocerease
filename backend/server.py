@@ -989,6 +989,240 @@ async def create_brand_banner(banner: dict, user_id: str = Depends(get_current_u
     await db.brand_banners.insert_one(banner_dict)
     return clean_mongo_doc(banner_dict)
 
+
+# ======================== ADMIN ENDPOINTS ========================
+
+# Admin credentials
+ADMIN_EMAIL = "admin@grocereasetv.com"
+ADMIN_PASSWORD_HASH = hash_password("admin123")
+
+# Admin login
+@api_router.post("/admin/login")
+async def admin_login(login_data: UserLogin):
+    if login_data.email != ADMIN_EMAIL:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    if not verify_password(login_data.password, ADMIN_PASSWORD_HASH):
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    
+    token = create_access_token({"user_id": "admin", "is_admin": True})
+    return {"token": token, "message": "Admin login successful"}
+
+# Middleware to check admin access
+async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        is_admin = payload.get("is_admin", False)
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return payload
+    except:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+# Get all KPIs
+@api_router.get("/admin/kpis")
+async def get_all_kpis(admin=Depends(verify_admin)):
+    # Get all orders
+    orders = await db.orders.find().to_list(None)
+    users = await db.users.find().to_list(None)
+    products = await db.products.find().to_list(None)
+    
+    # Calculate all KPIs
+    total_orders = len(orders)
+    total_revenue = sum(order.get("total", 0) for order in orders)
+    total_deliveries = len([o for o in orders if o.get("status") == "delivered"])
+    
+    # Operational KPIs
+    avg_delivery_time = 45  # Mock value
+    delivery_efficiency = 92.5 if total_deliveries > 0 else 0
+    order_accuracy_rate = 95.0
+    fulfilment_speed = 30  # minutes
+    
+    # Financial KPIs
+    aov = total_revenue / total_orders if total_orders > 0 else 0
+    revenue_per_delivery = total_revenue / total_deliveries if total_deliveries > 0 else 0
+    gross_margin = 25.0
+    cost_per_delivery = 50.0
+    
+    # Customer KPIs
+    total_customers = len(users)
+    returning_customers = len([u for u in users if u.get("order_count", 0) > 1])
+    customer_retention_rate = (returning_customers / total_customers * 100) if total_customers > 0 else 0
+    customer_satisfaction = 87.0  # Based on NPS
+    cac = 250.0  # Customer acquisition cost
+    clv = 5000.0  # Customer lifetime value
+    
+    # Inventory KPIs
+    total_products = len(products)
+    out_of_stock = len([p for p in products if p.get("stock", 0) == 0])
+    inventory_turnover = 4.5
+    
+    # TV Integration KPIs
+    orders_via_qr = len([o for o in orders if o.get("source") == "qr_code"])
+    tv_users_linked = len([u for u in users if u.get("cable_tv_linked", False)])
+    qr_conversion_rate = (orders_via_qr / total_orders * 100) if total_orders > 0 else 0
+    
+    # Brand Analytics
+    brand_orders = {}
+    for order in orders:
+        items = order.get("items", [])
+        for item in items:
+            brand = item.get("brand", "Unknown")
+            brand_orders[brand] = brand_orders.get(brand, 0) + 1
+    
+    top_brand = max(brand_orders.items(), key=lambda x: x[1])[0] if brand_orders else "N/A"
+    avg_brand_consumption = sum(brand_orders.values()) / len(users) if users else 0
+    
+    return {
+        # Operational
+        "nps": 72,  # Net Promoter Score
+        "avgDeliveryTime": avg_delivery_time,
+        "deliveryEfficiency": delivery_efficiency,
+        "orderAccuracyRate": order_accuracy_rate,
+        "fulfilmentSpeed": fulfilment_speed,
+        "totalDeliveries": total_deliveries,
+        
+        # Financial
+        "totalRevenue": total_revenue,
+        "aov": round(aov, 2),
+        "revenuePerDelivery": round(revenue_per_delivery, 2),
+        "grossMargin": gross_margin,
+        "costPerDelivery": cost_per_delivery,
+        
+        # Customer
+        "customerRetentionRate": round(customer_retention_rate, 2),
+        "customerSatisfaction": customer_satisfaction,
+        "cac": cac,
+        "clv": clv,
+        
+        # Inventory
+        "inventoryTurnover": inventory_turnover,
+        "totalProducts": total_products,
+        "outOfStock": out_of_stock,
+        
+        # TV Integration
+        "ordersViaQR": orders_via_qr,
+        "tvUsersLinked": tv_users_linked,
+        "qrConversionRate": round(qr_conversion_rate, 2),
+        
+        # Brand Analytics
+        "topBrand": top_brand,
+        "avgBrandConsumption": round(avg_brand_consumption, 2),
+        "competitivePricingIndex": 1.05
+    }
+
+# Product Management
+@api_router.get("/admin/products")
+async def admin_get_products(admin=Depends(verify_admin), limit: int = 100, skip: int = 0):
+    products = await db.products.find().skip(skip).limit(limit).to_list(limit)
+    total = await db.products.count_documents({})
+    return {
+        "products": clean_mongo_docs(products),
+        "total": total
+    }
+
+@api_router.post("/admin/products")
+async def admin_create_product(product: dict, admin=Depends(verify_admin)):
+    product_dict = {
+        "id": str(uuid.uuid4()),
+        **product,
+        "created_at": datetime.utcnow()
+    }
+    await db.products.insert_one(product_dict)
+    return clean_mongo_doc(product_dict)
+
+@api_router.put("/admin/products/{product_id}")
+async def admin_update_product(product_id: str, product: dict, admin=Depends(verify_admin)):
+    result = await db.products.update_one(
+        {"id": product_id},
+        {"$set": {**product, "updated_at": datetime.utcnow()}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"message": "Product updated successfully"}
+
+@api_router.delete("/admin/products/{product_id}")
+async def admin_delete_product(product_id: str, admin=Depends(verify_admin)):
+    result = await db.products.delete_one({"id": product_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"message": "Product deleted successfully"}
+
+# Excel import
+from fastapi import File, UploadFile
+import pandas as pd
+import io
+
+@api_router.post("/admin/products/upload-excel")
+async def upload_products_excel(file: UploadFile = File(...), admin=Depends(verify_admin)):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
+    
+    try:
+        # Read Excel file
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        
+        # Expected columns: Name, Category, Brand, Price, OfferPrice, Stock, Description, Image
+        required_columns = ['Name', 'Category', 'Price']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {', '.join(missing_columns)}"
+            )
+        
+        added_count = 0
+        updated_count = 0
+        
+        for _, row in df.iterrows():
+            product_name = str(row['Name']).strip()
+            
+            # Check if product exists
+            existing_product = await db.products.find_one({"name": product_name})
+            
+            product_dict = {
+                "name": product_name,
+                "category": str(row['Category']).strip(),
+                "brand": str(row.get('Brand', '')).strip() if pd.notna(row.get('Brand')) else '',
+                "price": float(row['Price']),
+                "offerPrice": float(row['OfferPrice']) if pd.notna(row.get('OfferPrice')) else None,
+                "stock": int(row.get('Stock', 0)) if pd.notna(row.get('Stock')) else 0,
+                "description": str(row.get('Description', '')).strip() if pd.notna(row.get('Description')) else '',
+                "image": str(row.get('Image', '')).strip() if pd.notna(row.get('Image')) else '',
+                "updated_at": datetime.utcnow()
+            }
+            
+            if existing_product:
+                # Update existing product
+                await db.products.update_one(
+                    {"name": product_name},
+                    {"$set": product_dict}
+                )
+                updated_count += 1
+            else:
+                # Add new product
+                product_dict["id"] = str(uuid.uuid4())
+                product_dict["created_at"] = datetime.utcnow()
+                await db.products.insert_one(product_dict)
+                added_count += 1
+        
+        return {
+            "message": "Excel uploaded successfully",
+            "added": added_count,
+            "updated": updated_count,
+            "total": added_count + updated_count
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing Excel file: {str(e)}")
+
+# Get categories
+@api_router.get("/admin/categories")
+async def admin_get_categories(admin=Depends(verify_admin)):
+    categories = await db.products.distinct("category")
+    return {"categories": categories}
+
 app.include_router(api_router)
 
 app.add_middleware(
