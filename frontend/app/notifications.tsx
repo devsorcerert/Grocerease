@@ -126,7 +126,7 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/home')} style={styles.headerButton}>
             <Ionicons name="arrow-back" size={24} color="#111" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
