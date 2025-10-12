@@ -123,18 +123,19 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#111" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          Notifications {unreadCount > 0 && <Text style={styles.unreadBadge}>({unreadCount})</Text>}
-        </Text>
-        <TouchableOpacity onPress={markAllAsRead}>
-          <Ionicons name="checkmark-done" size={24} color="#2D8B47" />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+            <Ionicons name="arrow-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            Notifications {unreadCount > 0 && <Text style={styles.unreadBadge}>({unreadCount})</Text>}
+          </Text>
+          <TouchableOpacity onPress={markAllAsRead} style={styles.headerButton}>
+            <Ionicons name="checkmark-done" size={24} color="#2D8B47" />
+          </TouchableOpacity>
+        </View>
 
       {notifications.length === 0 ? (
         <View style={styles.emptyState}>
