@@ -182,6 +182,9 @@ export default function HomeScreen() {
                   <Text style={styles.cableTvTitle}>Link Your Cable TV</Text>
                 </View>
                 <Text style={styles.cableTvSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
+                <Text style={styles.cableTvDescription}>
+                  Connect your cable TV account to track spending and unlock exclusive grocery rewards
+                </Text>
               </View>
               <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
                 <Text style={styles.linkButtonText}>Link Now</Text>
