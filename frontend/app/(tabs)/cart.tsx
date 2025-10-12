@@ -97,7 +97,10 @@ export default function CartScreen() {
       Alert.alert(
         'Order Successful! 🎉',
         `Order placed successfully!\n\n💰 Rewards Used: ₹${rewardsBreakdown.rewards_used}\n🎁 Cashback Earned: ₹${rewardsBreakdown.cashback_earned}\n🏆 New Tier: ${rewardsBreakdown.new_tier}\n💳 Amount Paid: ₹${orderData.total}`,
-        [{ text: 'Great!', style: 'default' }]
+        [
+          { text: 'Track Order', onPress: () => router.push(`/order-tracking/${orderData.id}`) },
+          { text: 'Continue Shopping', onPress: () => router.push('/(tabs)/home') }
+        ]
       );
       
       clearCart();
