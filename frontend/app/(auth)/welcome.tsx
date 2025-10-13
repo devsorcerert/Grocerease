@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import Logo from '../../components/Logo';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -12,7 +11,11 @@ export default function WelcomeScreen() {
       <StatusBar style="dark" />
       
       <View style={styles.content}>
-        <Logo size="large" showText={true} />
+        <Image 
+          source={{ uri: 'https://customer-assets.emergentagent.com/job_bd1cc3b3-4082-4676-b0be-fae7b3b45faf/artifacts/vp9rk51k_WhatsApp%20Image%202025-09-12%20at%2013.06.44%20%281%29.jpeg' }}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.tagline}>India's First Cable TV Powered Grocery Delivery</Text>
         
         <View style={styles.rewardBox}>
