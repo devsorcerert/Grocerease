@@ -34,10 +34,11 @@ export default function OrdersPage() {
 
   const fetchOrders = async () => {
     try {
-      const response = await api.get('/orders');
+      const response = await api.get('/user/orders');
       setOrders(response.data.orders || []);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
