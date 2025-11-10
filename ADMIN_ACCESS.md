@@ -41,7 +41,7 @@ http://localhost:3001/admin
 
 ### Method 3: Try Public Port (May require configuration)
 ```
-https://grocer-dash.preview.emergentagent.com:3001/admin
+https://quickmart-80.preview.emergentagent.com:3001/admin
 ```
 ⚠️ Note: This requires port 3001 to be exposed in Kubernetes ingress
 
@@ -103,8 +103,8 @@ Create an Excel file with these columns:
 **Port**: 3001
 **Access**: Local (Port forwarding needed for remote)
 
-**Backend API**: https://grocer-dash.preview.emergentagent.com/api
-**Mobile App**: https://grocer-dash.preview.emergentagent.com
+**Backend API**: https://quickmart-80.preview.emergentagent.com/api
+**Mobile App**: https://quickmart-80.preview.emergentagent.com
 
 ---
 
