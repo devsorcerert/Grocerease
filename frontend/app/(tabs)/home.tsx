@@ -515,6 +515,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#2D8B47',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  searchPlaceholder: {
+    flex: 1,
+    fontSize: 15,
+    color: '#9CA3AF',
+  },
   cableTvCard: { 
     flexDirection: 'column',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
