@@ -165,7 +165,12 @@ export default function CategoriesScreen() {
             </View>
           ) : (
             products.map((product) => (
-              <View key={product.id} style={styles.productItem}>
+              <TouchableOpacity 
+                key={product.id} 
+                style={styles.productItem}
+                onPress={() => router.push(`/product/${product.id}`)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.productImage}>
                   <Ionicons name="bag-outline" size={40} color="#2D8B47" />
                 </View>
@@ -181,11 +186,14 @@ export default function CategoriesScreen() {
                 </View>
                 <TouchableOpacity 
                   style={styles.addButton}
-                  onPress={() => handleAddToCart(product.id, product.name)}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleAddToCart(product.id, product.name);
+                  }}
                 >
                   <Ionicons name="add" size={20} color="#fff" />
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </ScrollView>
