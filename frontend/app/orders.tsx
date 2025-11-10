@@ -173,10 +173,20 @@ export default function OrdersPage() {
                   <Text style={styles.detailValue}>{order.payment_method || 'COD'}</Text>
                 </View>
 
-                <TouchableOpacity style={styles.reorderButton}>
-                  <Ionicons name="refresh-outline" size={18} color="#2D8B47" />
-                  <Text style={styles.reorderText}>Reorder</Text>
-                </TouchableOpacity>
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity 
+                    style={styles.trackButton}
+                    onPress={() => router.push(`/order-tracking/${order.id}`)}
+                  >
+                    <Ionicons name="location-outline" size={18} color="#fff" />
+                    <Text style={styles.trackButtonText}>Track Order</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={styles.reorderButton}>
+                    <Ionicons name="refresh-outline" size={18} color="#2D8B47" />
+                    <Text style={styles.reorderText}>Reorder</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
