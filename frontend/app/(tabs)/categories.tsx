@@ -26,6 +26,7 @@ const categoryIconMap: { [key: string]: any } = {
 };
 
 export default function CategoriesScreen() {
+  const router = useRouter();
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
