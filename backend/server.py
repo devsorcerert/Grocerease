@@ -511,6 +511,64 @@ async def get_products(
         "has_more": (skip + limit) < total_count
     }
 
+
+@api_router.get("/products/filters/options")
+async def get_filter_options():
+    """Get available filter options for products"""
+    # Get unique categories
+    categories = await db.products.distinct("category")
+    
+    # Get unique brands
+    brands = await db.products.distinct("brand")
+    
+    # Get price range
+    all_products = await db.products.find({}, {"price": 1}).to_list(10000)
+    prices = [p.get("price", 0) for p in all_products if p.get("price")]
+    
+    min_price = min(prices) if prices else 0
+    max_price = max(prices) if prices else 0
+    
+    return {
+        "categories": sorted([c for c in categories if c]),
+        "brands": sorted([b for b in brands if b]),
+        "price_range": {
+            "min": round(min_price, 2),
+            "max": round(max_price, 2)
+        }
+    }
+
+@api_router.post("/products/compare")
+async def compare_products(product_ids: List[str]):
+    """Compare multiple products"""
+    if len(product_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 products required for comparison")
+    if len(product_ids) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 products can be compared")
+    
+    products = []
+    for product_id in product_ids:
+        product = await db.products.find_one({"id": product_id})
+        if product:
+            products.append(clean_mongo_doc(product))
+    
+    if len(products) < 2:
+        raise HTTPException(status_code=404, detail="Not enough products found")
+    
+    # Calculate comparison metrics
+    price_comparison = {
+        "lowest": min(p.get("price", float('inf')) for p in products),
+        "highest": max(p.get("price", 0) for p in products),
+        "average": sum(p.get("price", 0) for p in products) / len(products)
+    }
+    
+    return {
+        "products": products,
+        "comparison": {
+            "price": price_comparison,
+            "total_compared": len(products)
+        }
+    }
+
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
     product = await db.products.find_one({"id": product_id})
