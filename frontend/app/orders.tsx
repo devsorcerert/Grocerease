@@ -287,11 +287,27 @@ const styles = StyleSheet.create({
   detailLabel: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
   detailValue: { fontSize: 14, color: '#111' },
   
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  trackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    padding: 10,
+    backgroundColor: '#2D8B47',
+    borderRadius: 8,
+    gap: 6,
+  },
+  trackButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   reorderButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    flex: 1,
     padding: 10,
     borderWidth: 1,
     borderColor: '#2D8B47',
