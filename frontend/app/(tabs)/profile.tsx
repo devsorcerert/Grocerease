@@ -98,9 +98,33 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/orders')}>
+            <Ionicons name="receipt-outline" size={24} color="#111" />
+            <Text style={styles.menuText}>Order History</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/addresses')}>
+            <Ionicons name="location-outline" size={24} color="#111" />
+            <Text style={styles.menuText}>Manage Addresses</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/settings')}>
+            <Ionicons name="settings-outline" size={24} color="#111" />
+            <Text style={styles.menuText}>Settings</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/cable-tv-settings')}>
             <Ionicons name="tv-outline" size={24} color="#111" />
             <Text style={styles.menuText}>Cable TV Settings</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/support-chat')}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#111" />
+            <Text style={styles.menuText}>Support Chat</Text>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
