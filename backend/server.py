@@ -1356,6 +1356,211 @@ async def admin_get_categories(admin=Depends(verify_admin)):
     categories = await db.products.distinct("category")
     return {"categories": categories}
 
+
+# User Settings & Account Management Routes
+
+@api_router.post("/auth/change-password")
+async def change_password(
+    password_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Change user password"""
+    current_password = password_data.get("current_password")
+    new_password = password_data.get("new_password")
+    
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Both passwords required")
+    
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not verify_password(current_password, user["password"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    
+    hashed_new_password = hash_password(new_password)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password": hashed_new_password, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Password changed successfully", "success": True}
+
+@api_router.delete("/auth/delete-account")
+async def delete_account(user_id: str = Depends(get_current_user)):
+    """Delete user account"""
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Also delete user's orders and cart
+    await db.orders.delete_many({"user_id": user_id})
+    await db.carts.delete_many({"user_id": user_id})
+    
+    return {"message": "Account deleted successfully", "success": True}
+
+# Address Management Routes
+
+@api_router.get("/user/addresses")
+async def get_addresses(user_id: str = Depends(get_current_user)):
+    """Get all addresses for user"""
+    addresses = await db.addresses.find({"user_id": user_id}).to_list(100)
+    return {"addresses": clean_mongo_docs(addresses)}
+
+@api_router.post("/user/addresses")
+async def add_address(address_data: dict, user_id: str = Depends(get_current_user)):
+    """Add new address"""
+    address_dict = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        **address_data,
+        "created_at": datetime.utcnow()
+    }
+    await db.addresses.insert_one(address_dict)
+    return clean_mongo_doc(address_dict)
+
+@api_router.put("/user/addresses/{address_id}")
+async def update_address(
+    address_id: str,
+    address_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Update existing address"""
+    result = await db.addresses.update_one(
+        {"id": address_id, "user_id": user_id},
+        {"$set": {**address_data, "updated_at": datetime.utcnow()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Address not found")
+    return {"message": "Address updated successfully"}
+
+@api_router.delete("/user/addresses/{address_id}")
+async def delete_address(address_id: str, user_id: str = Depends(get_current_user)):
+    """Delete address"""
+    result = await db.addresses.delete_one({"id": address_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Address not found")
+    return {"message": "Address deleted successfully"}
+
+@api_router.post("/user/addresses/{address_id}/set-default")
+async def set_default_address(address_id: str, user_id: str = Depends(get_current_user)):
+    """Set address as default"""
+    # Remove default from all addresses
+    await db.addresses.update_many(
+        {"user_id": user_id},
+        {"$set": {"is_default": False}}
+    )
+    
+    # Set this address as default
+    result = await db.addresses.update_one(
+        {"id": address_id, "user_id": user_id},
+        {"$set": {"is_default": True}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Address not found")
+    
+    return {"message": "Default address updated"}
+
+# Payment Methods Routes
+
+@api_router.get("/user/payment-methods")
+async def get_payment_methods(user_id: str = Depends(get_current_user)):
+    """Get all payment methods for user"""
+    methods = await db.payment_methods.find({"user_id": user_id}).to_list(100)
+    return {"payment_methods": clean_mongo_docs(methods)}
+
+@api_router.post("/user/payment-methods")
+async def add_payment_method(method_data: dict, user_id: str = Depends(get_current_user)):
+    """Add new payment method"""
+    method_dict = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        **method_data,
+        "created_at": datetime.utcnow()
+    }
+    await db.payment_methods.insert_one(method_dict)
+    return clean_mongo_doc(method_dict)
+
+@api_router.delete("/user/payment-methods/{method_id}")
+async def delete_payment_method(method_id: str, user_id: str = Depends(get_current_user)):
+    """Delete payment method"""
+    result = await db.payment_methods.delete_one({"id": method_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    return {"message": "Payment method deleted successfully"}
+
+# Notification Preferences Routes
+
+@api_router.post("/user/notification-preferences")
+async def update_notification_preferences(
+    preferences: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Update notification preferences"""
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "notification_preferences": preferences,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    return {"message": "Notification preferences updated", "success": True}
+
+@api_router.get("/user/notification-preferences")
+async def get_notification_preferences(user_id: str = Depends(get_current_user)):
+    """Get notification preferences"""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"preferences": user.get("notification_preferences", {
+        "order_updates": True,
+        "promotions": True,
+        "new_arrivals": False,
+        "price_drops": True
+    })}
+
+# Enhanced Orders Routes
+
+@api_router.get("/user/orders")
+async def get_user_orders(
+    user_id: str = Depends(get_current_user),
+    status: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0
+):
+    """Get user orders with optional filters"""
+    query = {"user_id": user_id}
+    if status:
+        query["status"] = status
+    
+    total = await db.orders.count_documents(query)
+    orders = await db.orders.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    
+    return {
+        "orders": clean_mongo_docs(orders),
+        "total": total,
+        "has_more": (skip + limit) < total
+    }
+
+@api_router.post("/orders/{order_id}/cancel")
+async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
+    """Cancel an order"""
+    order = await db.orders.find_one({"id": order_id, "user_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.get("status") in ["delivered", "cancelled"]:
+        raise HTTPException(status_code=400, detail="Cannot cancel this order")
+    
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.utcnow()}}
+    )
+    
+    return {"message": "Order cancelled successfully", "success": True}
+
 app.include_router(api_router)
 
 app.add_middleware(
