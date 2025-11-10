@@ -64,10 +64,12 @@ export default function CategoriesScreen() {
       const response = await api.get('/products', { 
         params: category ? { category } : {} 
       });
-      setProducts(response.data);
+      // Handle new API response format
+      setProducts(response.data.products || response.data || []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
       Alert.alert('Error', 'Failed to load products');
+      setProducts([]);
     } finally {
       setLoading(false);
     }
