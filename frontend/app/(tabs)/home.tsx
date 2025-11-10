@@ -166,6 +166,17 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TouchableOpacity 
+          style={styles.searchBar}
+          onPress={() => router.push('/search-advanced')}
+        >
+          <Ionicons name="search" size={20} color="#9CA3AF" />
+          <Text style={styles.searchPlaceholder}>Search for products...</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
 
         {!user?.cable_tv_linked && (
