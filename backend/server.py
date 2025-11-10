@@ -436,19 +436,80 @@ async def force_cable_tv_sync(user_id: str = Depends(get_current_user)):
 
 # Product Routes
 @api_router.get("/products")
-async def get_products(category: Optional[str] = None, search: Optional[str] = None):
+async def get_products(
+    category: Optional[str] = None, 
+    search: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    sort_by: Optional[str] = None,  # price_asc, price_desc, name_asc, name_desc, popularity, rating
+    in_stock: Optional[bool] = None,
+    brand: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0
+):
     query = {}
+    
+    # Category filter
     if category:
         query["category"] = category
-    if search:
-        query["name"] = {"$regex": search, "$options": "i"}
     
-    products = await db.products.find(query).to_list(1000)
+    # Search filter (searches in name, description, brand)
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"brand": {"$regex": search, "$options": "i"}}
+        ]
+    
+    # Price range filter
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None:
+            query["price"]["$gte"] = min_price
+        if max_price is not None:
+            query["price"]["$lte"] = max_price
+    
+    # Stock filter
+    if in_stock is not None:
+        if in_stock:
+            query["stock"] = {"$gt": 0}
+        else:
+            query["stock"] = 0
+    
+    # Brand filter
+    if brand:
+        query["brand"] = brand
+    
+    # Sorting
+    sort_options = {
+        "price_asc": ("price", 1),
+        "price_desc": ("price", -1),
+        "name_asc": ("name", 1),
+        "name_desc": ("name", -1),
+        "popularity": ("popularity", -1),
+        "rating": ("rating", -1)
+    }
+    
+    sort_field, sort_order = sort_options.get(sort_by, ("created_at", -1))
+    
+    # Get total count for pagination
+    total_count = await db.products.count_documents(query)
+    
+    # Fetch products with pagination
+    products = await db.products.find(query).sort(sort_field, sort_order).skip(skip).limit(limit).to_list(limit)
+    
     # Remove MongoDB _id field
     for product in products:
         if "_id" in product:
             del product["_id"]
-    return products
+    
+    return {
+        "products": products,
+        "total": total_count,
+        "limit": limit,
+        "skip": skip,
+        "has_more": (skip + limit) < total_count
+    }
 
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
