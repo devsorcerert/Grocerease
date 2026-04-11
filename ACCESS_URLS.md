@@ -5,7 +5,7 @@
 ### 📱 1. Mobile App (Expo)
 **Main App URL:**
 ```
-https://quickmart-80.preview.emergentagent.com
+https://order-management-93.preview.emergentagent.com
 ```
 - **Status**: ✅ Working
 - **Port**: 3000
@@ -16,7 +16,7 @@ https://quickmart-80.preview.emergentagent.com
 ### ⚙️ 2. Backend API
 **API Base URL:**
 ```
-https://quickmart-80.preview.emergentagent.com/api
+https://order-management-93.preview.emergentagent.com/api
 ```
 - **Status**: ✅ Working  
 - **Port**: 8001 (proxied through main domain)
@@ -28,7 +28,7 @@ https://quickmart-80.preview.emergentagent.com/api
 
 **Test Backend API:**
 ```bash
-curl https://quickmart-80.preview.emergentagent.com/api/categories
+curl https://order-management-93.preview.emergentagent.com/api/categories
 ```
 
 ---
@@ -49,7 +49,7 @@ http://localhost:3001/admin
 
 #### Option B: Public URL with Port (May require firewall rules)
 ```
-https://quickmart-80.preview.emergentagent.com:3001/admin
+https://order-management-93.preview.emergentagent.com:3001/admin
 ```
 - **When to use**: For remote access
 - **Note**: Requires port 3001 to be exposed in Kubernetes ingress
@@ -97,7 +97,7 @@ Password: admin123
 
 ### Test Backend API:
 ```bash
-curl https://quickmart-80.preview.emergentagent.com/api/categories
+curl https://order-management-93.preview.emergentagent.com/api/categories
 ```
 
 ### Test Admin Login:
@@ -110,7 +110,7 @@ curl -X POST http://localhost:8001/api/admin/login \
 ### Test Profile Update (with token):
 ```bash
 # Replace YOUR_TOKEN with actual JWT token
-curl -X POST https://quickmart-80.preview.emergentagent.com/api/auth/update-profile \
+curl -X POST https://order-management-93.preview.emergentagent.com/api/auth/update-profile \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"name":"John Doe","email":"john@example.com","phone":"1234567890","address":"123 Main St","city":"Mumbai","pincode":"400001"}'
@@ -122,8 +122,8 @@ curl -X POST https://quickmart-80.preview.emergentagent.com/api/auth/update-prof
 
 | Service | URL | Port | Status |
 |---------|-----|------|--------|
-| **Mobile App** | https://quickmart-80.preview.emergentagent.com | 3000 | ✅ Working |
-| **Backend API** | https://quickmart-80.preview.emergentagent.com/api | 8001 | ✅ Working |
+| **Mobile App** | https://order-management-93.preview.emergentagent.com | 3000 | ✅ Working |
+| **Backend API** | https://order-management-93.preview.emergentagent.com/api | 8001 | ✅ Working |
 | **Admin Portal** | http://localhost:3001/admin | 3001 | ✅ Working (local) |
 
 ---

@@ -305,6 +305,7 @@ export default function AdvancedSearchPage() {
                   </TouchableOpacity>
                 )}
 
+                <TouchableOpacity onPress={() => router.push(`/product/${product.id}`)}>
                 {product.image ? (
                   <Image source={{ uri: product.image }} style={styles.productImage} />
                 ) : (
@@ -312,6 +313,7 @@ export default function AdvancedSearchPage() {
                     <Ionicons name="cube-outline" size={40} color="#D1D5DB" />
                   </View>
                 )}
+                </TouchableOpacity>
                 
                 {product.stock === 0 && (
                   <View style={styles.outOfStockBadge}>
@@ -319,7 +321,7 @@ export default function AdvancedSearchPage() {
                   </View>
                 )}
                 
-                <View style={styles.productInfo}>
+                <TouchableOpacity style={styles.productInfo} onPress={() => router.push(`/product/${product.id}`)}>
                   <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
                   <Text style={styles.productBrand}>{product.brand || product.category}</Text>
                   
@@ -347,7 +349,7 @@ export default function AdvancedSearchPage() {
                       </TouchableOpacity>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
             ))}
           </View>

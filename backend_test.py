@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://quickmart-80.preview.emergentagent.com/api"
+BASE_URL = "https://order-management-93.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@grocereasetv.com"
 ADMIN_PASSWORD = "admin123"
 

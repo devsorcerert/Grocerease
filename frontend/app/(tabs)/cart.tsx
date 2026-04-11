@@ -72,47 +72,8 @@ export default function CartScreen() {
     return 0;
   };
 
-  const handleCheckout = async () => {
-    setLoading(true);
-    try {
-      const subtotal = calculateSubtotal();
-      const orderItems = items.map(item => {
-        const product = products.find(p => p.id === item.product_id);
-        return {
-          product_id: item.product_id,
-          name: product?.name,
-          price: product?.price,
-          quantity: item.quantity,
-        };
-      });
-
-      // The new API automatically calculates and applies rewards
-      const response = await api.post('/orders', {
-        items: orderItems,
-        subtotal,
-        payment_method: 'mock',
-      });
-
-      const orderData = response.data;
-      const rewardsBreakdown = orderData.rewards_breakdown;
-
-      Alert.alert(
-        'Order Successful! 🎉',
-        `Order placed successfully!\n\n💰 Rewards Used: ₹${rewardsBreakdown.rewards_used}\n🎁 Cashback Earned: ₹${rewardsBreakdown.cashback_earned}\n🏆 New Tier: ${rewardsBreakdown.new_tier}\n💳 Amount Paid: ₹${orderData.total}`,
-        [
-          { text: 'Track Order', onPress: () => router.push(`/order-tracking/${orderData.id}`) },
-          { text: 'Continue Shopping', onPress: () => router.push('/(tabs)/home') }
-        ]
-      );
-      
-      clearCart();
-      refreshUser(); // Refresh user data to show updated rewards
-    } catch (error) {
-      console.error('Checkout error:', error);
-      Alert.alert('Error', 'Failed to place order. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const handleCheckout = () => {
+    router.push('/checkout');
   };
 
   if (items.length === 0) {
@@ -231,7 +192,7 @@ export default function CartScreen() {
         >
           <Ionicons name="card" size={20} color="#fff" style={styles.checkoutIcon} />
           <Text style={styles.checkoutButtonText}>
-            {loading ? 'Processing...' : 'Complete Order with Auto-Rewards'}
+            Proceed to Checkout
           </Text>
         </TouchableOpacity>
       </View>

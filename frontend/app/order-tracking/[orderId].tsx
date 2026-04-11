@@ -1,156 +1,87 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Circle, Polyline } from 'react-native-maps';
 import api from '../../utils/api';
-import { useAuth } from '../../context/AuthContext';
 
-const { width, height } = Dimensions.get('window');
-
-interface Store {
-  id: string;
-  name: string;
-  address: string;
-  location: {
-    latitude: number;
-    longitude: number;
-  };
-  distance: number; // in km
+interface TrackingUpdate {
+  timestamp: string;
+  status: string;
+  message: string;
 }
 
-interface DeliveryPartner {
-  id: string;
-  name: string;
-  phone: string;
-  vehicle: string;
-  rating: number;
-  current_location: {
-    latitude: number;
-    longitude: number;
-  };
-  estimated_arrival: string;
-}
+const STATUS_STEPS = [
+  { key: 'confirmed', label: 'Order Confirmed', icon: 'checkmark-circle', description: 'Your order has been received' },
+  { key: 'preparing', label: 'Preparing', icon: 'restaurant', description: 'Items are being packed' },
+  { key: 'picked_up', label: 'Picked Up', icon: 'bicycle', description: 'Delivery partner has picked up your order' },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: 'navigate', description: 'Your order is on the way' },
+  { key: 'delivered', label: 'Delivered', icon: 'home', description: 'Order delivered successfully' },
+];
 
-interface OrderTrackingData {
-  order_id: string;
-  status: 'confirmed' | 'preparing' | 'picked_up' | 'out_for_delivery' | 'delivered';
-  delivery_partner?: DeliveryPartner;
-  delivery_address: string;
-  delivery_location: {
-    latitude: number;
-    longitude: number;
-  };
-  assigned_store?: Store;
-  estimated_delivery: string;
-  tracking_updates: Array<{
-    timestamp: string;
-    status: string;
-    message: string;
-  }>;
-}
+const STATUS_INDEX: Record<string, number> = {
+  confirmed: 0,
+  preparing: 1,
+  picked_up: 2,
+  out_for_delivery: 3,
+  delivered: 4,
+  cancelled: -1,
+};
 
-export default function OrderTrackingScreen() {
-  const { orderId } = useLocalSearchParams();
+export default function OrderTrackingPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const [trackingData, setTrackingData] = useState<OrderTrackingData | null>(null);
+  const { orderId } = useLocalSearchParams();
+  const [tracking, setTracking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
-    fetchTrackingData();
-    // Set up polling for real-time updates
-    const interval = setInterval(fetchTrackingData, 30000); // Every 30 seconds
-    return () => clearInterval(interval);
+    fetchTracking();
   }, [orderId]);
 
-  const fetchTrackingData = async () => {
+  const fetchTracking = async () => {
     try {
+      setLoading(true);
       const response = await api.get(`/orders/${orderId}/tracking`);
-      setTrackingData(response.data);
+      setTracking(response.data);
     } catch (error) {
-      console.error('Failed to fetch tracking data:', error);
-      // Mock data for demonstration - Infrastructure ready for real API
-      setTrackingData({
-        order_id: orderId as string,
-        status: 'out_for_delivery',
-        delivery_partner: {
-          id: 'dp_001',
-          name: 'Rajesh Kumar',
-          phone: '+91 98765 43210',
-          vehicle: 'Bike - MH 12 AB 1234',
-          rating: 4.8,
-          current_location: {
-            latitude: 19.0760,
-            longitude: 72.8777
-          },
-          estimated_arrival: '15 minutes'
-        },
-        delivery_address: user?.address || 'Your delivery address',
-        estimated_delivery: '2024-01-15T14:30:00Z',
-        tracking_updates: [
-          { timestamp: '2024-01-15T12:00:00Z', status: 'confirmed', message: 'Order confirmed and being prepared' },
-          { timestamp: '2024-01-15T12:30:00Z', status: 'preparing', message: 'Items being picked and packed' },
-          { timestamp: '2024-01-15T13:00:00Z', status: 'picked_up', message: 'Order picked up by delivery partner' },
-          { timestamp: '2024-01-15T13:15:00Z', status: 'out_for_delivery', message: 'On the way to your location' },
-        ]
-      });
+      console.error('Failed to fetch tracking:', error);
+      Alert.alert('Error', 'Failed to load tracking information');
     } finally {
       setLoading(false);
     }
   };
 
-  const openGoogleMaps = () => {
-    if (!trackingData?.delivery_partner) {
-      Alert.alert('Location Unavailable', 'Delivery partner location not available yet.');
-      return;
-    }
-
-    const { latitude, longitude } = trackingData.delivery_partner.current_location;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`;
-    
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) {
-        Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Unable to open Google Maps');
-      }
-    });
+  const handleCancelOrder = () => {
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order? This action cannot be undone.',
+      [
+        { text: 'Keep Order', style: 'cancel' },
+        {
+          text: 'Cancel Order',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancelling(true);
+              await api.post(`/orders/${orderId}/cancel`);
+              Alert.alert('Order Cancelled', 'Your order has been cancelled successfully.', [
+                { text: 'OK', onPress: () => router.push('/orders') }
+              ]);
+            } catch (error: any) {
+              Alert.alert('Error', error.response?.data?.detail || 'Failed to cancel order');
+            } finally {
+              setCancelling(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const callDeliveryPartner = () => {
-    if (!trackingData?.delivery_partner?.phone) return;
-    
-    const phoneUrl = `tel:${trackingData.delivery_partner.phone}`;
-    Linking.canOpenURL(phoneUrl).then(supported => {
-      if (supported) {
-        Linking.openURL(phoneUrl);
-      } else {
-        Alert.alert('Error', 'Unable to make phone call');
-      }
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return '#3B82F6';
-      case 'preparing': return '#F59E0B';
-      case 'picked_up': return '#10B981';
-      case 'out_for_delivery': return '#FF8C42';
-      case 'delivered': return '#2D8B47';
-      default: return '#6B7280';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'checkmark-circle';
-      case 'preparing': return 'restaurant';
-      case 'picked_up': return 'cube';
-      case 'out_for_delivery': return 'bicycle';
-      case 'delivered': return 'home';
-      default: return 'time';
+    if (tracking?.delivery_partner?.phone) {
+      Linking.openURL(`tel:${tracking.delivery_partner.phone.replace(/\s/g, '')}`);
     }
   };
 
@@ -159,269 +90,430 @@ export default function OrderTrackingScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2D8B47" />
-          <Text style={styles.loadingText}>Loading order tracking...</Text>
+          <Text style={styles.loadingText}>Loading tracking info...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!trackingData) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color="#EF4444" />
-          <Text style={styles.errorTitle}>Order Not Found</Text>
-          <Text style={styles.errorText}>Unable to load tracking information for this order.</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const currentStatus = tracking?.status || 'confirmed';
+  const currentStepIndex = STATUS_INDEX[currentStatus] ?? 0;
+  const isCancelled = currentStatus === 'cancelled';
+  const isDelivered = currentStatus === 'delivered';
+  const canCancel = !isCancelled && !isDelivered && currentStepIndex <= 1;
+
+  const formatTime = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch { return ''; }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/home')}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Tracking</Text>
-        <TouchableOpacity onPress={fetchTrackingData}>
+        <Text style={styles.headerTitle}>Track Order</Text>
+        <TouchableOpacity onPress={fetchTracking}>
           <Ionicons name="refresh" size={24} color="#2D8B47" />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        {/* Order Status */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <View style={[styles.statusIcon, { backgroundColor: getStatusColor(trackingData.status) }]}>
-              <Ionicons name={getStatusIcon(trackingData.status)} size={24} color="#fff" />
-            </View>
-            <View style={styles.statusInfo}>
-              <Text style={styles.statusTitle}>{trackingData.status.replace('_', ' ').toUpperCase()}</Text>
-              <Text style={styles.orderId}>Order #{trackingData.order_id}</Text>
-            </View>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Order ID */}
+        <View style={styles.orderIdCard}>
+          <View style={styles.orderIdLeft}>
+            <Text style={styles.orderIdLabel}>Order ID</Text>
+            <Text style={styles.orderIdValue}>#{String(orderId).slice(0, 8).toUpperCase()}</Text>
           </View>
-          <Text style={styles.estimatedTime}>
-            Estimated delivery: {new Date(trackingData.estimated_delivery).toLocaleTimeString()}
-          </Text>
+          {tracking?.estimated_delivery && !isCancelled && !isDelivered && (
+            <View style={styles.etaContainer}>
+              <Ionicons name="time-outline" size={18} color="#FF8C42" />
+              <Text style={styles.etaText}>
+                ETA: {formatTime(tracking.estimated_delivery)}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Delivery Partner Info */}
-        {trackingData.delivery_partner && (
-          <View style={styles.partnerCard}>
-            <View style={styles.partnerHeader}>
-              <View style={styles.partnerIcon}>
-                <Ionicons name="person" size={24} color="#2D8B47" />
-              </View>
-              <View style={styles.partnerInfo}>
-                <Text style={styles.partnerName}>{trackingData.delivery_partner.name}</Text>
-                <Text style={styles.partnerVehicle}>{trackingData.delivery_partner.vehicle}</Text>
-                <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={14} color="#F59E0B" />
-                  <Text style={styles.rating}>{trackingData.delivery_partner.rating}</Text>
-                </View>
-              </View>
-            </View>
-            
-            <Text style={styles.arrivalTime}>
-              Arriving in {trackingData.delivery_partner.estimated_arrival}
-            </Text>
-
-            <View style={styles.partnerActions}>
-              <TouchableOpacity style={styles.actionButton} onPress={callDeliveryPartner}>
-                <Ionicons name="call" size={20} color="#2D8B47" />
-                <Text style={styles.actionText}>Call</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={[styles.actionButton, styles.mapButton]} onPress={openGoogleMaps}>
-                <Ionicons name="location" size={20} color="#fff" />
-                <Text style={[styles.actionText, styles.mapButtonText]}>Track on Maps</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.infrastructureNote}>
-              <Ionicons name="information-circle-outline" size={16} color="#6B7280" />
-              <Text style={styles.infrastructureText}>
-                🚀 Infrastructure ready for real-time GPS tracking integration
-              </Text>
+        {/* Cancelled Banner */}
+        {isCancelled && (
+          <View style={styles.cancelledBanner}>
+            <Ionicons name="close-circle" size={24} color="#DC2626" />
+            <View style={styles.cancelledContent}>
+              <Text style={styles.cancelledTitle}>Order Cancelled</Text>
+              <Text style={styles.cancelledText}>This order has been cancelled</Text>
             </View>
           </View>
         )}
 
-        {/* Tracking Timeline */}
-        <View style={styles.timelineCard}>
-          <Text style={styles.timelineTitle}>Order Progress</Text>
-          
-          {trackingData.tracking_updates.map((update, index) => (
-            <View key={index} style={styles.timelineItem}>
-              <View style={styles.timelineDot}>
-                <View style={[styles.dot, { 
-                  backgroundColor: index === trackingData.tracking_updates.length - 1 ? 
-                    getStatusColor(trackingData.status) : '#E5E7EB' 
-                }]} />
-                {index < trackingData.tracking_updates.length - 1 && <View style={styles.timelineLine} />}
-              </View>
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineStatus}>{update.status.replace('_', ' ').toUpperCase()}</Text>
-                <Text style={styles.timelineMessage}>{update.message}</Text>
-                <Text style={styles.timelineTime}>
-                  {new Date(update.timestamp).toLocaleTimeString()}
-                </Text>
-              </View>
+        {/* Delivered Banner */}
+        {isDelivered && (
+          <View style={styles.deliveredBanner}>
+            <Ionicons name="checkmark-circle" size={24} color="#2D8B47" />
+            <View style={styles.deliveredContent}>
+              <Text style={styles.deliveredTitle}>Order Delivered!</Text>
+              <Text style={styles.deliveredText}>Enjoy your groceries</Text>
             </View>
-          ))}
-        </View>
+          </View>
+        )}
+
+        {/* Timeline */}
+        {!isCancelled && (
+          <View style={styles.timelineCard}>
+            <Text style={styles.timelineTitle}>Delivery Progress</Text>
+            
+            {STATUS_STEPS.map((step, index) => {
+              const isCompleted = index <= currentStepIndex;
+              const isCurrent = index === currentStepIndex;
+              const isLast = index === STATUS_STEPS.length - 1;
+              
+              return (
+                <View key={step.key} style={styles.timelineStep}>
+                  {/* Line */}
+                  <View style={styles.timelineLeft}>
+                    <View style={[
+                      styles.timelineCircle,
+                      isCompleted && styles.timelineCircleCompleted,
+                      isCurrent && styles.timelineCircleCurrent,
+                    ]}>
+                      {isCompleted ? (
+                        <Ionicons name={step.icon as any} size={16} color="#fff" />
+                      ) : (
+                        <Text style={styles.timelineStepNumber}>{index + 1}</Text>
+                      )}
+                    </View>
+                    {!isLast && (
+                      <View style={[
+                        styles.timelineLine,
+                        isCompleted && index < currentStepIndex && styles.timelineLineCompleted,
+                      ]} />
+                    )}
+                  </View>
+                  
+                  <View style={styles.timelineRight}>
+                    <Text style={[
+                      styles.timelineLabel,
+                      isCompleted && styles.timelineLabelCompleted,
+                      isCurrent && styles.timelineLabelCurrent,
+                    ]}>
+                      {step.label}
+                    </Text>
+                    <Text style={styles.timelineDescription}>{step.description}</Text>
+                    {isCurrent && (
+                      <View style={styles.currentBadge}>
+                        <View style={styles.currentDot} />
+                        <Text style={styles.currentText}>Current</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Delivery Partner */}
+        {tracking?.delivery_partner && !isCancelled && currentStepIndex >= 2 && (
+          <View style={styles.partnerCard}>
+            <Text style={styles.sectionTitle}>Delivery Partner</Text>
+            <View style={styles.partnerInfo}>
+              <View style={styles.partnerAvatar}>
+                <Ionicons name="person" size={24} color="#fff" />
+              </View>
+              <View style={styles.partnerDetails}>
+                <Text style={styles.partnerName}>{tracking.delivery_partner.name}</Text>
+                <Text style={styles.partnerVehicle}>{tracking.delivery_partner.vehicle}</Text>
+                <View style={styles.partnerRating}>
+                  <Ionicons name="star" size={14} color="#FF8C42" />
+                  <Text style={styles.ratingText}>{tracking.delivery_partner.rating}</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.callButton} onPress={callDeliveryPartner}>
+                <Ionicons name="call" size={20} color="#2D8B47" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Delivery Address */}
-        <View style={styles.addressCard}>
-          <View style={styles.addressHeader}>
-            <Ionicons name="location-outline" size={20} color="#2D8B47" />
-            <Text style={styles.addressTitle}>Delivery Address</Text>
+        {tracking?.delivery_address && (
+          <View style={styles.addressCard}>
+            <Text style={styles.sectionTitle}>Delivery Address</Text>
+            <View style={styles.addressRow}>
+              <Ionicons name="location" size={20} color="#2D8B47" />
+              <Text style={styles.addressText}>{tracking.delivery_address}</Text>
+            </View>
           </View>
-          <Text style={styles.addressText}>{trackingData.delivery_address}</Text>
-        </View>
-      </View>
+        )}
+
+        {/* Tracking History */}
+        {tracking?.tracking_updates && tracking.tracking_updates.length > 0 && (
+          <View style={styles.historyCard}>
+            <Text style={styles.sectionTitle}>Tracking History</Text>
+            {tracking.tracking_updates.map((update: TrackingUpdate, index: number) => (
+              <View key={index} style={styles.historyItem}>
+                <View style={styles.historyDot} />
+                <View style={styles.historyContent}>
+                  <Text style={styles.historyMessage}>{update.message}</Text>
+                  <Text style={styles.historyTime}>
+                    {formatDate(update.timestamp)} • {formatTime(update.timestamp)}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Cancel Order Button */}
+        {canCancel && (
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={handleCancelOrder}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <ActivityIndicator color="#DC2626" />
+            ) : (
+              <>
+                <Ionicons name="close-circle-outline" size={20} color="#DC2626" />
+                <Text style={styles.cancelButtonText}>Cancel Order</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Need Help */}
+        <TouchableOpacity 
+          style={styles.helpButton}
+          onPress={() => router.push('/profile/help-support')}
+        >
+          <Ionicons name="help-circle-outline" size={20} color="#6B7280" />
+          <Text style={styles.helpButtonText}>Need Help?</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    padding: 16, 
+  
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
+  
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   
   content: { flex: 1, padding: 16 },
   
-  statusCard: { 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 16, 
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+  orderIdCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  statusHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  statusIcon: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 24, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    marginRight: 16
+  orderIdLeft: {},
+  orderIdLabel: { fontSize: 12, color: '#6B7280' },
+  orderIdValue: { fontSize: 18, fontWeight: 'bold', color: '#111', marginTop: 2 },
+  etaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  statusInfo: { flex: 1 },
-  statusTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
-  orderId: { fontSize: 14, color: '#6B7280', marginTop: 2 },
-  estimatedTime: { fontSize: 14, color: '#2D8B47', fontWeight: '600' },
+  etaText: { fontSize: 14, fontWeight: '600', color: '#FF8C42' },
   
-  partnerCard: { 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 16, 
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  partnerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  partnerIcon: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 24, 
-    backgroundColor: '#ECFDF5', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    marginRight: 16
-  },
-  partnerInfo: { flex: 1 },
-  partnerName: { fontSize: 16, fontWeight: '600', color: '#111' },
-  partnerVehicle: { fontSize: 14, color: '#6B7280', marginTop: 2 },
-  ratingContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  rating: { fontSize: 14, fontWeight: '600', color: '#111', marginLeft: 4 },
-  arrivalTime: { fontSize: 14, color: '#FF8C42', fontWeight: '600', marginBottom: 16 },
-  
-  partnerActions: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  actionButton: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    padding: 12, 
-    borderRadius: 12, 
+  cancelledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2D8B47',
-    backgroundColor: '#fff'
+    borderColor: '#FECACA',
   },
-  mapButton: { backgroundColor: '#2D8B47', borderColor: '#2D8B47' },
-  actionText: { fontSize: 14, fontWeight: '600', color: '#2D8B47', marginLeft: 6 },
-  mapButtonText: { color: '#fff' },
+  cancelledContent: {},
+  cancelledTitle: { fontSize: 16, fontWeight: 'bold', color: '#DC2626' },
+  cancelledText: { fontSize: 13, color: '#DC2626', marginTop: 2 },
   
-  infrastructureNote: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#F3F4F6', 
-    padding: 12, 
-    borderRadius: 8 
+  deliveredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ECFDF5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  infrastructureText: { fontSize: 11, color: '#6B7280', marginLeft: 8, flex: 1 },
+  deliveredContent: {},
+  deliveredTitle: { fontSize: 16, fontWeight: 'bold', color: '#2D8B47' },
+  deliveredText: { fontSize: 13, color: '#2D8B47', marginTop: 2 },
   
-  timelineCard: { 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 16, 
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+  // Timeline
+  timelineCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  timelineTitle: { fontSize: 16, fontWeight: 'bold', color: '#111', marginBottom: 16 },
-  timelineItem: { flexDirection: 'row', marginBottom: 16 },
-  timelineDot: { alignItems: 'center', marginRight: 16 },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  timelineLine: { width: 2, height: 32, backgroundColor: '#E5E7EB', marginTop: 4 },
-  timelineContent: { flex: 1 },
-  timelineStatus: { fontSize: 14, fontWeight: '600', color: '#111' },
-  timelineMessage: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  timelineTime: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
-  
-  addressCard: { 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+  timelineTitle: { fontSize: 16, fontWeight: 'bold', color: '#111', marginBottom: 20 },
+  timelineStep: { flexDirection: 'row', minHeight: 70 },
+  timelineLeft: { alignItems: 'center', width: 40 },
+  timelineCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
   },
-  addressHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  addressTitle: { fontSize: 16, fontWeight: '600', color: '#111', marginLeft: 8 },
-  addressText: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
+  timelineCircleCompleted: { backgroundColor: '#2D8B47' },
+  timelineCircleCurrent: { backgroundColor: '#FF8C42' },
+  timelineStepNumber: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+  timelineLine: {
+    width: 3,
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: -2,
+  },
+  timelineLineCompleted: { backgroundColor: '#2D8B47' },
+  timelineRight: {
+    flex: 1,
+    paddingLeft: 16,
+    paddingBottom: 20,
+  },
+  timelineLabel: { fontSize: 15, fontWeight: '500', color: '#9CA3AF' },
+  timelineLabelCompleted: { color: '#2D8B47', fontWeight: '600' },
+  timelineLabelCurrent: { color: '#FF8C42', fontWeight: '600' },
+  timelineDescription: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  currentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  currentDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF8C42' },
+  currentText: { fontSize: 11, color: '#FF8C42', fontWeight: '600' },
   
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { fontSize: 16, color: '#6B7280', marginTop: 16 },
+  // Delivery Partner
+  partnerCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#6B7280', marginBottom: 12 },
+  partnerInfo: { flexDirection: 'row', alignItems: 'center' },
+  partnerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#2D8B47',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnerDetails: { flex: 1, marginLeft: 12 },
+  partnerName: { fontSize: 16, fontWeight: '600', color: '#111' },
+  partnerVehicle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  partnerRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  ratingText: { fontSize: 13, fontWeight: '500', color: '#111' },
+  callButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   
-  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  errorTitle: { fontSize: 24, fontWeight: 'bold', color: '#111', marginTop: 16 },
-  errorText: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 8, marginBottom: 24 },
-  backButton: { backgroundColor: '#2D8B47', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
-  backButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  // Address
+  addressCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  addressText: { flex: 1, fontSize: 14, color: '#374151', lineHeight: 20 },
+  
+  // History
+  historyCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  historyItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
+  historyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2D8B47',
+    marginTop: 6,
+  },
+  historyContent: { flex: 1 },
+  historyMessage: { fontSize: 14, color: '#111' },
+  historyTime: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  
+  // Cancel
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginBottom: 12,
+  },
+  cancelButtonText: { fontSize: 15, fontWeight: '600', color: '#DC2626' },
+  
+  // Help
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
+  },
+  helpButtonText: { fontSize: 14, color: '#6B7280' },
 });

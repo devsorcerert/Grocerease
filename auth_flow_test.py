@@ -8,7 +8,7 @@ import requests
 import json
 import uuid
 
-BASE_URL = "https://quickmart-80.preview.emergentagent.com/api"
+BASE_URL = "https://order-management-93.preview.emergentagent.com/api"
 
 def test_auth_endpoints():
     print("🔐 Testing Authentication Endpoints")

@@ -129,10 +129,12 @@ class CartItem(BaseModel):
 
 class OrderCreate(BaseModel):
     items: List[dict]
-    subtotal: float
-    reward_applied: float
-    total: float
-    payment_method: str = "mock"
+    subtotal: float = 0
+    reward_applied: float = 0
+    total: float = 0
+    payment_method: str = "COD"
+    delivery_address: Optional[str] = None
+    phone: Optional[str] = None
 
 class VideoCreate(BaseModel):
     title: str
@@ -865,32 +867,43 @@ async def create_order(order_data: OrderCreate, user_id: str = Depends(get_curre
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Calculate subtotal from items if not provided
+    subtotal = order_data.subtotal
+    if subtotal == 0 and order_data.items:
+        subtotal = sum(item.get("price", 0) * item.get("quantity", 1) for item in order_data.items)
+    
     # Calculate rewards and apply them automatically
     rewards_info = calculate_spending_tiers_and_rewards(
         user.get("monthly_spend", 0.0), 
-        order_data.subtotal
+        subtotal
     )
     
     # Auto-apply rewards (user's available reward balance)
     current_reward_balance = user.get("current_reward", 0.0)
-    reward_applied = min(current_reward_balance, order_data.subtotal)
-    final_total = order_data.subtotal - reward_applied
+    reward_applied = min(current_reward_balance, subtotal)
+    final_total = subtotal - reward_applied
+    
+    # Build delivery address
+    delivery_address = order_data.delivery_address
+    if not delivery_address:
+        delivery_address = f"{user.get('address', '')}, {user.get('city', '')}, {user.get('pincode', '')}"
     
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
         "items": order_data.items,
-        "subtotal": order_data.subtotal,
+        "subtotal": subtotal,
         "reward_applied": reward_applied,
         "total": final_total,
         "payment_method": order_data.payment_method,
+        "phone": order_data.phone or user.get("phone", ""),
         "tier_info": rewards_info["current_tier"],
         "order_cashback_earned": rewards_info["order_cashback"],
         "rewards_auto_applied": True,
         "status": "confirmed",
         "delivery_status": "confirmed",
         "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
-        "delivery_address": f"{user.get('address', '')}, {user.get('city', '')}, {user.get('pincode', '')}",
+        "delivery_address": delivery_address,
         "created_at": datetime.utcnow(),
         "tracking_updates": [
             {
@@ -1560,6 +1573,39 @@ async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
     )
     
     return {"message": "Order cancelled successfully", "success": True}
+
+
+# Support Messages
+class SupportMessage(BaseModel):
+    message: str
+
+@api_router.post("/support/messages")
+async def send_support_message(msg: SupportMessage, user_id: str = Depends(get_current_user)):
+    """Save support message and return auto-response"""
+    message_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "message": msg.message,
+        "created_at": datetime.utcnow(),
+    }
+    await db.support_messages.insert_one(message_doc)
+    
+    # Auto-response logic
+    lower_msg = msg.message.lower()
+    if "order" in lower_msg and ("track" in lower_msg or "where" in lower_msg):
+        reply = "You can track your order from the Orders section. Go to Orders > Tap on your order > Track Order."
+    elif "cancel" in lower_msg:
+        reply = "You can cancel your order from the Order Tracking page if it hasn't been picked up yet."
+    elif "payment" in lower_msg or "pay" in lower_msg:
+        reply = "For payment issues, please share your order ID. Our team will investigate and respond within 2 hours."
+    elif "refund" in lower_msg:
+        reply = "Refunds are processed within 5-7 business days. Please share your order ID for status."
+    elif "quality" in lower_msg or "damaged" in lower_msg:
+        reply = "We're sorry about the quality issue. Please share your order ID and we'll arrange a replacement or refund."
+    else:
+        reply = "Thank you for reaching out. Our support team will respond shortly. Support hours: 9 AM - 9 PM IST."
+    
+    return {"reply": reply, "message_id": message_doc["id"]}
 
 app.include_router(api_router)
 

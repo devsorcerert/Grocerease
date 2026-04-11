@@ -54,7 +54,7 @@ export default function SearchBar({ placeholder = 'Search products...' }: Search
   const handleSearchSubmit = () => {
     if (query.trim().length > 0) {
       setShowResults(false);
-      router.push(`/search?q=${encodeURIComponent(query)}`);
+      router.push(`/search-advanced?q=${encodeURIComponent(query)}`);
     }
   };
 

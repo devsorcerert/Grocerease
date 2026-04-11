@@ -18,7 +18,7 @@ export default function HelpSupportScreen() {
       icon: 'chatbubble-outline',
       title: 'Live Chat Support',
       description: 'Chat with our customer service team',
-      action: () => Alert.alert('Live Chat', 'Live chat feature coming soon!')
+      action: () => router.push('/support-chat')
     },
     {
       icon: 'call-outline',
