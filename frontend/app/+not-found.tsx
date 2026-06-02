@@ -2,51 +2,23 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
-import { Platform } from 'react-native';
 
 export default function NotFoundScreen() {
   const router = useRouter();
-  const { handleSessionId, user } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    // Check if this is a Google auth redirect with session_id in hash
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      const search = window.location.search;
-      let sessionId: string | null = null;
-
-      if (hash) {
-        const hashParams = new URLSearchParams(hash.substring(1));
-        sessionId = hashParams.get('session_id');
-      }
-      if (!sessionId && search) {
-        const searchParams = new URLSearchParams(search);
-        sessionId = searchParams.get('session_id');
-      }
-
-      if (sessionId) {
-        // This is a Google auth callback - process it
-        window.history.replaceState(null, '', '/');
-        handleSessionId(sessionId).then(() => {
+    if (!loading) {
+      const timer = setTimeout(() => {
+        if (user) {
           router.replace('/(tabs)/home');
-        }).catch(() => {
+        } else {
           router.replace('/(auth)/welcome');
-        });
-        return;
-      }
+        }
+      }, 500);
+      return () => clearTimeout(timer);
     }
-
-    // For other unmatched routes, redirect to home or welcome
-    const timeout = setTimeout(() => {
-      if (user) {
-        router.replace('/(tabs)/home');
-      } else {
-        router.replace('/(auth)/welcome');
-      }
-    }, 1500);
-
-    return () => clearTimeout(timeout);
-  }, [user]);
+  }, [user, loading]);
 
   return (
     <View style={styles.container}>

@@ -60,7 +60,8 @@ export default function HomeScreen() {
   const fetchFeaturedProducts = async () => {
     try {
       const response = await api.get('/products');
-      setProducts(response.data.slice(0, 6));
+      const products = response.data.products || response.data;
+      setProducts(Array.isArray(products) ? products.slice(0, 6) : []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     }

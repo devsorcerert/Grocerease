@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
@@ -25,7 +25,6 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   googleLogin: (idToken: string, name: string, email: string, photo?: string) => Promise<void>;
   socialLogin: (provider: string) => Promise<void>;
-  handleSessionId: (sessionId: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -63,45 +62,50 @@ const storage = {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionProcessingRef = useRef(false);
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
-    // On web, check for session_id in URL first
-    if (Platform.OS === 'web') {
-      const sessionId = getSessionIdFromUrl();
-      if (sessionId) {
-        handleSessionId(sessionId).then(() => {
-          // Clean URL
-          if (typeof window !== 'undefined') {
-            window.history.replaceState(null, '', window.location.pathname);
-          }
-        });
-        return;
-      }
-    }
-    checkAuth();
+    initAuth();
   }, []);
 
   // Mobile deep link listener
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      // Cold start
       Linking.getInitialURL().then((url) => {
         if (url) {
           const sessionId = extractSessionId(url);
-          if (sessionId) handleSessionId(sessionId);
+          if (sessionId) processSession(sessionId);
         }
       });
 
-      // Hot link
       const subscription = Linking.addEventListener('url', (event) => {
         const sessionId = extractSessionId(event.url);
-        if (sessionId) handleSessionId(sessionId);
+        if (sessionId) processSession(sessionId);
       });
 
       return () => subscription.remove();
     }
   }, []);
+
+  const initAuth = async () => {
+    try {
+      // On web, check for session_id in URL first (Google OAuth callback)
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const sessionId = getSessionIdFromUrl();
+        if (sessionId) {
+          await processSession(sessionId);
+          return;
+        }
+      }
+
+      // Normal auth check - look for stored token
+      await checkAuth();
+    } catch (error) {
+      console.log('Auth init error:', error);
+      setLoading(false);
+    }
+  };
 
   const getSessionIdFromUrl = () => {
     if (typeof window === 'undefined') return null;
@@ -127,17 +131,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const extractSessionId = (url: string) => {
     try {
-      const urlObj = new URL(url);
-      return urlObj.searchParams.get('session_id') || 
-             new URLSearchParams(urlObj.hash.substring(1)).get('session_id');
-    } catch {
-      // Try regex fallback
       const match = url.match(/session_id=([^&]+)/);
       return match ? match[1] : null;
+    } catch {
+      return null;
     }
   };
 
-  const handleSessionId = async (sessionId: string) => {
+  // Process session with lock to prevent double calls
+  const processSession = async (sessionId: string) => {
+    if (sessionProcessingRef.current) {
+      console.log('Session already being processed, skipping');
+      return;
+    }
+    sessionProcessingRef.current = true;
+    
     try {
       setLoading(true);
       
@@ -169,10 +177,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
       startTokenRefreshTimer();
+      
+      console.log('Google auth completed successfully for:', userData.email);
     } catch (error) {
-      console.error('Session ID handling failed:', error);
+      console.error('Session processing failed:', error);
     } finally {
       setLoading(false);
+      sessionProcessingRef.current = false;
     }
   };
 
@@ -207,10 +218,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await storage.setItem('token', newAccessToken);
         await storage.setItem('refresh_token', newRefreshToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
-        console.log('Token refreshed successfully');
       } catch (error) {
         console.log('Token refresh failed:', error);
-        await logout();
       }
     }, 14 * 60 * 1000);
 
@@ -267,18 +276,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
       
       if (Platform.OS === 'web') {
-        // On web, navigate directly
         if (typeof window !== 'undefined') {
           window.location.href = authUrl;
         }
       } else {
-        // On mobile, use WebBrowser
         const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
         
         if (result.type === 'success' && result.url) {
           const sessionId = extractSessionId(result.url);
           if (sessionId) {
-            await handleSessionId(sessionId);
+            await processSession(sessionId);
           }
         }
       }
@@ -291,17 +298,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ============ LOGOUT ============
   const logout = async () => {
     try {
-      console.log('Logout: starting...');
-
       try {
         await api.post('/auth/logout');
       } catch (err: any) {
         console.log('Server logout skipped:', err.message);
       }
-
       await clearAuth();
-      console.log('Logout complete');
-
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -326,7 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, googleLogin, socialLogin, handleSessionId, logout, refreshUser }}
+      value={{ user, loading, login, register, googleLogin, socialLogin, logout, refreshUser }}
     >
       {children}
     </AuthContext.Provider>
