@@ -302,6 +302,72 @@ async def google_auth(auth_data: GoogleAuthRequest):
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
     return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
 
+
+class SocialAuthRequest(BaseModel):
+    provider: str  # "google", "apple", "email"
+    email: str
+    name: Optional[str] = None
+    photo: Optional[str] = None
+    session_token: Optional[str] = None
+
+@api_router.post("/auth/social")
+async def social_auth(auth_data: SocialAuthRequest):
+    """Unified social auth endpoint for Google, Apple, and other providers"""
+    if not auth_data.email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    
+    db_user = await db.users.find_one({"email": auth_data.email})
+    
+    if not db_user:
+        # Create new user
+        user_dict = {
+            "id": str(uuid.uuid4()),
+            "name": auth_data.name or auth_data.email.split("@")[0],
+            "email": auth_data.email,
+            "password": None,
+            "phone": None,
+            "photo": auth_data.photo,
+            "auth_provider": auth_data.provider,
+            "cable_tv_linked": False,
+            "cable_tv_details": None,
+            "monthly_spend": 0.0,
+            "total_spend": 0.0,
+            "current_reward": 0.0,
+            "is_admin": False,
+            "created_at": datetime.utcnow()
+        }
+        await db.users.insert_one(user_dict)
+        db_user = user_dict
+    
+    # Store session if provided
+    if auth_data.session_token:
+        await db.user_sessions.update_one(
+            {"user_id": db_user["id"]},
+            {"$set": {
+                "session_token": auth_data.session_token,
+                "user_id": db_user["id"],
+                "expires_at": datetime.utcnow() + timedelta(days=7),
+                "created_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+    
+    token = create_access_token({"user_id": db_user["id"]})
+    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+    
+    return {
+        "token": token,
+        "refresh_token": refresh_token,
+        "user": {
+            "id": db_user["id"],
+            "name": db_user.get("name", ""),
+            "email": db_user["email"],
+            "photo": db_user.get("photo"),
+            "auth_provider": db_user.get("auth_provider", auth_data.provider)
+        }
+    }
+
+
 @api_router.get("/auth/me")
 async def get_me(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
