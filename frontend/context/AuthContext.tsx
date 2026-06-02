@@ -260,10 +260,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (Platform.OS === 'web') {
         redirectUrl = typeof window !== 'undefined' 
-          ? window.location.origin + '/' 
-          : 'https://localhost:3000/';
+          ? window.location.origin + '/auth-callback' 
+          : 'https://localhost:3000/auth-callback';
       } else {
-        redirectUrl = Linking.createURL('auth');
+        redirectUrl = Linking.createURL('auth-callback');
       }
       
       const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
