@@ -5,7 +5,6 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
-import { useNavigation } from '@react-navigation/native';
 
 interface User {
   id: string;
@@ -64,7 +63,6 @@ const storage = {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const navigation = useNavigation<any>();
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
@@ -304,25 +302,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await clearAuth();
       console.log('Logout complete');
 
-      if (Platform.OS === 'web') {
-        window.location.href = '/';
-      } else {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Login' }],
-        });
-      }
-
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
 
   const clearAuth = async () => {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('refresh_token');
-    await SecureStore.deleteItemAsync('token').catch(() => {});
-    await SecureStore.deleteItemAsync('refresh_token').catch(() => {});
+    await storage.removeItem('token');
+    await storage.removeItem('refresh_token');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
   };

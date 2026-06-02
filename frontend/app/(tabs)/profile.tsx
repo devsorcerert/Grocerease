@@ -28,7 +28,8 @@ export default function ProfileScreen() {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: async () => {
-        await logout(); // This will handle navigation automatically
+        await logout();
+        router.replace('/(auth)/welcome');
       }}
     ]);
   };
