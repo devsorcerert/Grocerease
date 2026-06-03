@@ -1,27 +1,66 @@
+/**
+ * GrocerEase — Checkout Screen
+ * Fixes applied:
+ *   [1] Razorpay payment gate — order only confirmed after real payment verification
+ *   [2] Rewards auto-apply removed — rewards shown as earned info only, NOT deducted
+ *   [4] Saved addresses — auto-detect location, match to saved, pick or add new
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, Platform,
+  ScrollView, ActivityIndicator, Alert, Modal, FlatList,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import * as SecureStore from 'expo-secure-store';
+import * as Location from 'expo-location';
 import axios from 'axios';
 import { API_BASE_URL, RAZORPAY_KEY_ID } from '../constants/api';
 
 type PaymentMethod = 'razorpay' | 'cod';
-type OrderSummary = { subtotal: number; delivery_fee: number; rewards_discount: number; total: number; rewards_earned: number; tier: string; };
+
+type SavedAddress = {
+  id: string;
+  label: string;
+  full_address: string;
+  landmark?: string;
+  lat?: number;
+  lng?: number;
+};
+
+type OrderSummary = {
+  subtotal: number;
+  delivery_fee: number;
+  total: number;
+  rewards_will_earn: number; // FIX [2]: only shows what user WILL earn, not auto-deducted
+  tier: string;
+};
+
+const BRAND = '#2D8B47';
 
 export default function CheckoutScreen() {
-  const params = useLocalSearchParams<{ cart_total?: string }>();
-  const [address, setAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('razorpay');
   const [summary, setSummary] = useState<OrderSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
-  const [razorpayUrl, setRazorpayUrl] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
 
+  // FIX [1]: payment gate state — order only marked paid after Razorpay verification
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [razorpayHtml, setRazorpayHtml] = useState<string | null>(null);
+  const [paymentVerified, setPaymentVerified] = useState(false);
+
+  // FIX [4]: address management
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false);
+  const [newAddress, setNewAddress] = useState('');
+  const [newLabel, setNewLabel] = useState('Home');
+  const [newLandmark, setNewLandmark] = useState('');
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+
+  // ── Load summary (FIX [2]: no rewards_discount field) ──────────────────
   const fetchSummary = useCallback(async () => {
     try {
       const token = await SecureStore.getItemAsync('access_token');
@@ -36,27 +75,119 @@ export default function CheckoutScreen() {
     }
   }, []);
 
-  useEffect(() => { fetchSummary(); }, [fetchSummary]);
+  // ── Load saved addresses ────────────────────────────────────────────────
+  const fetchSavedAddresses = useCallback(async () => {
+    try {
+      const token = await SecureStore.getItemAsync('access_token');
+      const res = await axios.get(`${API_BASE_URL}/api/user/addresses`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSavedAddresses(res.data.addresses || []);
+      if (res.data.addresses?.length > 0) {
+        setSelectedAddress(res.data.addresses[0]);
+      }
+    } catch {
+      // silently fail — user can still type address
+    }
+  }, []);
 
+  useEffect(() => {
+    fetchSummary();
+    fetchSavedAddresses();
+    autoDetectAndMatch();
+  }, []);
+
+  // ── FIX [4]: auto-detect location & match nearest saved address ─────────
+  const autoDetectAndMatch = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      setDetectingLocation(true);
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+
+      // Ask backend to match nearest saved address for this geolocation
+      const token = await SecureStore.getItemAsync('access_token');
+      const res = await axios.post(
+        `${API_BASE_URL}/api/user/addresses/nearest`,
+        { lat: latitude, lng: longitude },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data.matched_address) {
+        setSelectedAddress(res.data.matched_address);
+      }
+    } catch {
+      // Location detection optional — don't block checkout
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
+
+  // ── Save new address ────────────────────────────────────────────────────
+  const handleSaveNewAddress = async () => {
+    if (!newAddress.trim()) { Alert.alert('Required', 'Please enter an address.'); return; }
+    setSavingAddress(true);
+    try {
+      let coords: { lat?: number; lng?: number } = {};
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        }
+      } catch {}
+
+      const token = await SecureStore.getItemAsync('access_token');
+      const res = await axios.post(
+        `${API_BASE_URL}/api/user/addresses`,
+        { label: newLabel, full_address: newAddress.trim(), landmark: newLandmark.trim(), ...coords },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const saved = res.data.address;
+      setSavedAddresses(prev => [saved, ...prev]);
+      setSelectedAddress(saved);
+      setShowNewAddressForm(false);
+      setShowAddressPicker(false);
+      setNewAddress('');
+      setNewLandmark('');
+    } catch {
+      Alert.alert('Error', 'Could not save address. Please try again.');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  // ── FIX [1]: Place order — for Razorpay, only create order (not confirm) ─
   const handlePlaceOrder = async () => {
-    if (!address.trim()) { Alert.alert('Address Required', 'Please enter your delivery address.'); return; }
+    if (!selectedAddress) {
+      Alert.alert('Address Required', 'Please select or add a delivery address.');
+      return;
+    }
     setPlacing(true);
     try {
       const token = await SecureStore.getItemAsync('access_token');
-      const res = await axios.post(
-        `${API_BASE_URL}/api/orders/create`,
-        { delivery_address: address, payment_method: paymentMethod },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const newOrderId = res.data.order_id;
-      setOrderId(newOrderId);
 
       if (paymentMethod === 'cod') {
-        router.replace({ pathname: '/order-success', params: { order_id: newOrderId, payment: 'cod' } });
+        // COD: create + immediately confirm
+        const res = await axios.post(
+          `${API_BASE_URL}/api/orders/create`,
+          { address_id: selectedAddress.id, payment_method: 'cod' },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        router.replace({ pathname: '/order-success', params: { order_id: res.data.order_id, payment: 'cod' } });
         return;
       }
 
-      // Razorpay: create payment order on backend
+      // FIX [1]: Razorpay — create a PENDING order first, DO NOT confirm yet
+      const res = await axios.post(
+        `${API_BASE_URL}/api/orders/create-pending`,
+        { address_id: selectedAddress.id, payment_method: 'razorpay' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const newOrderId = res.data.order_id;
+      setPendingOrderId(newOrderId);
+
+      // Create Razorpay payment order
       const payRes = await axios.post(
         `${API_BASE_URL}/api/payments/razorpay/create`,
         { order_id: newOrderId },
@@ -64,20 +195,22 @@ export default function CheckoutScreen() {
       );
       const { razorpay_order_id, amount, currency } = payRes.data;
 
-      // Build inline HTML for Razorpay Checkout (WebView approach — works without native SDK)
-      const html = buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId: newOrderId });
-      setRazorpayUrl(html);
+      // Open Razorpay WebView — order only confirmed in handleWebViewMessage after signature verified
+      setRazorpayHtml(buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId: newOrderId }));
     } catch (err: any) {
-      Alert.alert('Order Failed', err?.response?.data?.detail || 'Something went wrong. Please try again.');
+      Alert.alert('Error', err?.response?.data?.detail || 'Something went wrong. Please try again.');
     } finally {
       setPlacing(false);
     }
   };
 
+  // ── FIX [1]: Only navigate to success AFTER backend signature verification ─
   const handleWebViewMessage = async (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+
       if (data.status === 'success') {
+        // CRITICAL: verify signature on backend BEFORE showing success
         const token = await SecureStore.getItemAsync('access_token');
         await axios.post(
           `${API_BASE_URL}/api/payments/razorpay/verify`,
@@ -85,29 +218,43 @@ export default function CheckoutScreen() {
             razorpay_order_id: data.razorpay_order_id,
             razorpay_payment_id: data.razorpay_payment_id,
             razorpay_signature: data.razorpay_signature,
-            order_id: orderId,
+            order_id: pendingOrderId,
           },
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        setRazorpayUrl(null);
-        router.replace({ pathname: '/order-success', params: { order_id: orderId!, payment: 'razorpay' } });
+        // Only here — after server confirms — do we navigate to success
+        setRazorpayHtml(null);
+        setPaymentVerified(true);
+        router.replace({ pathname: '/order-success', params: { order_id: pendingOrderId!, payment: 'razorpay' } });
+
       } else if (data.status === 'dismissed') {
-        setRazorpayUrl(null);
-        Alert.alert('Payment Cancelled', 'Your payment was cancelled. Your order has been saved — you can retry from Orders.');
+        setRazorpayHtml(null);
+        // Cancel the pending order on backend
+        try {
+          const token = await SecureStore.getItemAsync('access_token');
+          await axios.post(`${API_BASE_URL}/api/orders/${pendingOrderId}/cancel`, {},
+            { headers: { Authorization: `Bearer ${token}` } });
+        } catch {}
+        setPendingOrderId(null);
+        Alert.alert('Payment Cancelled', 'Your payment was cancelled. Cart is still saved.');
+
       } else if (data.status === 'failed') {
-        setRazorpayUrl(null);
+        setRazorpayHtml(null);
+        setPendingOrderId(null);
         Alert.alert('Payment Failed', data.error || 'Payment failed. Please try again.');
       }
-    } catch {
-      setRazorpayUrl(null);
+    } catch (err: any) {
+      setRazorpayHtml(null);
+      Alert.alert('Verification Failed', 'Payment could not be verified. Contact support if money was deducted.');
     }
   };
 
-  if (razorpayUrl) {
+  // ── Razorpay WebView ────────────────────────────────────────────────────
+  if (razorpayHtml) {
     return (
       <View style={{ flex: 1 }}>
         <WebView
-          source={{ html: razorpayUrl }}
+          source={{ html: razorpayHtml }}
           onMessage={handleWebViewMessage}
           javaScriptEnabled
           domStorageEnabled
@@ -123,154 +270,238 @@ export default function CheckoutScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <Text style={styles.heading}>Checkout</Text>
 
-      {/* Delivery Address */}
+      {/* ── FIX [4]: Saved Address Picker ─────────────────────────── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📍 Delivery Address</Text>
-        <TextInput
-          style={styles.addressInput}
-          placeholder="House no, Street, Area, Tirupati..."
-          multiline
-          numberOfLines={3}
-          value={address}
-          onChangeText={setAddress}
-          placeholderTextColor="#9CA3AF"
-        />
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>📍 Delivery Address</Text>
+          {detectingLocation && <Text style={styles.detectingText}>📡 Detecting location...</Text>}
+        </View>
+
+        {selectedAddress ? (
+          <TouchableOpacity style={styles.selectedAddress} onPress={() => setShowAddressPicker(true)}>
+            <View style={styles.addressBadge}>
+              <Text style={styles.addressBadgeText}>{selectedAddress.label}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addressText} numberOfLines={2}>{selectedAddress.full_address}</Text>
+              {selectedAddress.landmark ? <Text style={styles.addressLandmark}>Near: {selectedAddress.landmark}</Text> : null}
+            </View>
+            <Text style={styles.changeText}>Change</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.addAddressBtn} onPress={() => { setShowAddressPicker(true); setShowNewAddressForm(true); }}>
+            <Text style={styles.addAddressBtnText}>+ Add Delivery Address</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Order Summary */}
+      {/* ── FIX [2]: Order Summary — no rewards_discount row ───────── */}
       {summary && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🧾 Order Summary</Text>
-          <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Subtotal</Text><Text style={styles.summaryValue}>₹{summary.subtotal.toFixed(2)}</Text></View>
-          <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Delivery Fee</Text><Text style={styles.summaryValue}>₹{summary.delivery_fee.toFixed(2)}</Text></View>
-          {summary.rewards_discount > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, styles.green]}>🎁 Rewards Discount ({summary.tier})</Text>
-              <Text style={[styles.summaryValue, styles.green]}>-₹{summary.rewards_discount.toFixed(2)}</Text>
-            </View>
-          )}
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
+          <View style={styles.row}><Text style={styles.label}>Subtotal</Text><Text style={styles.value}>₹{summary.subtotal.toFixed(2)}</Text></View>
+          <View style={styles.row}><Text style={styles.label}>Delivery Fee</Text><Text style={styles.value}>₹{summary.delivery_fee.toFixed(2)}</Text></View>
+          <View style={[styles.row, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>₹{summary.total.toFixed(2)}</Text>
           </View>
-          {summary.rewards_earned > 0 && (
+          {/* FIX [2]: Rewards shown as what they WILL earn — not auto-applied */}
+          {summary.rewards_will_earn > 0 && (
             <View style={styles.rewardsBadge}>
-              <Text style={styles.rewardsBadgeText}>✨ You'll earn ₹{summary.rewards_earned.toFixed(2)} cashback on this order</Text>
+              <Text style={styles.rewardsBadgeText}>
+                ✨ Complete this order to earn ₹{summary.rewards_will_earn.toFixed(2)} GrocerEase Cashback ({summary.tier} tier)
+              </Text>
             </View>
           )}
         </View>
       )}
 
-      {/* Payment Method */}
+      {/* ── Payment Method ──────────────────────────────────────────── */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>💳 Payment Method</Text>
-        <TouchableOpacity
-          style={[styles.payOption, paymentMethod === 'razorpay' && styles.payOptionSelected]}
-          onPress={() => setPaymentMethod('razorpay')}
-        >
-          <View style={[styles.radio, paymentMethod === 'razorpay' && styles.radioSelected]} />
-          <View>
-            <Text style={styles.payLabel}>UPI / Card / Netbanking</Text>
-            <Text style={styles.paySubLabel}>Powered by Razorpay — secure & instant</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.payOption, paymentMethod === 'cod' && styles.payOptionSelected]}
-          onPress={() => setPaymentMethod('cod')}
-        >
-          <View style={[styles.radio, paymentMethod === 'cod' && styles.radioSelected]} />
-          <View>
-            <Text style={styles.payLabel}>Cash on Delivery</Text>
-            <Text style={styles.paySubLabel}>Pay when your order arrives</Text>
-          </View>
-        </TouchableOpacity>
+        {(['razorpay', 'cod'] as PaymentMethod[]).map(method => (
+          <TouchableOpacity
+            key={method}
+            style={[styles.payOption, paymentMethod === method && styles.payOptionSelected]}
+            onPress={() => setPaymentMethod(method)}
+          >
+            <View style={[styles.radio, paymentMethod === method && styles.radioSelected]} />
+            <View>
+              <Text style={styles.payLabel}>{method === 'razorpay' ? 'UPI / Card / Netbanking' : 'Cash on Delivery'}</Text>
+              <Text style={styles.paySubLabel}>{method === 'razorpay' ? 'Powered by Razorpay — secure & instant' : 'Pay when your order arrives'}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <TouchableOpacity
-        style={[styles.placeBtn, placing && styles.disabledBtn]}
+        style={[styles.placeBtn, (placing || !selectedAddress) && styles.disabledBtn]}
         onPress={handlePlaceOrder}
-        disabled={placing}
+        disabled={placing || !selectedAddress}
       >
         {placing ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.placeBtnText}>
-            {paymentMethod === 'cod' ? '✅ Place Order (COD)' : '🔒 Pay ₹' + (summary?.total.toFixed(2) || '0')}
+            {paymentMethod === 'cod' ? '✅ Place Order (COD)' : `🔒 Pay ₹${summary?.total.toFixed(2) || '0'}`}
           </Text>
         )}
       </TouchableOpacity>
+
+      {/* ── Address Picker Modal ─────────────────────────────────────── */}
+      <Modal visible={showAddressPicker} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose Delivery Address</Text>
+              <TouchableOpacity onPress={() => { setShowAddressPicker(false); setShowNewAddressForm(false); }}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {!showNewAddressForm ? (
+              <>
+                <FlatList
+                  data={savedAddresses}
+                  keyExtractor={a => a.id}
+                  style={{ maxHeight: 320 }}
+                  ListEmptyComponent={<Text style={styles.emptyText}>No saved addresses yet</Text>}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[styles.addressRow, selectedAddress?.id === item.id && styles.addressRowSelected]}
+                      onPress={() => { setSelectedAddress(item); setShowAddressPicker(false); }}
+                    >
+                      <View style={styles.addressBadge}><Text style={styles.addressBadgeText}>{item.label}</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.addressRowText}>{item.full_address}</Text>
+                        {item.landmark ? <Text style={styles.addressLandmark}>Near: {item.landmark}</Text> : null}
+                      </View>
+                      {selectedAddress?.id === item.id && <Text style={styles.checkmark}>✓</Text>}
+                    </TouchableOpacity>
+                  )}
+                />
+                <TouchableOpacity style={styles.addNewBtn} onPress={() => setShowNewAddressForm(true)}>
+                  <Text style={styles.addNewBtnText}>+ Add New Address</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <Text style={styles.formLabel}>Label</Text>
+                <View style={styles.labelRow}>
+                  {['Home', 'Work', 'Other'].map(l => (
+                    <TouchableOpacity key={l} style={[styles.labelChip, newLabel === l && styles.labelChipSelected]} onPress={() => setNewLabel(l)}>
+                      <Text style={[styles.labelChipText, newLabel === l && styles.labelChipTextSelected]}>{l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.formLabel}>Full Address *</Text>
+                <TextInput style={styles.formInput} placeholder="House no, Street, Area, Tirupati"
+                  multiline numberOfLines={3} value={newAddress} onChangeText={setNewAddress}
+                  placeholderTextColor="#9CA3AF" textAlignVertical="top" />
+                <Text style={styles.formLabel}>Landmark (optional)</Text>
+                <TextInput style={[styles.formInput, { height: 48 }]} placeholder="Near temple, school, etc."
+                  value={newLandmark} onChangeText={setNewLandmark} placeholderTextColor="#9CA3AF" />
+                <TouchableOpacity style={[styles.addNewBtn, savingAddress && styles.disabledBtn]} onPress={handleSaveNewAddress} disabled={savingAddress}>
+                  {savingAddress ? <ActivityIndicator color="#fff" /> : <Text style={styles.addNewBtnText}>Save & Use This Address</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowNewAddressForm(false)}>
+                  <Text style={styles.backText}>← Back to saved addresses</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
 function buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId }: any) {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-</head>
-<body style="background:#F0FDF4;display:flex;align-items:center;justify-content:center;height:100vh;">
-<script>
-var options = {
-  key: "${RAZORPAY_KEY_ID}",
-  amount: "${amount}",
-  currency: "${currency}",
-  name: "GrocerEase",
-  description: "Grocery Order #${orderId}",
-  order_id: "${razorpay_order_id}",
-  prefill: {},
-  theme: { color: "#2D8B47" },
-  handler: function(response) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      status: "success",
-      razorpay_order_id: response.razorpay_order_id,
-      razorpay_payment_id: response.razorpay_payment_id,
-      razorpay_signature: response.razorpay_signature
-    }));
-  },
-  modal: {
-    ondismiss: function() {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ status: "dismissed" }));
+  return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1.0"><script src="https://checkout.razorpay.com/v1/checkout.js"></script></head><body style="margin:0;background:#F0FDF4;display:flex;align-items:center;justify-content:center;min-height:100vh"><script>
+(function(){
+  var rzp = new Razorpay({
+    key:"${RAZORPAY_KEY_ID}",
+    amount:"${amount}",
+    currency:"${currency}",
+    name:"GrocerEase",
+    description:"Grocery Order",
+    order_id:"${razorpay_order_id}",
+    theme:{color:"#2D8B47"},
+    handler:function(r){
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        status:"success",
+        razorpay_order_id:r.razorpay_order_id,
+        razorpay_payment_id:r.razorpay_payment_id,
+        razorpay_signature:r.razorpay_signature
+      }));
+    },
+    modal:{
+      ondismiss:function(){
+        window.ReactNativeWebView.postMessage(JSON.stringify({status:"dismissed"}));
+      }
     }
-  }
-};
-var rzp = new Razorpay(options);
-rzp.on("payment.failed", function(response) {
-  window.ReactNativeWebView.postMessage(JSON.stringify({ status: "failed", error: response.error.description }));
-});
-rzp.open();
-</script>
-</body>
-</html>`;
+  });
+  rzp.on("payment.failed",function(r){
+    window.ReactNativeWebView.postMessage(JSON.stringify({status:"failed",error:r.error.description}));
+  });
+  rzp.open();
+})();
+</script></body></html>`;
 }
 
-const BRAND = '#2D8B47';
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  scroll: { padding: 20, paddingBottom: 40 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  heading: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 20 },
-  section: { backgroundColor: '#fff', borderRadius: 14, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 14 },
-  addressInput: { borderWidth: 1.5, borderColor: '#D1FAE5', borderRadius: 10, padding: 12, fontSize: 15, color: '#111827', minHeight: 80, textAlignVertical: 'top' },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { color: '#6B7280', fontSize: 14 },
-  summaryValue: { color: '#111827', fontSize: 14, fontWeight: '500' },
-  green: { color: BRAND, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 10 },
-  totalLabel: { fontSize: 17, fontWeight: '800', color: '#111827' },
-  totalValue: { fontSize: 17, fontWeight: '800', color: '#111827' },
-  rewardsBadge: { backgroundColor: '#F0FDF4', borderRadius: 8, padding: 10, marginTop: 10 },
-  rewardsBadgeText: { color: BRAND, fontSize: 13, fontWeight: '600', textAlign: 'center' },
-  payOption: { flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 14, marginBottom: 10 },
-  payOptionSelected: { borderColor: BRAND, backgroundColor: '#F0FDF4' },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#D1D5DB' },
-  radioSelected: { borderColor: BRAND, backgroundColor: BRAND },
-  payLabel: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  paySubLabel: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  placeBtn: { backgroundColor: BRAND, paddingVertical: 17, borderRadius: 14, alignItems: 'center', marginTop: 8 },
-  disabledBtn: { opacity: 0.6 },
-  placeBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  container:{ flex:1, backgroundColor:'#F9FAFB' },
+  scroll:{ padding:20, paddingBottom:48 },
+  center:{ flex:1, justifyContent:'center', alignItems:'center' },
+  heading:{ fontSize:24, fontWeight:'800', color:'#111827', marginBottom:20 },
+  section:{ backgroundColor:'#fff', borderRadius:14, padding:18, marginBottom:16, shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, elevation:2 },
+  sectionHeader:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 },
+  sectionTitle:{ fontSize:15, fontWeight:'700', color:'#111827' },
+  detectingText:{ fontSize:12, color:'#6B7280' },
+  selectedAddress:{ flexDirection:'row', alignItems:'flex-start', gap:10, borderWidth:1.5, borderColor:BRAND, borderRadius:12, padding:12, backgroundColor:'#F0FDF4' },
+  addressBadge:{ backgroundColor:BRAND, borderRadius:6, paddingHorizontal:8, paddingVertical:3 },
+  addressBadgeText:{ color:'#fff', fontSize:11, fontWeight:'700' },
+  addressText:{ fontSize:14, color:'#111827', fontWeight:'500', flex:1 },
+  addressLandmark:{ fontSize:12, color:'#6B7280', marginTop:2 },
+  changeText:{ color:BRAND, fontSize:13, fontWeight:'700', alignSelf:'center' },
+  addAddressBtn:{ borderWidth:1.5, borderColor:BRAND, borderStyle:'dashed', borderRadius:12, padding:16, alignItems:'center' },
+  addAddressBtnText:{ color:BRAND, fontWeight:'700', fontSize:15 },
+  row:{ flexDirection:'row', justifyContent:'space-between', marginBottom:8 },
+  totalRow:{ borderTopWidth:1, borderTopColor:'#F3F4F6', paddingTop:10, marginTop:4 },
+  label:{ color:'#6B7280', fontSize:14 },
+  value:{ color:'#111827', fontSize:14, fontWeight:'500' },
+  totalLabel:{ fontSize:17, fontWeight:'800', color:'#111827' },
+  totalValue:{ fontSize:17, fontWeight:'800', color:BRAND },
+  rewardsBadge:{ backgroundColor:'#F0FDF4', borderRadius:8, padding:10, marginTop:10 },
+  rewardsBadgeText:{ color:BRAND, fontSize:13, fontWeight:'600', textAlign:'center' },
+  payOption:{ flexDirection:'row', alignItems:'center', gap:14, borderWidth:1.5, borderColor:'#E5E7EB', borderRadius:12, padding:14, marginBottom:10 },
+  payOptionSelected:{ borderColor:BRAND, backgroundColor:'#F0FDF4' },
+  radio:{ width:20, height:20, borderRadius:10, borderWidth:2, borderColor:'#D1D5DB' },
+  radioSelected:{ borderColor:BRAND, backgroundColor:BRAND },
+  payLabel:{ fontSize:15, fontWeight:'600', color:'#111827' },
+  paySubLabel:{ fontSize:12, color:'#6B7280', marginTop:2 },
+  placeBtn:{ backgroundColor:BRAND, paddingVertical:17, borderRadius:14, alignItems:'center', marginTop:8 },
+  disabledBtn:{ opacity:0.6 },
+  placeBtnText:{ color:'#fff', fontSize:17, fontWeight:'800' },
+  // Modal
+  modalOverlay:{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'flex-end' },
+  modalSheet:{ backgroundColor:'#fff', borderTopLeftRadius:20, borderTopRightRadius:20, padding:20, maxHeight:'80%' },
+  modalHeader:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 },
+  modalTitle:{ fontSize:17, fontWeight:'700', color:'#111827' },
+  modalClose:{ fontSize:18, color:'#6B7280', padding:4 },
+  emptyText:{ textAlign:'center', color:'#9CA3AF', padding:20 },
+  addressRow:{ flexDirection:'row', alignItems:'flex-start', gap:10, padding:14, borderRadius:12, borderWidth:1.5, borderColor:'#E5E7EB', marginBottom:10 },
+  addressRowSelected:{ borderColor:BRAND, backgroundColor:'#F0FDF4' },
+  addressRowText:{ fontSize:14, color:'#111827', fontWeight:'500' },
+  checkmark:{ color:BRAND, fontSize:18, fontWeight:'700', alignSelf:'center' },
+  addNewBtn:{ backgroundColor:BRAND, paddingVertical:14, borderRadius:12, alignItems:'center', marginTop:12 },
+  addNewBtnText:{ color:'#fff', fontWeight:'700', fontSize:15 },
+  formLabel:{ fontSize:13, fontWeight:'600', color:'#374151', marginBottom:6, marginTop:12 },
+  formInput:{ borderWidth:1.5, borderColor:'#D1FAE5', borderRadius:10, padding:12, fontSize:14, color:'#111827', minHeight:80 },
+  labelRow:{ flexDirection:'row', gap:10 },
+  labelChip:{ paddingHorizontal:16, paddingVertical:8, borderRadius:20, borderWidth:1.5, borderColor:'#E5E7EB' },
+  labelChipSelected:{ borderColor:BRAND, backgroundColor:'#F0FDF4' },
+  labelChipText:{ color:'#6B7280', fontWeight:'600' },
+  labelChipTextSelected:{ color:BRAND },
+  backText:{ textAlign:'center', color:'#6B7280', marginTop:12, fontSize:13 },
 });
