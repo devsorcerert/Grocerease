@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, Modal, FlatList,
+  ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -54,7 +54,6 @@ export default function CheckoutScreen() {
   // FIX [4]: address management
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
-  const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [showNewAddressForm, setShowNewAddressForm] = useState(false);
   const [newAddress, setNewAddress] = useState('');
   const [newLabel, setNewLabel] = useState('Home');
@@ -149,7 +148,6 @@ export default function CheckoutScreen() {
       setSavedAddresses(prev => [saved, ...prev]);
       setSelectedAddress(saved);
       setShowNewAddressForm(false);
-      setShowAddressPicker(false);
       setNewAddress('');
       setNewLandmark('');
     } catch {
@@ -272,28 +270,111 @@ export default function CheckoutScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <Text style={styles.heading}>{t('checkout')}</Text>
 
-      {/* ── FIX [4]: Saved Address Picker ─────────────────────────── */}
+      {/* ── FIX [4]: Saved Address Picker Inline ─────────────────── */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>📍 {t('deliveryAddress')}</Text>
           {detectingLocation && <Text style={styles.detectingText}>📡 Detecting location...</Text>}
         </View>
 
-        {selectedAddress ? (
-          <TouchableOpacity style={styles.selectedAddress} onPress={() => setShowAddressPicker(true)}>
-            <View style={styles.addressBadge}>
-              <Text style={styles.addressBadgeText}>{selectedAddress.label}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.addressText} numberOfLines={2}>{selectedAddress.full_address}</Text>
-              {selectedAddress.landmark ? <Text style={styles.addressLandmark}>Near: {selectedAddress.landmark}</Text> : null}
-            </View>
-            <Text style={styles.changeText}>{t('changeText') || 'Change'}</Text>
+        {savedAddresses.length > 0 ? (
+          <View style={styles.addressListContainer}>
+            {savedAddresses.map((item) => {
+              const isSelected = selectedAddress?.id === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.addressItemCard, isSelected && styles.addressItemCardSelected]}
+                  onPress={() => setSelectedAddress(item)}
+                >
+                  <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                    {isSelected && <View style={styles.radioInnerCircle} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.addressCardHeader}>
+                      <View style={[styles.addressBadge, isSelected && styles.addressBadgeActive]}>
+                        <Text style={[styles.addressBadgeText, isSelected && styles.addressBadgeTextActive]}>{item.label}</Text>
+                      </View>
+                      {isSelected && <Text style={styles.selectedMarkerText}>Selected</Text>}
+                    </View>
+                    <Text style={styles.addressText}>{item.full_address}</Text>
+                    {item.landmark ? (
+                      <Text style={styles.addressLandmark}>Near: {item.landmark}</Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>{t('emptyAddresses')}</Text>
+        )}
+
+        {/* Inline Add Address Accordion Form */}
+        {!showNewAddressForm ? (
+          <TouchableOpacity
+            style={styles.addAddressInlineBtn}
+            onPress={() => setShowNewAddressForm(true)}
+          >
+            <Text style={styles.addAddressInlineBtnText}>+ Add New Address</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.addAddressBtn} onPress={() => { setShowAddressPicker(true); setShowNewAddressForm(true); }}>
-            <Text style={styles.addAddressBtnText}>+ {t('chooseAddress')}</Text>
-          </TouchableOpacity>
+          <View style={styles.inlineFormContainer}>
+            <View style={styles.inlineFormHeader}>
+              <Text style={styles.inlineFormTitle}>Add New Address</Text>
+              <TouchableOpacity onPress={() => setShowNewAddressForm(false)}>
+                <Text style={styles.inlineFormCloseText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.formLabel}>Label</Text>
+            <View style={styles.labelRow}>
+              {['Home', 'Work', 'Other'].map(l => (
+                <TouchableOpacity
+                  key={l}
+                  style={[styles.labelChip, newLabel === l && styles.labelChipSelected]}
+                  onPress={() => setNewLabel(l)}
+                >
+                  <Text style={[styles.labelChipText, newLabel === l && styles.labelChipTextSelected]}>
+                    {l}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.formLabel}>Full Address *</Text>
+            <TextInput
+              style={styles.formInput}
+              placeholder="House no, Street, Area, Tirupati"
+              multiline
+              numberOfLines={3}
+              value={newAddress}
+              onChangeText={setNewAddress}
+              placeholderTextColor="#9CA3AF"
+              textAlignVertical="top"
+            />
+
+            <Text style={styles.formLabel}>Landmark (optional)</Text>
+            <TextInput
+              style={[styles.formInput, { height: 48, minHeight: 48 }]}
+              placeholder="Near temple, school, etc."
+              value={newLandmark}
+              onChangeText={setNewLandmark}
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <TouchableOpacity
+              style={[styles.saveAddressBtn, savingAddress && styles.disabledBtn]}
+              onPress={handleSaveNewAddress}
+              disabled={savingAddress}
+            >
+              {savingAddress ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveAddressBtnText}>Save & Use Address</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -350,70 +431,7 @@ export default function CheckoutScreen() {
         )}
       </TouchableOpacity>
 
-      {/* ── Address Picker Modal ─────────────────────────────────────── */}
-      <Modal visible={showAddressPicker} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Delivery Address</Text>
-              <TouchableOpacity onPress={() => { setShowAddressPicker(false); setShowNewAddressForm(false); }}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            {!showNewAddressForm ? (
-              <>
-                <FlatList
-                  data={savedAddresses}
-                  keyExtractor={a => a.id}
-                  style={{ maxHeight: 320 }}
-                  ListEmptyComponent={<Text style={styles.emptyText}>No saved addresses yet</Text>}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.addressRow, selectedAddress?.id === item.id && styles.addressRowSelected]}
-                      onPress={() => { setSelectedAddress(item); setShowAddressPicker(false); }}
-                    >
-                      <View style={styles.addressBadge}><Text style={styles.addressBadgeText}>{item.label}</Text></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.addressRowText}>{item.full_address}</Text>
-                        {item.landmark ? <Text style={styles.addressLandmark}>Near: {item.landmark}</Text> : null}
-                      </View>
-                      {selectedAddress?.id === item.id && <Text style={styles.checkmark}>✓</Text>}
-                    </TouchableOpacity>
-                  )}
-                />
-                <TouchableOpacity style={styles.addNewBtn} onPress={() => setShowNewAddressForm(true)}>
-                  <Text style={styles.addNewBtnText}>+ Add New Address</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <ScrollView keyboardShouldPersistTaps="handled">
-                <Text style={styles.formLabel}>Label</Text>
-                <View style={styles.labelRow}>
-                  {['Home', 'Work', 'Other'].map(l => (
-                    <TouchableOpacity key={l} style={[styles.labelChip, newLabel === l && styles.labelChipSelected]} onPress={() => setNewLabel(l)}>
-                      <Text style={[styles.labelChipText, newLabel === l && styles.labelChipTextSelected]}>{l}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={styles.formLabel}>Full Address *</Text>
-                <TextInput style={styles.formInput} placeholder="House no, Street, Area, Tirupati"
-                  multiline numberOfLines={3} value={newAddress} onChangeText={setNewAddress}
-                  placeholderTextColor="#9CA3AF" textAlignVertical="top" />
-                <Text style={styles.formLabel}>Landmark (optional)</Text>
-                <TextInput style={[styles.formInput, { height: 48 }]} placeholder="Near temple, school, etc."
-                  value={newLandmark} onChangeText={setNewLandmark} placeholderTextColor="#9CA3AF" />
-                <TouchableOpacity style={[styles.addNewBtn, savingAddress && styles.disabledBtn]} onPress={handleSaveNewAddress} disabled={savingAddress}>
-                  {savingAddress ? <ActivityIndicator color="#fff" /> : <Text style={styles.addNewBtnText}>Save & Use This Address</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowNewAddressForm(false)}>
-                  <Text style={styles.backText}>← Back to saved addresses</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -534,14 +552,132 @@ const styles = StyleSheet.create({
   sectionHeader:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 },
   sectionTitle:{ fontSize:15, fontWeight:'700', color:'#111827' },
   detectingText:{ fontSize:12, color:'#6B7280' },
-  selectedAddress:{ flexDirection:'row', alignItems:'flex-start', gap:10, borderWidth:1.5, borderColor:BRAND, borderRadius:12, padding:12, backgroundColor:'#F0FDF4' },
-  addressBadge:{ backgroundColor:BRAND, borderRadius:6, paddingHorizontal:8, paddingVertical:3 },
-  addressBadgeText:{ color:'#fff', fontSize:11, fontWeight:'700' },
-  addressText:{ fontSize:14, color:'#111827', fontWeight:'500', flex:1 },
-  addressLandmark:{ fontSize:12, color:'#6B7280', marginTop:2 },
-  changeText:{ color:BRAND, fontSize:13, fontWeight:'700', alignSelf:'center' },
-  addAddressBtn:{ borderWidth:1.5, borderColor:BRAND, borderStyle:'dashed', borderRadius:12, padding:16, alignItems:'center' },
-  addAddressBtnText:{ color:BRAND, fontWeight:'700', fontSize:15 },
+  addressListContainer: { gap: 12, marginBottom: 12 },
+  addressItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+  },
+  addressItemCardSelected: {
+    borderColor: BRAND,
+    backgroundColor: '#F0FDF4',
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioCircleSelected: {
+    borderColor: BRAND,
+  },
+  radioInnerCircle: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: BRAND,
+  },
+  addressCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  addressBadge: {
+    backgroundColor: '#E5E7EB',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  addressBadgeActive: {
+    backgroundColor: BRAND,
+  },
+  addressBadgeText: {
+    color: '#374151',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  addressBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  selectedMarkerText: {
+    fontSize: 12,
+    color: BRAND,
+    fontWeight: '700',
+  },
+  addressText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+    lineHeight: 18,
+    flex: 1,
+  },
+  addressLandmark: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  addAddressInlineBtn: {
+    borderWidth: 1.5,
+    borderColor: BRAND,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  addAddressInlineBtnText: {
+    color: BRAND,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  inlineFormContainer: {
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 12,
+    backgroundColor: '#FAFAFA',
+  },
+  inlineFormHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingBottom: 8,
+  },
+  inlineFormTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  inlineFormCloseText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  saveAddressBtn: {
+    backgroundColor: BRAND,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  saveAddressBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
   row:{ flexDirection:'row', justifyContent:'space-between', marginBottom:8 },
   totalRow:{ borderTopWidth:1, borderTopColor:'#F3F4F6', paddingTop:10, marginTop:4 },
   label:{ color:'#6B7280', fontSize:14 },
@@ -559,19 +695,7 @@ const styles = StyleSheet.create({
   placeBtn:{ backgroundColor:BRAND, paddingVertical:17, borderRadius:14, alignItems:'center', marginTop:8 },
   disabledBtn:{ opacity:0.6 },
   placeBtnText:{ color:'#fff', fontSize:17, fontWeight:'800' },
-  // Modal
-  modalOverlay:{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'flex-end' },
-  modalSheet:{ backgroundColor:'#fff', borderTopLeftRadius:20, borderTopRightRadius:20, padding:20, maxHeight:'80%' },
-  modalHeader:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 },
-  modalTitle:{ fontSize:17, fontWeight:'700', color:'#111827' },
-  modalClose:{ fontSize:18, color:'#6B7280', padding:4 },
   emptyText:{ textAlign:'center', color:'#9CA3AF', padding:20 },
-  addressRow:{ flexDirection:'row', alignItems:'flex-start', gap:10, padding:14, borderRadius:12, borderWidth:1.5, borderColor:'#E5E7EB', marginBottom:10 },
-  addressRowSelected:{ borderColor:BRAND, backgroundColor:'#F0FDF4' },
-  addressRowText:{ fontSize:14, color:'#111827', fontWeight:'500' },
-  checkmark:{ color:BRAND, fontSize:18, fontWeight:'700', alignSelf:'center' },
-  addNewBtn:{ backgroundColor:BRAND, paddingVertical:14, borderRadius:12, alignItems:'center', marginTop:12 },
-  addNewBtnText:{ color:'#fff', fontWeight:'700', fontSize:15 },
   formLabel:{ fontSize:13, fontWeight:'600', color:'#374151', marginBottom:6, marginTop:12 },
   formInput:{ borderWidth:1.5, borderColor:'#D1FAE5', borderRadius:10, padding:12, fontSize:14, color:'#111827', minHeight:80 },
   labelRow:{ flexDirection:'row', gap:10 },
@@ -579,5 +703,4 @@ const styles = StyleSheet.create({
   labelChipSelected:{ borderColor:BRAND, backgroundColor:'#F0FDF4' },
   labelChipText:{ color:'#6B7280', fontWeight:'600' },
   labelChipTextSelected:{ color:BRAND },
-  backText:{ textAlign:'center', color:'#6B7280', marginTop:12, fontSize:13 },
 });

@@ -107,6 +107,7 @@ export const translations = {
     orderSuccessDesc: "Your payment has been processed and your order is confirmed.",
     trackOrder: "Track Order",
     changeText: "Change",
+    emptyAddresses: "No saved addresses yet",
   },
   hi: {
     // Welcome Screen
@@ -214,6 +215,7 @@ export const translations = {
     orderSuccessDesc: "आपका भुगतान हो गया है और आपका ऑर्डर पक्का हो गया है।",
     trackOrder: "ऑर्डर ट्रैक करें",
     changeText: "बदलें",
+    emptyAddresses: "कोई सहेजे गए पते नहीं मिले",
   },
   te: {
     // Welcome Screen
@@ -321,5 +323,6 @@ export const translations = {
     orderSuccessDesc: "మీ చెల్లింపు పూర్तయింది మరియు మీ ఆర్డర్ ధృవీకరించబడింది.",
     trackOrder: "ఆర్డర్ ట్రాక్ చేయండి",
     changeText: "మార్చండి",
+    emptyAddresses: "సేవ్ చేసిన చిరునామాలు ఏవీ లేవు",
   }
 };
