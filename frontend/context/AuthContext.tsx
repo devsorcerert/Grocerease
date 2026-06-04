@@ -14,8 +14,18 @@ interface User {
   photo?: string;
   cable_tv_linked?: boolean;
   monthly_spend?: number;
+  total_spend?: number;
   current_reward?: number;
   auth_provider?: string;
+  address?: string;
+  city?: string;
+  pincode?: string;
+  cable_tv_details?: {
+    user_id_nuid: string;
+    phone: string;
+    service_provider: string;
+  };
+  is_admin?: boolean;
 }
 
 interface AuthContextType {
@@ -27,6 +37,8 @@ interface AuthContextType {
   socialLogin: (provider: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  sendOtp: (phone: string) => Promise<{ is_new_user: boolean; message: string }>;
+  verifyOtp: (phone: string, otp: string, name?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -326,9 +338,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // ============ OTP AUTHENTICATION ============
+  const sendOtp = async (phone: string) => {
+    const response = await api.post('/auth/send-otp', { phone });
+    return response.data;
+  };
+
+  const verifyOtp = async (phone: string, otp: string, name?: string) => {
+    const response = await api.post('/auth/verify-otp', { phone, otp, name });
+    const { token, refresh_token, user: userData } = response.data;
+
+    await storage.setItem('token', token);
+    await storage.setItem('refresh_token', refresh_token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setUser(userData);
+    startTokenRefreshTimer();
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, googleLogin, socialLogin, logout, refreshUser }}
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        googleLogin,
+        socialLogin,
+        logout,
+        refreshUser,
+        sendOtp,
+        verifyOtp
+      }}
     >
       {children}
     </AuthContext.Provider>

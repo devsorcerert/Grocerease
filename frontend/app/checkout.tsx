@@ -15,6 +15,7 @@ import { WebView } from 'react-native-webview';
 import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
 import axios from 'axios';
+import { useTranslation } from '../context/LanguageContext';
 import { API_BASE_URL, RAZORPAY_KEY_ID } from '../constants/api';
 
 type PaymentMethod = 'razorpay' | 'cod';
@@ -39,6 +40,7 @@ type OrderSummary = {
 const BRAND = '#2D8B47';
 
 export default function CheckoutScreen() {
+  const { t } = useTranslation();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('razorpay');
   const [summary, setSummary] = useState<OrderSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -268,12 +270,12 @@ export default function CheckoutScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <Text style={styles.heading}>Checkout</Text>
+      <Text style={styles.heading}>{t('checkout')}</Text>
 
       {/* ── FIX [4]: Saved Address Picker ─────────────────────────── */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>📍 Delivery Address</Text>
+          <Text style={styles.sectionTitle}>📍 {t('deliveryAddress')}</Text>
           {detectingLocation && <Text style={styles.detectingText}>📡 Detecting location...</Text>}
         </View>
 
@@ -286,11 +288,11 @@ export default function CheckoutScreen() {
               <Text style={styles.addressText} numberOfLines={2}>{selectedAddress.full_address}</Text>
               {selectedAddress.landmark ? <Text style={styles.addressLandmark}>Near: {selectedAddress.landmark}</Text> : null}
             </View>
-            <Text style={styles.changeText}>Change</Text>
+            <Text style={styles.changeText}>{t('changeText') || 'Change'}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.addAddressBtn} onPress={() => { setShowAddressPicker(true); setShowNewAddressForm(true); }}>
-            <Text style={styles.addAddressBtnText}>+ Add Delivery Address</Text>
+            <Text style={styles.addAddressBtnText}>+ {t('chooseAddress')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -298,18 +300,18 @@ export default function CheckoutScreen() {
       {/* ── FIX [2]: Order Summary — no rewards_discount row ───────── */}
       {summary && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🧾 Order Summary</Text>
-          <View style={styles.row}><Text style={styles.label}>Subtotal</Text><Text style={styles.value}>₹{summary.subtotal.toFixed(2)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Delivery Fee</Text><Text style={styles.value}>₹{summary.delivery_fee.toFixed(2)}</Text></View>
+          <Text style={styles.sectionTitle}>🧾 {t('orderSummary')}</Text>
+          <View style={styles.row}><Text style={styles.label}>{t('subtotal')}</Text><Text style={styles.value}>₹{summary.subtotal.toFixed(2)}</Text></View>
+          <View style={styles.row}><Text style={styles.label}>{t('deliveryFee')}</Text><Text style={styles.value}>₹{summary.delivery_fee.toFixed(2)}</Text></View>
           <View style={[styles.row, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalLabel}>{t('totalAmount')}</Text>
             <Text style={styles.totalValue}>₹{summary.total.toFixed(2)}</Text>
           </View>
           {/* FIX [2]: Rewards shown as what they WILL earn — not auto-applied */}
           {summary.rewards_will_earn > 0 && (
             <View style={styles.rewardsBadge}>
               <Text style={styles.rewardsBadgeText}>
-                ✨ Complete this order to earn ₹{summary.rewards_will_earn.toFixed(2)} GrocerEase Cashback ({summary.tier} tier)
+                ✨ {t('rewardsWillEarn')}: ₹{summary.rewards_will_earn.toFixed(2)} ({summary.tier} tier)
               </Text>
             </View>
           )}
@@ -318,7 +320,7 @@ export default function CheckoutScreen() {
 
       {/* ── Payment Method ──────────────────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💳 Payment Method</Text>
+        <Text style={styles.sectionTitle}>💳 {t('selectPaymentMethod')}</Text>
         {(['razorpay', 'cod'] as PaymentMethod[]).map(method => (
           <TouchableOpacity
             key={method}
@@ -327,7 +329,7 @@ export default function CheckoutScreen() {
           >
             <View style={[styles.radio, paymentMethod === method && styles.radioSelected]} />
             <View>
-              <Text style={styles.payLabel}>{method === 'razorpay' ? 'UPI / Card / Netbanking' : 'Cash on Delivery'}</Text>
+              <Text style={styles.payLabel}>{method === 'razorpay' ? t('payOnlineRazorpay') : t('cashOnDelivery')}</Text>
               <Text style={styles.paySubLabel}>{method === 'razorpay' ? 'Powered by Razorpay — secure & instant' : 'Pay when your order arrives'}</Text>
             </View>
           </TouchableOpacity>
@@ -343,7 +345,7 @@ export default function CheckoutScreen() {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.placeBtnText}>
-            {paymentMethod === 'cod' ? '✅ Place Order (COD)' : `🔒 Pay ₹${summary?.total.toFixed(2) || '0'}`}
+            {paymentMethod === 'cod' ? `✅ ${t('placeOrder')} (COD)` : `🔒 ${t('checkout')} ₹${summary?.total.toFixed(2) || '0'}`}
           </Text>
         )}
       </TouchableOpacity>
@@ -417,6 +419,80 @@ export default function CheckoutScreen() {
 }
 
 function buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId }: any) {
+  const isMock = razorpay_order_id.startsWith("rzp_mock_");
+  
+  if (isMock) {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #F0FDF4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #1E293B;
+    }
+    .card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      text-align: center;
+      max-width: 320px;
+      width: 90%;
+      border: 1px solid #E2E8F0;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2D8B47;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #64748B;
+      margin-bottom: 20px;
+    }
+    .loader {
+      border: 4px solid #F1F5F9;
+      border-top: 4px solid #2D8B47;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="loader"></div>
+    <div class="title">Secure Mock Payment Gateway</div>
+    <div class="subtitle">Simulating transaction for Order #${orderId.slice(0, 8)}...</div>
+  </div>
+  <script>
+    setTimeout(function() {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        status: "success",
+        razorpay_order_id: "${razorpay_order_id}",
+        razorpay_payment_id: "pay_mock_" + Math.random().toString(36).substring(2, 10),
+        razorpay_signature: "sig_mock_" + Math.random().toString(36).substring(2, 10)
+      }));
+    }, 1500);
+  </script>
+</body>
+</html>`;
+  }
+
   return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1.0"><script src="https://checkout.razorpay.com/v1/checkout.js"></script></head><body style="margin:0;background:#F0FDF4;display:flex;align-items:center;justify-content:center;min-height:100vh"><script>
 (function(){
   var rzp = new Razorpay({

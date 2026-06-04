@@ -5,6 +5,7 @@ import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCartStore } from '../../store/cartStore';
+import { useTranslation } from '../../context/LanguageContext';
 
 // Category icon mapping
 const categoryIconMap: { [key: string]: any } = {
@@ -27,6 +28,7 @@ const categoryIconMap: { [key: string]: any } = {
 
 export default function CategoriesScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export default function CategoriesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Shop by Category</Text>
+          <Text style={styles.title}>{t('categoriesTitle')}</Text>
         </View>
 
         <ScrollView style={styles.categoryGrid}>
@@ -134,7 +136,7 @@ export default function CategoriesScreen() {
         <TouchableOpacity onPress={handleBackToCategories} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.title}>{selectedCategory || 'All Products'}</Text>
+        <Text style={styles.title}>{selectedCategory || t('allProducts')}</Text>
       </View>
 
       <View style={styles.filterChips}>
@@ -142,14 +144,14 @@ export default function CategoriesScreen() {
           style={[styles.filterChip, !selectedCategory && styles.filterChipActive]}
           onPress={() => { setSelectedCategory(null); fetchProducts(); }}
         >
-          <Text style={[styles.filterChipText, !selectedCategory && styles.filterChipTextActive]}>All</Text>
+          <Text style={[styles.filterChipText, !selectedCategory && styles.filterChipTextActive]}>{t('allProducts')}</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.filterChip}
           onPress={handleBackToCategories}
         >
           <Ionicons name="grid-outline" size={16} color="#6B7280" />
-          <Text style={styles.filterChipText}>Categories</Text>
+          <Text style={styles.filterChipText}>{t('categoriesTitle')}</Text>
         </TouchableOpacity>
       </View>
 

@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import api from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 
 export default function CartScreen() {
   const { items, fetchCart, updateQuantity, clearCart } = useCartStore();
   const { user, refreshUser } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,7 +83,7 @@ export default function CartScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyCart}>
           <Ionicons name="cart-outline" size={64} color="#D1D5DB" />
-          <Text style={styles.emptyText}>Your cart is empty</Text>
+          <Text style={styles.emptyText}>{t('emptyCart')}</Text>
           <Text style={styles.emptySubtext}>Add items to get started</Text>
         </View>
       </SafeAreaView>
@@ -93,7 +95,7 @@ export default function CartScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Cart</Text>
+        <Text style={styles.title}>{t('myCart')}</Text>
         <TouchableOpacity onPress={clearCart}>
           <Text style={styles.clearText}>Clear All</Text>
         </TouchableOpacity>
@@ -135,7 +137,7 @@ export default function CartScreen() {
 
       <View style={styles.summary}>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryText}>Subtotal</Text>
+          <Text style={styles.summaryText}>{t('subtotal')}</Text>
           <Text style={styles.summaryValue}>₹{subtotal.toFixed(2)}</Text>
         </View>
         
@@ -179,7 +181,7 @@ export default function CartScreen() {
         )}
         
         <View style={[styles.summaryRow, styles.totalRow]}>
-          <Text style={styles.totalText}>Final Total</Text>
+          <Text style={styles.totalText}>{t('totalAmount')}</Text>
           <Text style={styles.totalValue}>
             ₹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
           </Text>
@@ -192,7 +194,7 @@ export default function CartScreen() {
         >
           <Ionicons name="card" size={20} color="#fff" style={styles.checkoutIcon} />
           <Text style={styles.checkoutButtonText}>
-            Proceed to Checkout
+            {t('checkout')}
           </Text>
         </TouchableOpacity>
       </View>

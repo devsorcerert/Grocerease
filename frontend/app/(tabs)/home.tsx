@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +31,7 @@ const categoryIconMap: { [key: string]: any } = {
 
 export default function HomeScreen() {
   const { user, refreshUser } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const { addToCart } = useCartStore();
   const [showCableTVModal, setShowCableTVModal] = useState(false);
@@ -110,11 +112,11 @@ export default function HomeScreen() {
       await addToCart(productId, 1);
       // Show success toast
       Alert.alert(
-        'Added to Cart! 🛒',
-        'Product has been added to your cart successfully.',
+        t('addedToCart'),
+        t('addedToCartDesc'),
         [
-          { text: 'Continue Shopping', style: 'default' },
-          { text: 'View Cart', onPress: () => router.push('/(tabs)/cart') }
+          { text: t('continueShopping'), style: 'default' },
+          { text: t('viewCart'), onPress: () => router.push('/(tabs)/cart') }
         ]
       );
     } catch (error) {
@@ -149,11 +151,11 @@ export default function HomeScreen() {
       <View style={styles.topBanner}>
         <View style={styles.header}>
           <View style={{flex: 1}}>
-            <Text style={styles.greeting}>Hello, {user?.name}!</Text>
+            <Text style={styles.greeting}>{t('hello')}, {user?.name}!</Text>
             {user?.address && (
               <Text style={styles.addressText}>📍 {user.address}, {user.city} - {user.pincode}</Text>
             )}
-            <Text style={styles.subgreeting}>Get fresh groceries delivered</Text>
+            <Text style={styles.subgreeting}>{t('getGroceriesDelivered')}</Text>
           </View>
           <View style={styles.headerActions}>
             {/* Admin access removed - now available via separate web dashboard */}
@@ -174,7 +176,7 @@ export default function HomeScreen() {
           onPress={() => router.push('/search-advanced')}
         >
           <Ionicons name="search" size={20} color="#9CA3AF" />
-          <Text style={styles.searchPlaceholder}>Search for products...</Text>
+          <Text style={styles.searchPlaceholder}>{t('searchProducts')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -186,15 +188,15 @@ export default function HomeScreen() {
               <View style={styles.cableTvMainContent}>
                 <View style={styles.cableTvTitleRow}>
                   <Ionicons name="gift" size={24} color="#fff" style={styles.cableTvGiftIcon} />
-                  <Text style={styles.cableTvTitle}>Link Your Cable TV</Text>
+                  <Text style={styles.cableTvTitle}>{t('linkCableTv')}</Text>
                 </View>
-                <Text style={styles.cableTvSubtitle}>Get up to ₹1,000 off monthly grocery spends</Text>
+                <Text style={styles.cableTvSubtitle}>{t('cableTvDiscountOffer')}</Text>
                 <Text style={styles.cableTvDescription}>
-                  Connect your cable TV account to track spending and unlock exclusive grocery rewards
+                  {t('cableTvDesc')}
                 </Text>
               </View>
               <TouchableOpacity style={styles.linkButton} onPress={() => setShowCableTVModal(true)}>
-                <Text style={styles.linkButtonText}>Link Now</Text>
+                <Text style={styles.linkButtonText}>{t('linkNow')}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -226,12 +228,12 @@ export default function HomeScreen() {
                 <View style={styles.usageStats}>
                   <View style={styles.usageStatItem}>
                     <Text style={styles.usageStatValue}>₹{user?.monthly_spend || 0}</Text>
-                    <Text style={styles.usageStatLabel}>Spent</Text>
+                    <Text style={styles.usageStatLabel}>{t('monthlySpend')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
                   <View style={styles.usageStatItem}>
                     <Text style={styles.usageStatValue}>₹{user?.current_reward || 0}</Text>
-                    <Text style={styles.usageStatLabel}>Reward</Text>
+                    <Text style={styles.usageStatLabel}>{t('rewardBalance')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
                   <View style={styles.usageStatItem}>
@@ -320,9 +322,9 @@ export default function HomeScreen() {
         {/* Product Categories */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Shop by Category</Text>
+            <Text style={styles.sectionTitle}>{t('categories')}</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
-              <Text style={styles.viewAllText}>View All</Text>
+              <Text style={styles.viewAllText}>{t('seeAll')}</Text>
             </TouchableOpacity>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
@@ -344,9 +346,9 @@ export default function HomeScreen() {
         {/* Featured Products */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Products</Text>
+            <Text style={styles.sectionTitle}>{t('featuredProducts')}</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
-              <Text style={styles.viewAllText}>View All</Text>
+              <Text style={styles.viewAllText}>{t('seeAll')}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.productGrid}>
@@ -432,7 +434,7 @@ export default function HomeScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Link Cable TV</Text>
+              <Text style={styles.modalTitle}>{t('linkCableTvTitle')}</Text>
               <TouchableOpacity onPress={() => setShowCableTVModal(false)}>
                 <Ionicons name="close" size={24} color="#111" />
               </TouchableOpacity>
@@ -448,20 +450,22 @@ export default function HomeScreen() {
 
             <TextInput
               style={styles.input}
-              placeholder="User ID / NUID"
+              placeholder={t('nuidPlaceholder')}
+              placeholderTextColor="#9CA3AF"
               value={userIdNuid}
               onChangeText={setUserIdNuid}
             />
 
             <TextInput
               style={styles.input}
-              placeholder="Registered Phone Number"
+              placeholder={t('phonePlaceholder')}
+              placeholderTextColor="#9CA3AF"
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
             />
 
-            <Text style={styles.label}>Select Service Provider</Text>
+            <Text style={styles.label}>{t('cableTvProvider')}</Text>
             <ScrollView style={styles.providerList}>
               {providers.map((provider) => (
                 <TouchableOpacity
@@ -480,7 +484,7 @@ export default function HomeScreen() {
             </ScrollView>
 
             <TouchableOpacity style={styles.submitButton} onPress={handleLinkCableTV}>
-              <Text style={styles.submitButtonText}>Link Cable TV</Text>
+              <Text style={styles.submitButtonText}>{t('submit')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -581,13 +585,6 @@ const styles = StyleSheet.create({
     fontSize: 14, 
     color: 'rgba(255, 255, 255, 0.9)', 
     lineHeight: 20,
-    flexWrap: 'wrap',
-  },
-  cableTvDescription: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    lineHeight: 16,
-    marginTop: 8,
     flexWrap: 'wrap',
   },
   cableTvDescription: {
