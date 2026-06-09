@@ -31,7 +31,7 @@ jobs:
       - name: Install Frontend Dependencies
         run: |
           cd frontend
-          npm ci
+          npm install --no-audit --no-fund
 
       - name: Run Expo Prebuild
         run: |
