@@ -236,8 +236,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (Platform.OS === 'web') {
         redirectUrl = typeof window !== 'undefined' 
-          ? window.location.origin + '/auth-callback' 
-          : 'http://localhost:8081/auth-callback';
+          ? window.location.origin
+          : 'http://localhost:8081';
       } else {
         redirectUrl = Linking.createURL('auth-callback');
       }
