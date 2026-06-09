@@ -7,7 +7,7 @@ import {
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
-import { API_BASE_URL } from '../constants/api';
+import { API_BASE_URL } from '../../constants/api';
 
 type AuthStep = 'phone' | 'otp' | 'register';
 
