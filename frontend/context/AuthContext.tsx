@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -82,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const sessionProcessingRef = useRef(false);
+  const processedSessionsRef = useRef<Set<string>>(new Set());
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
@@ -159,10 +160,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Process session with lock to prevent double calls
   const processSession = async (sessionId: string) => {
+    if (processedSessionsRef.current.has(sessionId)) {
+      console.log('Session already processed or in progress, skipping:', sessionId);
+      return;
+    }
     if (sessionProcessingRef.current) {
       console.log('Session already being processed, skipping');
       return;
     }
+    
+    processedSessionsRef.current.add(sessionId);
     sessionProcessingRef.current = true;
     
     try {
@@ -175,10 +182,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (!response.ok) {
-        throw new Error('Failed to validate session');
+        throw new Error(`Failed to validate session (Status ${response.status})`);
       }
       
       const sessionData = await response.json();
+      
+      if (!sessionData.email) {
+        throw new Error('No email found in session data');
+      }
       
       // Send to our backend to create/find user
       const backendResponse = await api.post('/auth/social', {
@@ -186,8 +197,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: sessionData.email,
         name: sessionData.name,
         photo: sessionData.picture,
-        session_token: sessionData.session_token,
+        session_token: sessionData.session_token || sessionId,
       });
+      
+      if (!backendResponse.data || !backendResponse.data.token) {
+        throw new Error('Backend failed to return authentication tokens');
+      }
       
       const { token, refresh_token, user: userData } = backendResponse.data;
       
@@ -198,8 +213,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       startTokenRefreshTimer();
       
       console.log('Google auth completed successfully for:', userData.email);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Session processing failed:', error);
+      const errMsg = error?.response?.data?.detail || error?.message || String(error);
+      Alert.alert(
+        'Login Failed',
+        `Google sign-in session processing failed. Details: ${errMsg}`
+      );
+      // Remove from processed sessions set if it failed, so user can try again
+      processedSessionsRef.current.delete(sessionId);
     } finally {
       setLoading(false);
       sessionProcessingRef.current = false;

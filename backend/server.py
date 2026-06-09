@@ -336,6 +336,13 @@ async def google_auth(auth_data: GoogleAuthRequest):
         }
         await db.users.insert_one(user_dict)
         db_user = user_dict
+    else:
+        if "id" not in db_user:
+            db_user["id"] = str(uuid.uuid4())
+            await db.users.update_one(
+                {"_id": db_user["_id"]},
+                {"$set": {"id": db_user["id"]}}
+            )
     
     token = create_access_token({"user_id": db_user["id"]})
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
@@ -377,6 +384,13 @@ async def social_auth(auth_data: SocialAuthRequest):
         }
         await db.users.insert_one(user_dict)
         db_user = user_dict
+    else:
+        if "id" not in db_user:
+            db_user["id"] = str(uuid.uuid4())
+            await db.users.update_one(
+                {"_id": db_user["_id"]},
+                {"$set": {"id": db_user["id"]}}
+            )
     
     # Store session if provided
     if auth_data.session_token:
