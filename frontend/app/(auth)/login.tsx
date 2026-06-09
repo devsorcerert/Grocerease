@@ -149,7 +149,7 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.logoContainer}>
           <Text style={styles.logoText}>🛒 GrocerEase</Text>
-          <Text style={styles.tagline}>India's First Media-Subsidised Grocery App</Text>
+          <Text style={styles.tagline}>India&apos;s First Media-Subsidised Grocery App</Text>
         </View>
 
         {step === 'phone' && (
@@ -273,7 +273,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.signupLink} onPress={() => router.push('/(auth)/register')}>
-              <Text style={styles.signupText}>Don't have an account? <Text style={styles.signupTextBold}>Sign Up</Text></Text>
+              <Text style={styles.signupText}>Don&apos;t have an account? <Text style={styles.signupTextBold}>Sign Up</Text></Text>
             </TouchableOpacity>
 
             <Text style={styles.disclaimer}>

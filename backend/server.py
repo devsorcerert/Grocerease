@@ -1533,6 +1533,59 @@ async def delete_account(user_id: str = Depends(get_current_user)):
 
 # Address Management Routes
 
+class NearestAddressRequest(BaseModel):
+    lat: float
+    lng: float
+
+def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Distance in km between two lat/lng points."""
+    import math
+    R = 6371
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng/2)**2
+    return R * 2 * math.asin(math.sqrt(a))
+
+@api_router.post("/user/addresses/nearest")
+async def nearest_address(payload: NearestAddressRequest, user_id: str = Depends(get_current_user)):
+    """
+    Find the saved address nearest to the user's current GPS location.
+    Returns the matched address only if it's within 500 metres (0.5 km).
+    """
+    MATCH_RADIUS_KM = 0.5
+
+    # Retrieve all addresses for this user that have coordinates
+    addresses = await db.addresses.find({
+        "user_id": user_id, 
+        "lat": {"$ne": None}, 
+        "lng": {"$ne": None}
+    }).to_list(100)
+
+    if not addresses:
+        return {"matched_address": None}
+
+    closest = None
+    closest_dist = float("inf")
+
+    for addr in addresses:
+        lat = addr.get("lat")
+        lng = addr.get("lng")
+        if lat is None or lng is None:
+            continue
+        try:
+            dist = haversine_km(payload.lat, payload.lng, float(lat), float(lng))
+            if dist < closest_dist:
+                closest_dist = dist
+                closest = addr
+        except Exception as e:
+            print("Error calculating distance:", e)
+            continue
+
+    if closest and closest_dist <= MATCH_RADIUS_KM:
+        return {"matched_address": clean_mongo_doc(closest), "distance_km": round(closest_dist, 3)}
+
+    return {"matched_address": None}
+
 @api_router.get("/user/addresses")
 async def get_addresses(user_id: str = Depends(get_current_user)):
     """Get all addresses for user"""

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCartStore } from '../../store/cartStore';
+import Toast from 'react-native-toast-message';
+import * as Location from 'expo-location';
 
 const { width } = Dimensions.get('window');
 
@@ -43,12 +45,112 @@ export default function HomeScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
 
+  // Address states
+  const [currentAddress, setCurrentAddress] = useState<any>(null);
+  const [detectedCoords, setDetectedCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [isNewAddressDetected, setIsNewAddressDetected] = useState(false);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [newAddressForm, setNewAddressForm] = useState({
+    label: 'Home',
+    address: '',
+    landmark: ''
+  });
+
   useEffect(() => {
     fetchProviders();
     fetchFeaturedProducts();
     fetchCategories();
     fetchVideos();
+    detectLocation();
   }, []);
+
+  const detectLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (user?.address) {
+          setCurrentAddress({
+            full_address: `${user.address}${user.city ? ', ' + user.city : ''}${user.pincode ? ' - ' + user.pincode : ''}`,
+            label: 'Profile'
+          });
+        }
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      setDetectedCoords({ lat: latitude, lng: longitude });
+
+      const res = await api.post('/user/addresses/nearest', { lat: latitude, lng: longitude });
+      if (res.data.matched_address) {
+        setCurrentAddress(res.data.matched_address);
+        setIsNewAddressDetected(false);
+      } else {
+        const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+        let fullAddr = '';
+        if (geocode && geocode.length > 0) {
+          const first = geocode[0];
+          fullAddr = [
+            first.name,
+            first.street,
+            first.district,
+            first.city,
+            first.postalCode
+          ].filter(Boolean).join(', ');
+        }
+        if (!fullAddr) {
+          fullAddr = `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`;
+        }
+        setCurrentAddress({
+          full_address: fullAddr,
+          label: 'Detected'
+        });
+        setNewAddressForm(prev => ({ ...prev, address: fullAddr }));
+        setIsNewAddressDetected(true);
+      }
+    } catch (error) {
+      console.error('Error detecting location on home:', error);
+      if (user?.address) {
+        setCurrentAddress({
+          full_address: `${user.address}${user.city ? ', ' + user.city : ''}${user.pincode ? ' - ' + user.pincode : ''}`,
+          label: 'Profile'
+        });
+      }
+    }
+  };
+
+  const handleSaveHomeAddress = async () => {
+    if (!newAddressForm.address.trim()) {
+      Alert.alert('Required', 'Please enter an address');
+      return;
+    }
+    setSavingAddress(true);
+    try {
+      const payload = {
+        label: newAddressForm.label,
+        full_address: newAddressForm.address.trim(),
+        landmark: newAddressForm.landmark.trim(),
+        lat: detectedCoords?.lat,
+        lng: detectedCoords?.lng
+      };
+      const res = await api.post('/user/addresses', payload);
+      const saved = res.data.address || res.data;
+      setCurrentAddress(saved);
+      setIsNewAddressDetected(false);
+      setShowAddressModal(false);
+      Toast.show({
+        type: 'success',
+        text1: 'Address Saved',
+        text2: 'Your current location has been saved successfully!'
+      });
+      refreshUser();
+    } catch (error) {
+      console.error('Error saving address from home:', error);
+      Alert.alert('Error', 'Failed to save address');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
 
   const fetchProviders = async () => {
     try {
@@ -110,15 +212,14 @@ export default function HomeScreen() {
   const handleAddToCart = async (productId: string) => {
     try {
       await addToCart(productId, 1);
-      // Show success toast
-      Alert.alert(
-        t('addedToCart'),
-        t('addedToCartDesc'),
-        [
-          { text: t('continueShopping'), style: 'default' },
-          { text: t('viewCart'), onPress: () => router.push('/(tabs)/cart') }
-        ]
-      );
+      Toast.show({
+        type: 'success',
+        text1: t('addedToCart') || 'Added to Cart',
+        text2: t('addedToCartDesc') || 'Product added to cart successfully!',
+        position: 'bottom',
+        visibilityTime: 2000,
+        autoHide: true,
+      });
     } catch (error) {
       console.error('Failed to add to cart:', error);
       Alert.alert('Error', 'Failed to add product to cart. Please try again.');
@@ -152,10 +253,25 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={{flex: 1}}>
             <Text style={styles.greeting}>{t('hello')}, {user?.name}!</Text>
-            {user?.address && (
+            {currentAddress ? (
+              <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                <Text style={[styles.addressText, { flexShrink: 1 }]} numberOfLines={1}>
+                  📍 {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
+                </Text>
+                {isNewAddressDetected && (
+                  <TouchableOpacity 
+                    style={{ backgroundColor: '#FF8C42', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}
+                    onPress={() => setShowAddressModal(true)}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>+ Save</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : user?.address ? (
               <Text style={styles.addressText}>📍 {user.address}, {user.city} - {user.pincode}</Text>
+            ) : (
+              <Text style={styles.addressText}>📍 Detecting location...</Text>
             )}
-            <Text style={styles.subgreeting}>{t('getGroceriesDelivered')}</Text>
           </View>
           <View style={styles.headerActions}>
             {/* Admin access removed - now available via separate web dashboard */}
@@ -227,12 +343,12 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.usageStats}>
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{user?.monthly_spend || 0}</Text>
+                    <Text style={styles.usageStatValue}>₹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('monthlySpend')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{user?.current_reward || 0}</Text>
+                    <Text style={styles.usageStatValue}>₹{Number(user?.current_reward || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('rewardBalance')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
@@ -247,31 +363,8 @@ export default function HomeScreen() {
                 <Text style={styles.nextTierText}>
                   {getMonthlyOfferUsage().used === 3 
                     ? '🎉 Maximum tier unlocked!' 
-                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0)} more for next tier`}
+                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
                 </Text>
-              </View>
-
-              <View style={styles.usageCard}>
-                <View style={styles.usageHeader}>
-                  <Ionicons name="calendar" size={20} color="#FF8C42" />
-                  <Text style={styles.usageCardTitle}>This Year</Text>
-                </View>
-                <View style={styles.usageStats}>
-                  <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{user?.total_spend || 0}</Text>
-                    <Text style={styles.usageStatLabel}>Total Spent</Text>
-                  </View>
-                  <View style={styles.usageStatDivider} />
-                  <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>{getYearlyStats().offers}</Text>
-                    <Text style={styles.usageStatLabel}>Max Offers</Text>
-                  </View>
-                  <View style={styles.usageStatDivider} />
-                  <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{getYearlyStats().savings}</Text>
-                    <Text style={styles.usageStatLabel}>Saved</Text>
-                  </View>
-                </View>
               </View>
             </View>
           </View>
@@ -485,6 +578,65 @@ export default function HomeScreen() {
 
             <TouchableOpacity style={styles.submitButton} onPress={handleLinkCableTV}>
               <Text style={styles.submitButtonText}>{t('submit')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Save Detected Address Modal */}
+      <Modal visible={showAddressModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Save Detected Address</Text>
+              <TouchableOpacity onPress={() => setShowAddressModal(false)}>
+                <Ionicons name="close" size={24} color="#111" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>Address Label</Text>
+            <View style={styles.labelRow}>
+              {['Home', 'Office', 'Other'].map(l => (
+                <TouchableOpacity
+                  key={l}
+                  style={[styles.labelChip, newAddressForm.label === l && styles.labelChipSelected]}
+                  onPress={() => setNewAddressForm(prev => ({ ...prev, label: l }))}
+                >
+                  <Text style={[styles.labelChipText, newAddressForm.label === l && styles.labelChipTextSelected]}>
+                    {l}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Full Address *</Text>
+            <TextInput
+              style={styles.input}
+              value={newAddressForm.address}
+              onChangeText={text => setNewAddressForm(prev => ({ ...prev, address: text }))}
+              placeholder="Enter full address"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <Text style={styles.label}>Landmark (optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={newAddressForm.landmark}
+              onChangeText={text => setNewAddressForm(prev => ({ ...prev, landmark: text }))}
+              placeholder="Near temple, school, etc."
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <TouchableOpacity 
+              style={[styles.submitButton, savingAddress && { opacity: 0.7 }]} 
+              onPress={handleSaveHomeAddress}
+              disabled={savingAddress}
+            >
+              {savingAddress ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Save Address</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -797,4 +949,9 @@ const styles = StyleSheet.create({
   providerTextSelected: { color: '#2D8B47', fontWeight: '600' },
   submitButton: { backgroundColor: '#2D8B47', paddingVertical: 16, borderRadius: 12 },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  labelRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  labelChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E5E7EB' },
+  labelChipSelected: { borderColor: '#2D8B47', backgroundColor: '#ECFDF5' },
+  labelChipText: { color: '#6B7280', fontWeight: '600' },
+  labelChipTextSelected: { color: '#2D8B47' },
 });

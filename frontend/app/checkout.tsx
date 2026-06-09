@@ -14,9 +14,9 @@ import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import * as SecureStore from 'expo-secure-store';
 import * as Location from 'expo-location';
-import axios from 'axios';
 import { useTranslation } from '../context/LanguageContext';
-import { API_BASE_URL, RAZORPAY_KEY_ID } from '../constants/api';
+import { RAZORPAY_KEY_ID } from '../constants/api';
+import api from '../utils/api';
 
 type PaymentMethod = 'razorpay' | 'cod';
 
@@ -64,10 +64,7 @@ export default function CheckoutScreen() {
   // ── Load summary (FIX [2]: no rewards_discount field) ──────────────────
   const fetchSummary = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync('access_token');
-      const res = await axios.get(`${API_BASE_URL}/api/checkout/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get('/checkout/summary');
       setSummary(res.data);
     } catch {
       Alert.alert('Error', 'Could not load order summary.');
@@ -79,10 +76,7 @@ export default function CheckoutScreen() {
   // ── Load saved addresses ────────────────────────────────────────────────
   const fetchSavedAddresses = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync('access_token');
-      const res = await axios.get(`${API_BASE_URL}/api/user/addresses`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get('/user/addresses');
       setSavedAddresses(res.data.addresses || []);
       if (res.data.addresses?.length > 0) {
         setSelectedAddress(res.data.addresses[0]);
@@ -108,11 +102,9 @@ export default function CheckoutScreen() {
       const { latitude, longitude } = loc.coords;
 
       // Ask backend to match nearest saved address for this geolocation
-      const token = await SecureStore.getItemAsync('access_token');
-      const res = await axios.post(
-        `${API_BASE_URL}/api/user/addresses/nearest`,
-        { lat: latitude, lng: longitude },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await api.post(
+        '/user/addresses/nearest',
+        { lat: latitude, lng: longitude }
       );
       if (res.data.matched_address) {
         setSelectedAddress(res.data.matched_address);
@@ -138,13 +130,11 @@ export default function CheckoutScreen() {
         }
       } catch {}
 
-      const token = await SecureStore.getItemAsync('access_token');
-      const res = await axios.post(
-        `${API_BASE_URL}/api/user/addresses`,
-        { label: newLabel, full_address: newAddress.trim(), landmark: newLandmark.trim(), ...coords },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await api.post(
+        '/user/addresses',
+        { label: newLabel, full_address: newAddress.trim(), landmark: newLandmark.trim(), ...coords }
       );
-      const saved = res.data.address;
+      const saved = res.data.address || res.data;
       setSavedAddresses(prev => [saved, ...prev]);
       setSelectedAddress(saved);
       setShowNewAddressForm(false);
@@ -165,33 +155,28 @@ export default function CheckoutScreen() {
     }
     setPlacing(true);
     try {
-      const token = await SecureStore.getItemAsync('access_token');
-
       if (paymentMethod === 'cod') {
         // COD: create + immediately confirm
-        const res = await axios.post(
-          `${API_BASE_URL}/api/orders/create`,
-          { address_id: selectedAddress.id, payment_method: 'cod' },
-          { headers: { Authorization: `Bearer ${token}` } }
+        const res = await api.post(
+          '/orders/create',
+          { address_id: selectedAddress.id, payment_method: 'cod' }
         );
         router.replace({ pathname: '/order-success', params: { order_id: res.data.order_id, payment: 'cod' } });
         return;
       }
 
       // FIX [1]: Razorpay — create a PENDING order first, DO NOT confirm yet
-      const res = await axios.post(
-        `${API_BASE_URL}/api/orders/create-pending`,
-        { address_id: selectedAddress.id, payment_method: 'razorpay' },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await api.post(
+        '/orders/create-pending',
+        { address_id: selectedAddress.id, payment_method: 'razorpay' }
       );
       const newOrderId = res.data.order_id;
       setPendingOrderId(newOrderId);
 
       // Create Razorpay payment order
-      const payRes = await axios.post(
-        `${API_BASE_URL}/api/payments/razorpay/create`,
-        { order_id: newOrderId },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const payRes = await api.post(
+        '/payments/razorpay/create',
+        { order_id: newOrderId }
       );
       const { razorpay_order_id, amount, currency } = payRes.data;
 
@@ -211,16 +196,14 @@ export default function CheckoutScreen() {
 
       if (data.status === 'success') {
         // CRITICAL: verify signature on backend BEFORE showing success
-        const token = await SecureStore.getItemAsync('access_token');
-        await axios.post(
-          `${API_BASE_URL}/api/payments/razorpay/verify`,
+        await api.post(
+          '/payments/razorpay/verify',
           {
             razorpay_order_id: data.razorpay_order_id,
             razorpay_payment_id: data.razorpay_payment_id,
             razorpay_signature: data.razorpay_signature,
             order_id: pendingOrderId,
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
+          }
         );
         // Only here — after server confirms — do we navigate to success
         setRazorpayHtml(null);
@@ -231,9 +214,7 @@ export default function CheckoutScreen() {
         setRazorpayHtml(null);
         // Cancel the pending order on backend
         try {
-          const token = await SecureStore.getItemAsync('access_token');
-          await axios.post(`${API_BASE_URL}/api/orders/${pendingOrderId}/cancel`, {},
-            { headers: { Authorization: `Bearer ${token}` } });
+          await api.post(`/orders/${pendingOrderId}/cancel`, {});
         } catch {}
         setPendingOrderId(null);
         Alert.alert('Payment Cancelled', 'Your payment was cancelled. Cart is still saved.');

@@ -10,6 +10,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -107,7 +108,14 @@ export default function ProductDetailPage() {
       }
       
       await addToCart(product.id, quantity);
-      Alert.alert('Success', `${quantity} item(s) added to cart!`);
+      Toast.show({
+        type: 'success',
+        text1: 'Added to Cart',
+        text2: `${quantity} item(s) added to cart!`,
+        position: 'bottom',
+        visibilityTime: 2000,
+        autoHide: true,
+      });
     } catch (error) {
       console.error('Failed to add to cart:', error);
       Alert.alert('Error', 'Failed to add product to cart');

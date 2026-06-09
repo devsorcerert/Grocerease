@@ -26,6 +26,20 @@ export default function ProfileScreen() {
     }
   };
 
+  const getMonthlyOfferUsage = () => {
+    const spend = user?.monthly_spend || 0;
+    if (spend >= 25000) return { used: 3, total: 3, maxReward: 1000 };
+    if (spend >= 13000) return { used: 2, total: 3, maxReward: 500 };
+    if (spend >= 7000) return { used: 1, total: 3, maxReward: 250 };
+    return { used: 0, total: 3, maxReward: 0 };
+  };
+
+  const getYearlyStats = () => {
+    const totalSpend = user?.total_spend || 0;
+    const yearlyOffers = Math.floor(totalSpend / 25000);
+    return { offers: yearlyOffers, savings: yearlyOffers * 1000 };
+  };
+
   const handleLogout = () => {
     Alert.alert(t('logout'), 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -60,16 +74,78 @@ export default function ProfileScreen() {
               <Text style={styles.statValue}>{orders.length}</Text>
               <Text style={styles.statLabel}>{t('myOrders')}</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>₹{user?.monthly_spend || 0}</Text>
-              <Text style={styles.statLabel}>{t('monthlySpend')}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>₹{user?.current_reward || 0}</Text>
-              <Text style={styles.statLabel}>{t('rewardBalance')}</Text>
-            </View>
           </View>
         </View>
+
+        {/* My Rewards & Spends Section */}
+        {user?.cable_tv_linked && (
+          <View style={styles.section}>
+            <View style={styles.rewardsHeader}>
+              <Ionicons name="gift" size={22} color="#2D8B47" />
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>My Rewards & Spends</Text>
+            </View>
+
+            <View style={styles.rewardsContainer}>
+              {/* Monthly Stats Card */}
+              <View style={styles.rewardCard}>
+                <Text style={styles.rewardCardTitle}>This Month&apos;s Progress</Text>
+                
+                <View style={styles.rewardStatsRow}>
+                  <View style={styles.rewardStat}>
+                    <Text style={styles.rewardStatValue}>₹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
+                    <Text style={styles.rewardStatLabel}>Monthly Spend</Text>
+                  </View>
+                  <View style={styles.rewardStatDivider} />
+                  <View style={styles.rewardStat}>
+                    <Text style={styles.rewardStatValue}>₹{Number(user?.current_reward || 0).toFixed(2)}</Text>
+                    <Text style={styles.rewardStatLabel}>Earned Reward</Text>
+                  </View>
+                  <View style={styles.rewardStatDivider} />
+                  <View style={styles.rewardStat}>
+                    <Text style={styles.rewardStatValue}>{getMonthlyOfferUsage().used}/{getMonthlyOfferUsage().total}</Text>
+                    <Text style={styles.rewardStatLabel}>Tiers Unlocked</Text>
+                  </View>
+                </View>
+
+                {/* Progress Bar */}
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${Math.min((user?.monthly_spend || 0) / 250, 100)}%` }]} />
+                </View>
+
+                <Text style={styles.nextTierText}>
+                  {getMonthlyOfferUsage().used === 3 
+                    ? '🎉 Maximum monthly tier unlocked!' 
+                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
+                </Text>
+              </View>
+
+              {/* Yearly History Card */}
+              <View style={[styles.rewardCard, { borderColor: '#FFE4D6', backgroundColor: '#FFFBF9' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <Ionicons name="time" size={18} color="#FF8C42" />
+                  <Text style={[styles.rewardCardTitle, { color: '#FF8C42', marginBottom: 0 }]}>Yearly Spends & History</Text>
+                </View>
+
+                <View style={styles.rewardStatsRow}>
+                  <View style={styles.rewardStat}>
+                    <Text style={styles.rewardStatValue}>₹{Number(user?.total_spend || 0).toFixed(2)}</Text>
+                    <Text style={styles.rewardStatLabel}>Total Spent</Text>
+                  </View>
+                  <View style={styles.rewardStatDivider} />
+                  <View style={styles.rewardStat}>
+                    <Text style={styles.rewardStatValue}>{getYearlyStats().offers}</Text>
+                    <Text style={styles.rewardStatLabel}>Max Offers</Text>
+                  </View>
+                  <View style={styles.rewardStatDivider} />
+                  <View style={styles.rewardStat}>
+                    <Text style={styles.rewardStatValue}>₹{Number(getYearlyStats().savings).toFixed(2)}</Text>
+                    <Text style={styles.rewardStatLabel}>Total Saved</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Language Selection Section */}
         <View style={styles.section}>
@@ -355,4 +431,16 @@ const styles = StyleSheet.create({
   logoutText: {
     color: '#EF4444',
   },
+  rewardsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  rewardsContainer: { gap: 16 },
+  rewardCard: { backgroundColor: '#F9FAFB', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  rewardCardTitle: { fontSize: 14, fontWeight: '700', color: '#1F2937', marginBottom: 12 },
+  rewardStatsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 12 },
+  rewardStat: { alignItems: 'center', flex: 1 },
+  rewardStatValue: { fontSize: 16, fontWeight: 'bold', color: '#111' },
+  rewardStatLabel: { fontSize: 10, color: '#6B7280', marginTop: 4, textAlign: 'center' },
+  rewardStatDivider: { width: 1, height: 30, backgroundColor: '#E5E7EB' },
+  progressBarContainer: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginBottom: 8, marginTop: 4 },
+  progressBar: { height: '100%', backgroundColor: '#2D8B47', borderRadius: 3 },
+  nextTierText: { fontSize: 11, color: '#6B7280', textAlign: 'center' },
 });

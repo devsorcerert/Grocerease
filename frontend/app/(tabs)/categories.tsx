@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -92,7 +93,14 @@ export default function CategoriesScreen() {
   const handleAddToCart = async (productId: string, productName: string) => {
     try {
       await addToCart(productId, 1);
-      Alert.alert('Success', `${productName} added to cart!`);
+      Toast.show({
+        type: 'success',
+        text1: 'Added to Cart',
+        text2: `${productName} added to cart!`,
+        position: 'bottom',
+        visibilityTime: 2000,
+        autoHide: true,
+      });
     } catch (error: any) {
       console.error('Add to cart error:', error);
       const errorMessage = error.response?.data?.detail || error.message || 'Failed to add to cart';

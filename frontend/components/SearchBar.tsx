@@ -102,15 +102,15 @@ export default function SearchBar({ placeholder = 'Search products...' }: Search
               </TouchableOpacity>
             )}
             ListFooterComponent={
-              query.length >= 2 && (
+              query.length >= 2 ? (
                 <TouchableOpacity
                   style={styles.viewAllButton}
                   onPress={handleSearchSubmit}
                 >
-                  <Text style={styles.viewAllText}>View all results for "{query}"</Text>
+                  <Text style={styles.viewAllText}>View all results for &quot;{query}&quot;</Text>
                   <Ionicons name="arrow-forward" size={16} color="#2D8B47" />
                 </TouchableOpacity>
-              )
+              ) : null
             }
           />
         </View>

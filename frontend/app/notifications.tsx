@@ -142,7 +142,7 @@ export default function NotificationsScreen() {
           <Ionicons name="notifications-outline" size={64} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>No Notifications</Text>
           <Text style={styles.emptyText}>
-            You're all caught up! Check back later for updates on your orders and rewards.
+            You&apos;re all caught up! Check back later for updates on your orders and rewards.
           </Text>
         </View>
       ) : (
