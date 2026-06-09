@@ -1,6 +1,6 @@
 // GrocerEase API Configuration
 // Replace PRODUCTION_BACKEND_URL with your deployed backend URL
-const PRODUCTION_BACKEND_URL = 'https://your-backend.onrender.com'; // UPDATE THIS
+const PRODUCTION_BACKEND_URL = 'https://order-management-93.preview.emergentagent.com';
 const DEV_BACKEND_URL = 'http://localhost:8001';
 
 export const API_BASE_URL = __DEV__ ? DEV_BACKEND_URL : PRODUCTION_BACKEND_URL;

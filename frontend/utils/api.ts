@@ -2,9 +2,10 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../constants/api';
 
-// Use environment variable or fallback to localhost
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+// Use environment variable or fallback to API_BASE_URL constant
+const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL;
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
