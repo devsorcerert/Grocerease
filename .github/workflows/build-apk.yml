@@ -36,7 +36,7 @@ jobs:
       - name: Run Expo Prebuild
         run: |
           cd frontend
-          npx expo prebuild --platform android --no-interactive
+          npx expo prebuild --platform android --no-install
 
       - name: Build Android Debug APK
         run: |
