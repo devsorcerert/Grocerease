@@ -5,8 +5,6 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
-import { GOOGLE_CLIENT_ID_WEB, GOOGLE_CLIENT_ID_ANDROID, GOOGLE_CLIENT_ID_IOS } from '../constants/api';
-
 interface User {
   id: string;
   name: string;
@@ -44,6 +42,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const EMERGENT_AUTH_URL = 'https://auth.emergentagent.com/';
+const EMERGENT_SESSION_URL = 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data';
+
 
 // Helper for cross-platform secure storage
 const storage = {
@@ -80,21 +81,39 @@ const extractParam = (url: string, paramName: string) => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionProcessingRef = useRef(false);
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
     initAuth();
   }, []);
 
+  // Mobile deep link listener
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      Linking.getInitialURL().then((url) => {
+        if (url) {
+          const sessionId = extractSessionId(url);
+          if (sessionId) processSession(sessionId);
+        }
+      });
+
+      const subscription = Linking.addEventListener('url', (event) => {
+        const sessionId = extractSessionId(event.url);
+        if (sessionId) processSession(sessionId);
+      });
+
+      return () => subscription.remove();
+    }
+  }, []);
+
   const initAuth = async () => {
     try {
-      // On web, check for access_token in URL first (Google OAuth callback)
+      // On web, check for session_id in URL first (Google OAuth callback)
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const accessToken = getAccessTokenFromUrl();
-        if (accessToken) {
-          // Clear hash/query params from URL bar
-          window.history.replaceState({}, document.title, window.location.pathname);
-          await processGoogleAccessToken(accessToken);
+        const sessionId = getSessionIdFromUrl();
+        if (sessionId) {
+          await processSession(sessionId);
           return;
         }
       }
@@ -107,32 +126,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const getAccessTokenFromUrl = () => {
+  const getSessionIdFromUrl = () => {
     if (typeof window === 'undefined') return null;
-    return extractParam(window.location.href, 'access_token');
+    
+    // Check hash fragment
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const sid = params.get('session_id');
+      if (sid) return sid;
+    }
+    
+    // Check query params
+    const search = window.location.search;
+    if (search) {
+      const params = new URLSearchParams(search);
+      const sid = params.get('session_id');
+      if (sid) return sid;
+    }
+    
+    return null;
   };
 
-  const processGoogleAccessToken = async (accessToken: string) => {
+  const extractSessionId = (url: string) => {
+    try {
+      const match = url.match(/session_id=([^&]+)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Process session with lock to prevent double calls
+  const processSession = async (sessionId: string) => {
+    if (sessionProcessingRef.current) {
+      console.log('Session already being processed, skipping');
+      return;
+    }
+    sessionProcessingRef.current = true;
+    
     try {
       setLoading(true);
       
-      // Fetch user profile from Google info endpoint
-      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      // Exchange session_id for user data via Emergent
+      const response = await fetch(EMERGENT_SESSION_URL, {
+        method: 'GET',
+        headers: { 'X-Session-ID': sessionId },
       });
       
-      if (!userInfoResponse.ok) {
-        throw new Error('Failed to validate Google access token');
+      if (!response.ok) {
+        throw new Error('Failed to validate session');
       }
       
-      const userInfo = await userInfoResponse.json();
+      const sessionData = await response.json();
       
       // Send to our backend to create/find user
       const backendResponse = await api.post('/auth/social', {
         provider: 'google',
-        email: userInfo.email,
-        name: userInfo.name,
-        photo: userInfo.picture,
+        email: sessionData.email,
+        name: sessionData.name,
+        photo: sessionData.picture,
+        session_token: sessionData.session_token,
       });
       
       const { token, refresh_token, user: userData } = backendResponse.data;
@@ -143,11 +197,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       startTokenRefreshTimer();
       
-      console.log('Google direct auth completed successfully for:', userData.email);
+      console.log('Google auth completed successfully for:', userData.email);
     } catch (error) {
-      console.error('Google token processing failed:', error);
+      console.error('Session processing failed:', error);
     } finally {
       setLoading(false);
+      sessionProcessingRef.current = false;
     }
   };
 
@@ -224,56 +279,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     startTokenRefreshTimer();
   };
 
-  // ============ SOCIAL LOGIN (Direct Google OAuth) ============
+  // ============ SOCIAL LOGIN (Emergent Auth) ============
   const socialLogin = async (provider: string) => {
-    if (provider !== 'google') {
-      console.log(`Unsupported social provider: ${provider}`);
-      return;
-    }
-
     try {
       let redirectUrl: string;
       
       if (Platform.OS === 'web') {
         redirectUrl = typeof window !== 'undefined' 
-          ? window.location.origin
-          : 'http://localhost:8081';
+          ? window.location.origin + '/auth-callback' 
+          : 'https://localhost:3000/auth-callback';
       } else {
         redirectUrl = Linking.createURL('auth-callback');
       }
-
-      // Determine client ID based on platform
-      let clientId = GOOGLE_CLIENT_ID_WEB;
-      if (Platform.OS === 'android') {
-        clientId = GOOGLE_CLIENT_ID_ANDROID;
-      } else if (Platform.OS === 'ios') {
-        clientId = GOOGLE_CLIENT_ID_IOS;
-      }
-
-      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
-        `client_id=${encodeURIComponent(clientId)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
-        `&response_type=token` +
-        `&scope=${encodeURIComponent('openid profile email')}`;
-
+      
+      const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+      
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined') {
-          window.location.href = googleAuthUrl;
+          window.location.href = authUrl;
         }
       } else {
-        const result = await WebBrowser.openAuthSessionAsync(googleAuthUrl, redirectUrl);
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
         
         if (result.type === 'success' && result.url) {
-          const accessToken = extractParam(result.url, 'access_token');
-          if (accessToken) {
-            await processGoogleAccessToken(accessToken);
-          } else {
-            throw new Error('Access token not found in Google redirect URL');
+          const sessionId = extractSessionId(result.url);
+          if (sessionId) {
+            await processSession(sessionId);
           }
         }
       }
     } catch (error) {
-      console.error('Direct Google OAuth login failed:', error);
+      console.error('Social login failed:', error);
       throw error;
     }
   };
