@@ -29,7 +29,9 @@ jobs:
 
       - name: Install npm dependencies
         working-directory: frontend
-        run: npm ci --legacy-peer-deps
+        run: |
+          npm ci --legacy-peer-deps
+          npm install @react-native-google-signin/google-signin @react-navigation/native-stack --legacy-peer-deps
 
       - name: Write environment file
         working-directory: frontend
