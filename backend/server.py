@@ -42,6 +42,15 @@ RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@api_router.get("/health")
+async def api_health_check():
+    return {"status": "ok"}
+
+
 
 def clean_mongo_doc(doc):
     """Remove MongoDB _id field from document"""
