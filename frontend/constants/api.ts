@@ -17,7 +17,9 @@ const PRODUCTION_BACKEND_URL = getEnvVar(
 );
 const DEV_BACKEND_URL = process.env.EXPO_PUBLIC_DEV_BACKEND_URL || 'http://localhost:8001';
 
-export const API_BASE_URL = __DEV__ ? DEV_BACKEND_URL : PRODUCTION_BACKEND_URL;
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL)
+  ? PRODUCTION_BACKEND_URL
+  : (__DEV__ ? DEV_BACKEND_URL : PRODUCTION_BACKEND_URL);
 
 // Razorpay
 export const RAZORPAY_KEY_ID = getEnvVar(

@@ -76,36 +76,36 @@ jobs:
         working-directory: frontend/android
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: frontend/android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
-
+ 
       - name: Rename APK
         run: |
           mkdir -p /home/runner/apk-output
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk \
-             /home/runner/apk-output/GrocerEase-debug-${{ github.sha }}.apk
-
+          cp frontend/android/app/build/outputs/apk/release/app-release.apk \
+             /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
+ 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GrocerEase-debug-${{ github.sha }}
-          path: /home/runner/apk-output/GrocerEase-debug-${{ github.sha }}.apk
+          name: GrocerEase-release-${{ github.sha }}
+          path: /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
           retention-days: 30
-
+ 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: "Debug Build #${{ github.run_number }}"
+          name: "Release Build #${{ github.run_number }}"
           body: |
-            **Automatic debug build**
+            **Automatic release build**
             Commit: `${{ github.sha }}`
             Branch: `${{ github.ref_name }}`
-          files: /home/runner/apk-output/GrocerEase-debug-${{ github.sha }}.apk
+          files: /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
           draft: false
-          prerelease: true
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
