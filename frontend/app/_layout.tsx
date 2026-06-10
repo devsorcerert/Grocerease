@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import { Stack, ErrorBoundary } from 'expo-router';
 import { AuthProvider } from '../context/AuthContext';
 import { LanguageProvider } from '../context/LanguageContext';
