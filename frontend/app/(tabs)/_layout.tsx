@@ -21,9 +21,9 @@ export default function TabsLayout() {
     if (user) {
       fetchCart();
     }
-  }, [user]);
+  }, [user, fetchCart]);
 
-  const cartCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCount = (items ?? []).reduce((sum, item) => sum + (item.quantity ?? 0), 0);
 
   return (
     <Tabs
