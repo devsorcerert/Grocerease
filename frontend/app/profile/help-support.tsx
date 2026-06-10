@@ -107,7 +107,7 @@ export default function HelpSupportScreen() {
         {/* Welcome Message */}
         <View style={styles.welcomeCard}>
           <Ionicons name="heart" size={32} color="#2D8B47" />
-          <Text style={styles.welcomeTitle}>We're here to help!</Text>
+          <Text style={styles.welcomeTitle}>We&apos;re here to help!</Text>
           <Text style={styles.welcomeText}>
             Our support team is available 24/7 to assist you with any questions or issues you might have.
           </Text>
