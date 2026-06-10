@@ -48,6 +48,10 @@ jobs:
         working-directory: frontend
         run: |
           echo "EXPO_PUBLIC_API_URL=${{ secrets.API_BASE_URL }}" >> .env
+          echo "EXPO_PUBLIC_BACKEND_URL=${{ secrets.API_BASE_URL }}" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=${{ secrets.GOOGLE_CLIENT_ID_WEB }}" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=${{ secrets.GOOGLE_CLIENT_ID_ANDROID }}" >> .env
+          echo "EXPO_PUBLIC_RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}" >> .env
 
       - name: Create dummy google-services.json
         working-directory: frontend

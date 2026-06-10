@@ -17,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
+import Logo from '../../components/Logo';
 
 type AuthStep = 'options' | 'phone' | 'otp';
 
@@ -160,11 +161,7 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={styles.logoContainer}>
-          <Image
-            source={{ uri: 'https://customer-assets.emergentagent.com/job_bd1cc3b3-4082-4676-b0be-fae7b3b45faf/artifacts/vp9rk51k_WhatsApp%20Image%202025-09-12%20at%2013.06.44%20%281%29.jpeg' }}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <Logo size="large" showText={true} />
           <Text style={styles.tagline}>{t('welcomeTagline')}</Text>
         </View>
 
