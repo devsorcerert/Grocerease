@@ -79,7 +79,7 @@ security = HTTPBearer()
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET")
 if not SECRET_KEY:
     logging.warning("JWT_SECRET_KEY environment variable is not set! Using insecure fallback secret key.")
-    SECRET_KEY = "grocerease_secret_key_2025"
+    raise RuntimeError("FATAL: JWT_SECRET_KEY environment variable is not set. Refusing to start with insecure fallback.")
 
 ALGORITHM = "HS256"
 
@@ -1187,7 +1187,7 @@ async def get_user_orders(user_id: str = Depends(get_current_user)):
     return [clean_mongo_doc(order) for order in orders]
 
 @api_router.get("/orders")
-async def get_orders(user_id: str = Depends(get_current_user)):
+async def get_orders_legacy(user_id: str = Depends(get_current_user)):  # NOTE: duplicate route removed - use get_user_orders above
     orders = await db.orders.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
     return clean_mongo_docs(orders)
 
@@ -2220,7 +2220,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
