@@ -18,7 +18,6 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.grocereasetv.app",
-      "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",

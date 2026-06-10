@@ -1,7 +1,9 @@
-import { Stack } from 'expo-router';
+import { Stack, ErrorBoundary } from 'expo-router';
 import { AuthProvider } from '../context/AuthContext';
 import { LanguageProvider } from '../context/LanguageContext';
 import Toast from 'react-native-toast-message';
+
+export { ErrorBoundary };
 
 export default function RootLayout() {
   return (

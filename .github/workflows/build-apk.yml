@@ -53,11 +53,6 @@ jobs:
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=${{ secrets.GOOGLE_CLIENT_ID_ANDROID }}" >> .env
           echo "EXPO_PUBLIC_RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}" >> .env
 
-      - name: Create dummy google-services.json
-        working-directory: frontend
-        run: |
-          echo '{"project_info":{"project_number":"123456789","project_id":"dummy-project"},"client":[{"client_info":{"mobilesdk_app_id":"1:123456789:android:123456789","android_client_info":{"package_name":"com.grocereasetv.app"}},"oauth_client":[],"api_key":[{"current_key":"dummy-api-key"}]}],"configuration_version":"1"}' > google-services.json
-
       - name: Generate native Android folder
         working-directory: frontend
         run: npx expo prebuild --platform android --no-install
