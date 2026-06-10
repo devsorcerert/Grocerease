@@ -1,47 +1,49 @@
 {
   "expo": {
-    "name": "GrocerEase TV",
-    "slug": "grocereasetv",
+    "name": "GrocerEase",
+    "slug": "grocerease",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "grocereasetv",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.grocereasetv.app"
+    "scheme": "grocerease",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#2D8B47"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
-      "package": "com.grocereasetv.app",
-      "edgeToEdgeEnabled": true
+      "package": "com.grocerease.app",
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "grocerease",
+              "host": "oauthredirect"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.grocerease.app"
     },
     "plugins": [
-      "expo-router",
-      "expo-secure-store",
       [
-        "expo-splash-screen",
+        "@react-native-google-signin/google-signin",
         {
-          "image": "./assets/images/splash-image.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#2D8B47"
+          "iosUrlScheme": "com.googleusercontent.apps.1033798066161-00g31ael0mipkviip26btj04q6090ksq"
         }
-      ],
-      "expo-web-browser",
-      "expo-font"
-    ],
-    "experiments": {
-      "typedRoutes": true
-    }
+      ]
+    ]
   }
 }
