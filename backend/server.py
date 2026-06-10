@@ -42,6 +42,16 @@ RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+@app.on_event("startup")
+async def startup_db_client():
+    try:
+        # Ping the database to verify the connection
+        await client.admin.command('ping')
+        logging.info("Successfully connected to MongoDB!")
+    except Exception as e:
+        logging.error(f"Failed to connect to MongoDB on startup: {e}")
+        # Log critical error but allow application startup for local mock runtimes if necessary
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
@@ -65,7 +75,12 @@ def clean_mongo_docs(docs):
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
-SECRET_KEY = "grocerease_secret_key_2025"
+
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET")
+if not SECRET_KEY:
+    logging.warning("JWT_SECRET_KEY environment variable is not set! Using insecure fallback secret key.")
+    SECRET_KEY = "grocerease_secret_key_2025"
+
 ALGORITHM = "HS256"
 
 def hash_password(password: str) -> str:
@@ -325,16 +340,53 @@ async def refresh_token(request: dict):
 
 @api_router.post("/auth/google")
 async def google_auth(auth_data: GoogleAuthRequest):
-    db_user = await db.users.find_one({"email": auth_data.email})
+    # Verify the Google ID Token securely
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://oauth2.googleapis.com/tokeninfo?id_token={auth_data.id_token}",
+                timeout=10
+            )
+            if response.status_code != 200:
+                logging.error(f"Google TokenInfo verification failed: {response.text}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, 
+                    detail="Invalid or expired Google ID Token"
+                )
+            
+            token_info = response.json()
+            
+            # Additional validation
+            verified_email = token_info.get("email")
+            if not verified_email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="Email address not found in Google ID Token"
+                )
+            
+            # Use securely verified email and details
+            email = verified_email.lower()
+            name = token_info.get("name", auth_data.name)
+            photo = token_info.get("picture", auth_data.photo)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Google authentication error during token verification: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail=f"Google authentication failed: {str(e)}"
+        )
+        
+    db_user = await db.users.find_one({"email": email})
     
     if not db_user:
         user_dict = {
             "id": str(uuid.uuid4()),
-            "name": auth_data.name,
-            "email": auth_data.email,
+            "name": name,
+            "email": email,
             "password": None,
             "phone": None,
-            "photo": auth_data.photo,
+            "photo": photo,
             "cable_tv_linked": False,
             "cable_tv_details": None,
             "monthly_spend": 0.0,
@@ -346,11 +398,22 @@ async def google_auth(auth_data: GoogleAuthRequest):
         await db.users.insert_one(user_dict)
         db_user = user_dict
     else:
+        update_fields = {}
         if "id" not in db_user:
             db_user["id"] = str(uuid.uuid4())
+            update_fields["id"] = db_user["id"]
+        
+        # Keep name and photo updated in database
+        if db_user.get("name") != name or db_user.get("photo") != photo:
+            update_fields["name"] = name
+            update_fields["photo"] = photo
+            db_user["name"] = name
+            db_user["photo"] = photo
+            
+        if update_fields:
             await db.users.update_one(
                 {"_id": db_user["_id"]},
-                {"$set": {"id": db_user["id"]}}
+                {"$set": update_fields}
             )
     
     token = create_access_token({"user_id": db_user["id"]})

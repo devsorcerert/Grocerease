@@ -17,7 +17,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.grocerease.app",
+      "package": "com.grocereasetv.app",
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {

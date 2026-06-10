@@ -5,6 +5,17 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
+
+// Configure Google Sign-In on Native
+if (Platform.OS !== 'web') {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_CLIENT_ID_WEB,
+    offlineAccess: true,
+    scopes: ['profile', 'email'],
+  });
+}
 interface User {
   id: string;
   name: string;
@@ -42,8 +53,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const EMERGENT_AUTH_URL = 'https://auth.emergentagent.com/';
-const EMERGENT_SESSION_URL = 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data';
+const EMERGENT_AUTH_URL = process.env.EXPO_PUBLIC_EMERGENT_AUTH_URL || 'https://auth.emergentagent.com/';
+const EMERGENT_SESSION_URL = process.env.EXPO_PUBLIC_EMERGENT_SESSION_URL || 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data';
 
 
 // Helper for cross-platform secure storage
@@ -301,38 +312,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     startTokenRefreshTimer();
   };
 
-  // ============ SOCIAL LOGIN (Emergent Auth) ============
+  // ============ SOCIAL LOGIN (Google Sign-In & Emergent Auth) ============
   const socialLogin = async (provider: string) => {
+    if (provider !== 'google') {
+      throw new Error(`Social login provider ${provider} not supported`);
+    }
+
     try {
-      let redirectUrl: string;
+      setLoading(true);
       
       if (Platform.OS === 'web') {
-        redirectUrl = typeof window !== 'undefined' 
+        // Fallback to Web Browser / redirect-based social login on Web
+        let redirectUrl = typeof window !== 'undefined' 
           ? window.location.origin + '/auth-callback' 
           : 'https://localhost:3000/auth-callback';
-      } else {
-        redirectUrl = Linking.createURL('auth-callback');
-      }
-      
-      const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
-      
-      if (Platform.OS === 'web') {
+          
+        const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+        
         if (typeof window !== 'undefined') {
           window.location.href = authUrl;
         }
-      } else {
-        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-        
-        if (result.type === 'success' && result.url) {
-          const sessionId = extractSessionId(result.url);
-          if (sessionId) {
-            await processSession(sessionId);
-          }
-        }
+        return;
       }
-    } catch (error) {
-      console.error('Social login failed:', error);
+
+      // Native Direct Google Sign-In Flow
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const signInResult: any = await GoogleSignin.signIn();
+      
+      let idToken: string | null = null;
+      let userProfile: any = null;
+      
+      if (signInResult && signInResult.type === 'success') {
+        idToken = signInResult.data?.idToken;
+        userProfile = signInResult.data?.user;
+      } else {
+        idToken = signInResult?.idToken;
+        userProfile = signInResult?.user;
+      }
+
+      if (!idToken) {
+        throw new Error('Google Sign-In did not return an ID token.');
+      }
+
+      console.log('Obtained Google ID Token, exchanging with backend...');
+
+      // Call our backend /auth/google endpoint to exchange ID token
+      const response = await api.post('/auth/google', {
+        id_token: idToken,
+        name: userProfile?.name || 'Google User',
+        email: userProfile?.email || '',
+        photo: userProfile?.photo || null,
+      });
+
+      if (!response.data || !response.data.token) {
+        throw new Error('Backend failed to return authentication tokens');
+      }
+
+      const { token, refresh_token, user: userData } = response.data;
+
+      await storage.setItem('token', token);
+      await storage.setItem('refresh_token', refresh_token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(userData);
+      startTokenRefreshTimer();
+
+      console.log('Google Sign-In completed successfully for native client:', userData.email);
+
+    } catch (error: any) {
+      console.error('Google Sign-In failed:', error);
+      
+      let errorMessage = 'Google Sign-In failed. Please try again.';
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        errorMessage = 'Sign-in cancelled.';
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        errorMessage = 'Sign-in already in progress.';
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        errorMessage = 'Google Play Services not available or outdated.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Google Sign-In Error', errorMessage);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -344,6 +407,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err: any) {
         console.log('Server logout skipped:', err.message);
       }
+      
+      // Sign out from Google if on Native
+      if (Platform.OS !== 'web') {
+        try {
+          await GoogleSignin.signOut();
+        } catch (googleErr) {
+          console.log('Google Sign-Out error:', googleErr);
+        }
+      }
+      
       await clearAuth();
     } catch (error) {
       console.error('Logout error:', error);
