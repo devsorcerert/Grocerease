@@ -72,4 +72,4 @@ watchfiles==1.1.0
 razorpay==1.4.1
 httpx==0.26.0
 setuptools<70
-
+slowapi
