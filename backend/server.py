@@ -1,6 +1,9 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -42,12 +45,26 @@ RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+AUTH_RATE_LIMIT = os.environ.get("AUTH_RATE_LIMIT", "5/minute")
+
 @app.on_event("startup")
 async def startup_db_client():
     try:
         # Ping the database to verify the connection
         await client.admin.command('ping')
         logging.info("Successfully connected to MongoDB!")
+        
+        # Create MongoDB indexes
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("phone", unique=True)
+        await db.orders.create_index("user_id")
+        await db.orders.create_index("id", unique=True)
+        await db.products.create_index("category")
+        await db.products.create_index("id", unique=True)
+        await db.products.create_index([("name", "text"), ("description", "text")])
     except Exception as e:
         logging.error(f"Failed to connect to MongoDB on startup: {e}")
         # Log critical error but allow application startup for local mock runtimes if necessary
@@ -262,7 +279,8 @@ async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_curr
     return {"success": True}
 
 @api_router.post("/auth/login")
-async def login(user: UserLogin):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def login(request: Request, user: UserLogin):
     db_user = await db.users.find_one({"email": user.email})
     if not db_user or not verify_password(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1878,7 +1896,8 @@ async def send_sms_fast2sms(phone: str, otp: str):
         return False
 
 @api_router.post("/auth/send-otp")
-async def send_otp(payload: SendOtpRequest):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def send_otp(request: Request, payload: SendOtpRequest):
     phone = payload.phone.strip()
     if not phone.startswith("+91") or len(phone) != 13:
         raise HTTPException(status_code=422, detail="Invalid Indian phone number. Format: +91XXXXXXXXXX")
@@ -1892,7 +1911,8 @@ async def send_otp(payload: SendOtpRequest):
     return {"is_new_user": existing_user is None, "message": "OTP sent successfully"}
 
 @api_router.post("/auth/verify-otp")
-async def verify_otp(payload: VerifyOtpRequest):
+@limiter.limit(AUTH_RATE_LIMIT)
+async def verify_otp(request: Request, payload: VerifyOtpRequest):
     phone = payload.phone.strip()
     stored = _otp_store.get(phone)
     is_master_otp = payload.otp == "123456"
@@ -2115,8 +2135,12 @@ async def create_razorpay_order(payload: CreatePaymentRequest, user_id: str = De
             })
             rz_order_id = rz_order["id"]
         except Exception:
+            if os.environ.get("ENV", "development") != "development":
+                raise HTTPException(status_code=400, detail="Mock payments not allowed in production")
             rz_order_id = f"rzp_mock_{uuid.uuid4().hex[:14]}"
     else:
+        if os.environ.get("ENV", "development") != "development":
+            raise HTTPException(status_code=400, detail="Razorpay not configured and mock not allowed in prod")
         rz_order_id = f"rzp_mock_{uuid.uuid4().hex[:14]}"
         
     await db.orders.update_one(
@@ -2133,6 +2157,8 @@ async def create_razorpay_order(payload: CreatePaymentRequest, user_id: str = De
 @api_router.post("/payments/razorpay/verify")
 async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
     if payload.razorpay_order_id.startswith("rzp_mock_"):
+        if os.environ.get("ENV", "development") != "development":
+            raise HTTPException(status_code=400, detail="Mock payments not allowed in production")
         success = True
     else:
         if not RAZORPAY_KEY_SECRET:
@@ -2217,10 +2243,14 @@ async def razorpay_webhook(request: Request):
 app.include_router(api_router)
 
 
+env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if os.environ.get("ENV", "development") != "development" and not env_origins:
+    raise RuntimeError("ALLOWED_ORIGINS must be set in non-development environments")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
+    allow_origins=env_origins.split(",") if env_origins else ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
