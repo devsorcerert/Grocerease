@@ -77,6 +77,16 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
 
+      - name: Print SHA-1 Certificate Fingerprint
+        run: |
+          echo "========================================"
+          echo "  GROCEREASE APK - SHA-1 FINGERPRINT"
+          echo "  Use this in Google Cloud Console"
+          echo "  Package: com.grocereasetv.app"
+          echo "========================================"
+          keytool -printcert -jarfile frontend/android/app/build/outputs/apk/release/app-release.apk 2>/dev/null | grep -E "SHA1:|SHA-1:"
+          echo "========================================"
+
       - name: Rename APK
         run: |
           mkdir -p /home/runner/apk-output
