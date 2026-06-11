@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -65,6 +66,10 @@ async def startup_db_client():
         await db.products.create_index("category")
         await db.products.create_index("id", unique=True)
         await db.products.create_index([("name", "text"), ("description", "text")])
+        await db.stores.create_index("id", unique=True)
+        await db.store_inventory.create_index([("store_id", 1), ("product_id", 1)], unique=True)
+        await db.riders.create_index("id", unique=True)
+        await db.riders.create_index("phone", unique=True)
     except Exception as e:
         logging.error(f"Failed to connect to MongoDB on startup: {e}")
         # Log critical error but allow application startup for local mock runtimes if necessary
@@ -1977,6 +1982,107 @@ async def verify_otp(request: Request, payload: VerifyOtpRequest):
         }
     }
 
+async def match_store_and_decrement_inventory(db, address, cart_items):
+    lat = address.get("lat")
+    lng = address.get("lng")
+    if lat is None or lng is None:
+        raise HTTPException(status_code=400, detail="Delivery address is missing geolocation (lat/lng).")
+    
+    stores = await db.stores.find({"is_active": True}).to_list(100)
+    matched_store = None
+    closest_dist = float("inf")
+    
+    for store in stores:
+        slat = store.get("lat")
+        slng = store.get("lng")
+        if slat is None or slng is None:
+            continue
+        try:
+            dist = haversine_km(lat, lng, float(slat), float(slng))
+            if dist <= store.get("service_radius_km", 5.0) and dist < closest_dist:
+                closest_dist = dist
+                matched_store = store
+        except Exception:
+            continue
+            
+    if not matched_store:
+        raise HTTPException(status_code=400, detail="No serviceable store near your address.")
+        
+    store_id = matched_store["id"]
+    
+    # Check inventory
+    for item in cart_items:
+        product_id = item["product_id"]
+        req_qty = item["quantity"]
+        inv = await db.store_inventory.find_one({"store_id": store_id, "product_id": product_id, "is_active": True})
+        if not inv or inv.get("stock", 0) < req_qty:
+            product = await db.products.find_one({"id": product_id})
+            pname = product["name"] if product else product_id
+            raise HTTPException(status_code=400, detail=f"Insufficient stock for '{pname}' at your local store.")
+            
+    # Decrement inventory
+    for item in cart_items:
+        product_id = item["product_id"]
+        req_qty = item["quantity"]
+        await db.store_inventory.update_one(
+            {"store_id": store_id, "product_id": product_id},
+            {"$inc": {"stock": -req_qty}}
+        )
+        
+    return store_id
+
+async def dispatch_order(db, order_id: str, store_id: str):
+    store = await db.stores.find_one({"id": store_id})
+    if not store:
+        return None
+        
+    store_lat = store.get("lat")
+    store_lng = store.get("lng")
+    
+    # Find all online riders with no current order
+    available_riders = await db.riders.find({
+        "status": "online",
+        "current_order_id": None,
+        "current_lat": {"$ne": None},
+        "current_lng": {"$ne": None}
+    }).to_list(100)
+    
+    if not available_riders:
+        logging.warning(f"No riders available for order {order_id}")
+        return None
+        
+    closest_rider = None
+    closest_dist = float("inf")
+    
+    for rider in available_riders:
+        try:
+            dist = haversine_km(float(store_lat), float(store_lng), float(rider["current_lat"]), float(rider["current_lng"]))
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_rider = rider
+        except Exception:
+            pass
+            
+    if closest_rider:
+        rider_id = closest_rider["id"]
+        # Update rider
+        await db.riders.update_one({"id": rider_id}, {"$set": {"current_order_id": order_id}})
+        # Update order
+        await db.orders.update_one({"id": order_id}, {"$set": {"rider_id": rider_id, "delivery_status": "assigned"}})
+        
+        # Add tracking update
+        await db.orders.update_one(
+            {"id": order_id},
+            {"$push": {"tracking_updates": {
+                "timestamp": datetime.utcnow(),
+                "status": "assigned",
+                "message": f"Assigned to delivery partner: {closest_rider['name']}"
+            }}}
+        )
+        logging.info(f"Dispatched order {order_id} to rider {rider_id}")
+        return rider_id
+        
+    return None
 
 # Checkout & Order Routing
 @api_router.get("/checkout/summary")
@@ -2011,6 +2117,8 @@ async def create_order_endpoint(payload: CreateOrderRequest, user_id: str = Depe
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
         
+    store_id = await match_store_and_decrement_inventory(db, address, cart["items"])
+        
     subtotal = sum(item["price"] * item["quantity"] for item in cart["items"])
     delivery_fee = 0.0 if subtotal >= 299 else 30.0
     total = subtotal + delivery_fee
@@ -2022,6 +2130,8 @@ async def create_order_endpoint(payload: CreateOrderRequest, user_id: str = Depe
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
+        "store_id": store_id,
+        "rider_id": None,
         "items": cart["items"],
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
@@ -2058,6 +2168,9 @@ async def create_order_endpoint(payload: CreateOrderRequest, user_id: str = Depe
             }}
         )
         
+        import asyncio
+        asyncio.create_task(dispatch_order(db, order_dict["id"], store_id))
+        
     await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
     return {"success": True, "order_id": order_dict["id"]}
 
@@ -2071,6 +2184,8 @@ async def create_pending_order(payload: CreateOrderRequest, user_id: str = Depen
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
         
+    store_id = await match_store_and_decrement_inventory(db, address, cart["items"])
+        
     subtotal = sum(item["price"] * item["quantity"] for item in cart["items"])
     delivery_fee = 0.0 if subtotal >= 299 else 30.0
     total = subtotal + delivery_fee
@@ -2082,6 +2197,8 @@ async def create_pending_order(payload: CreateOrderRequest, user_id: str = Depen
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
+        "store_id": store_id,
+        "rider_id": None,
         "items": cart["items"],
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
@@ -2211,6 +2328,10 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
         
         await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
         
+        if order.get("store_id"):
+            import asyncio
+            asyncio.create_task(dispatch_order(db, payload.order_id, order["store_id"]))
+            
     return {"status": "success", "order_id": payload.order_id}
 
 @api_router.post("/payments/razorpay/webhook")
@@ -2239,6 +2360,134 @@ async def razorpay_webhook(request: Request):
         
     return {"status": "ok"}
 
+
+# Rider & Tracking APIs
+class RiderLogin(BaseModel):
+    phone: str
+    password: str
+
+class RiderLocationUpdate(BaseModel):
+    rider_id: str
+    lat: float
+    lng: float
+
+class RiderStatusUpdate(BaseModel):
+    rider_id: str
+    order_id: str
+    status: str
+
+@api_router.post("/rider/login")
+async def rider_login(payload: RiderLogin):
+    rider = await db.riders.find_one({"phone": payload.phone})
+    if not rider or not pwd_context.verify(payload.password, rider.get("password", "")):
+        raise HTTPException(status_code=401, detail="Invalid phone or password")
+    
+    # We could issue a JWT, but for simplicity we'll just return the rider_id
+    await db.riders.update_one({"id": rider["id"]}, {"$set": {"status": "online"}})
+    
+    current_order = None
+    if rider.get("current_order_id"):
+        current_order = await db.orders.find_one({"id": rider["current_order_id"]})
+        if current_order:
+            current_order = clean_mongo_doc(current_order)
+            
+    return {
+        "success": True,
+        "rider_id": rider["id"],
+        "name": rider["name"],
+        "current_order": current_order
+    }
+
+@api_router.post("/rider/location")
+async def rider_location_update(payload: RiderLocationUpdate):
+    await db.riders.update_one(
+        {"id": payload.rider_id},
+        {"$set": {"current_lat": payload.lat, "current_lng": payload.lng}}
+    )
+    return {"success": True}
+
+@api_router.post("/rider/order-status")
+async def rider_status_update(payload: RiderStatusUpdate):
+    order = await db.orders.find_one({"id": payload.order_id, "rider_id": payload.rider_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found or not assigned to rider")
+        
+    await db.orders.update_one(
+        {"id": payload.order_id},
+        {
+            "$set": {"delivery_status": payload.status},
+            "$push": {"tracking_updates": {
+                "timestamp": datetime.utcnow(),
+                "status": payload.status,
+                "message": f"Order status updated to {payload.status}"
+            }}
+        }
+    )
+    
+    if payload.status == "delivered":
+        await db.riders.update_one(
+            {"id": payload.rider_id},
+            {"$set": {"current_order_id": None}}
+        )
+        
+    return {"success": True}
+
+import json
+import asyncio
+
+@api_router.get("/orders/{order_id}/tracking/stream")
+async def order_tracking_stream(order_id: str):
+    async def event_generator():
+        last_status = None
+        last_lat = None
+        last_lng = None
+        
+        while True:
+            order = await db.orders.find_one({"id": order_id})
+            if not order:
+                yield f"data: {json.dumps({'error': 'Order not found'})}\n\n"
+                break
+                
+            rider_id = order.get("rider_id")
+            if not rider_id:
+                yield f"data: {json.dumps({'status': order.get('delivery_status'), 'message': 'Waiting for rider assignment'})}\n\n"
+                await asyncio.sleep(5)
+                continue
+                
+            rider = await db.riders.find_one({"id": rider_id})
+            if rider:
+                current_lat = rider.get("current_lat")
+                current_lng = rider.get("current_lng")
+                delivery_status = order.get("delivery_status")
+                
+                # Yield update if anything changed
+                if current_lat != last_lat or current_lng != last_lng or delivery_status != last_status:
+                    last_lat = current_lat
+                    last_lng = current_lng
+                    last_status = delivery_status
+                    
+                    # Convert datetimes to isoformat for json dumping
+                    updates = []
+                    for u in order.get("tracking_updates", []):
+                        if "timestamp" in u and hasattr(u["timestamp"], "isoformat"):
+                            u["timestamp"] = u["timestamp"].isoformat()
+                        updates.append(clean_mongo_doc(u))
+                    
+                    data = {
+                        "status": delivery_status,
+                        "rider_name": rider.get("name"),
+                        "rider_lat": current_lat,
+                        "rider_lng": current_lng,
+                        "updates": updates
+                    }
+                    yield f"data: {json.dumps(data)}\n\n"
+                    
+                if delivery_status == "delivered":
+                    break
+                    
+            await asyncio.sleep(5)
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 app.include_router(api_router)
 
