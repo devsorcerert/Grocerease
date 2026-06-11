@@ -18,6 +18,10 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.grocereasetv.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -37,6 +41,12 @@
       "bundleIdentifier": "com.grocerease.app"
     },
     "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow GrocerEase to use your location."
+        }
+      ],
       [
         "@react-native-google-signin/google-signin",
         {
