@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 export { ErrorBoundary };
 
 export default function RootLayout() {
+  console.log('[BOOT] RootLayout mounting');
   return (
     <AuthProvider>
       <LanguageProvider>

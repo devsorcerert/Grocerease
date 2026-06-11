@@ -9,6 +9,7 @@ export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log(`[BOOT] Index screen mounted, loading=${loading}, user=${!!user}`);
     if (!loading) {
       if (user) {
         router.replace('/(tabs)/home');

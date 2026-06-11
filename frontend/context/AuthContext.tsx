@@ -9,12 +9,16 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
 
 // Configure Google Sign-In on Native
-if (Platform.OS !== 'web') {
-  GoogleSignin.configure({
-    webClientId: GOOGLE_CLIENT_ID_WEB,
-    offlineAccess: true,
-    scopes: ['profile', 'email'],
-  });
+try {
+  if (Platform.OS !== 'web') {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_CLIENT_ID_WEB,
+      offlineAccess: true,
+      scopes: ['profile', 'email'],
+    });
+  }
+} catch (e) {
+  console.warn('GoogleSignin config error:', e);
 }
 interface User {
   id: string;
@@ -60,24 +64,37 @@ const EMERGENT_SESSION_URL = process.env.EXPO_PUBLIC_EMERGENT_SESSION_URL || 'ht
 // Helper for cross-platform secure storage
 const storage = {
   setItem: async (key: string, value: string) => {
-    if (Platform.OS === 'web') {
-      await AsyncStorage.setItem(key, value);
-    } else {
-      await SecureStore.setItemAsync(key, value);
+    try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.setItem(key, value);
+      } else {
+        await SecureStore.setItemAsync(key, value);
+      }
+    } catch (error) {
+      console.warn('storage.setItem error:', error);
     }
   },
   getItem: async (key: string) => {
-    if (Platform.OS === 'web') {
-      return await AsyncStorage.getItem(key);
-    } else {
-      return await SecureStore.getItemAsync(key);
+    try {
+      if (Platform.OS === 'web') {
+        return await AsyncStorage.getItem(key);
+      } else {
+        return await SecureStore.getItemAsync(key);
+      }
+    } catch (error) {
+      console.warn('storage.getItem error:', error);
+      return null;
     }
   },
   removeItem: async (key: string) => {
-    if (Platform.OS === 'web') {
-      await AsyncStorage.removeItem(key);
-    } else {
-      await SecureStore.deleteItemAsync(key);
+    try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.removeItem(key);
+      } else {
+        await SecureStore.deleteItemAsync(key);
+      }
+    } catch (error) {
+      console.warn('storage.removeItem error:', error);
     }
   }
 };
@@ -97,6 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
+    console.log('[BOOT] AuthProvider mounting, calling initAuth');
     initAuth();
   }, []);
 
@@ -120,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const initAuth = async () => {
+    console.log('[BOOT] initAuth started');
     try {
       // On web, check for session_id in URL first (Google OAuth callback)
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
