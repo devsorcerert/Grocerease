@@ -130,7 +130,7 @@ class UserLogin(BaseModel):
 class GoogleAuthRequest(BaseModel):
     id_token: str
     name: str
-    email: EmailStr
+    email: Optional[str] = None
     photo: Optional[str] = None
 
 class CableTVLink(BaseModel):
