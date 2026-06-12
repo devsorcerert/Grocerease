@@ -1,0 +1,23 @@
+{
+  "project_info": {
+    "project_number": "123456789",
+    "project_id": "dummy-project"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789:android:123456789",
+        "android_client_info": {
+          "package_name": "com.grocereasetv.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "dummy-api-key"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}
