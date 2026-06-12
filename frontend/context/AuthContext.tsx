@@ -6,13 +6,13 @@ import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
-
+import { GOOGLE_CLIENT_ID_WEB, GOOGLE_CLIENT_ID_ANDROID } from '../constants/api';
 // Configure Google Sign-In on Native
 if (Platform.OS !== 'web') {
   try {
     GoogleSignin.configure({
               webClientId: GOOGLE_CLIENT_ID_WEB,
+          androidClientId: GOOGLE_CLIENT_ID_ANDROID,
       offlineAccess: true,
       scopes: ['profile', 'email'],
     });
@@ -299,15 +299,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ============ LOGIN / REGISTER ============
   const login = async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { token, refresh_token, user } = response.data;
+      // Detect admin login by checking the ADMIN_EMAIL env variable
+    const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL || 'admin@grocerease.com';
+    const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase();
+    const endpoint = isAdmin ? '/admin/login' : '/auth/login';
+    const response = await api.post(endpoint, { email, password });
+        const { token, refresh_token, user: userData } = response.data;
+    // For admin login, backend only returns token; construct a minimal admin user object
+    const user = userData || { id: 'admin', name: 'Admin', email: email, is_admin: true };
 
     await storage.setItem('token', token);
-    await storage.setItem('refresh_token', refresh_token);
+    await storage.setItem('refresh_token', refresh_token || '');
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
     startTokenRefreshTimer();
-  };
+      };
 
   const register = async (name: string, email: string, password: string, phone?: string) => {
     const response = await api.post('/auth/register', { name, email, password, phone });
