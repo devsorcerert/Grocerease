@@ -18,6 +18,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.grocereasetv.app",
+            "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -40,7 +41,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.1033798066161-00g31ael0mipkviip26btj04q6090ksq"
+          "iosUrlScheme": "com.googleusercontent.apps.517781079379-nkg71u5h723qbeab81005a96l0r2u4tq"
         }
       ]
     ]
