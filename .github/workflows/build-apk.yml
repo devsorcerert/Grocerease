@@ -49,7 +49,20 @@ jobs:
           echo "EXPO_PUBLIC_BACKEND_URL=${{ secrets.API_BASE_URL }}" >> .env
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=${{ secrets.GOOGLE_CLIENT_ID_WEB }}" >> .env
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=${{ secrets.GOOGLE_CLIENT_ID_ANDROID }}" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=${{ secrets.GOOGLE_CLIENT_ID_IOS }}" >> .env
           echo "EXPO_PUBLIC_RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}" >> .env
+
+      - name: Generate google-services.json for Android
+        working-directory: frontend
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > ./google-services.json
+            echo "google-services.json generated from secret"
+          else
+            echo "WARNING: GOOGLE_SERVICES_JSON secret not set - Google Sign-In may not work on Android"
+          fi
 
       - name: Generate native Android folder
         working-directory: frontend
