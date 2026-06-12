@@ -12,6 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
+    "newArchEnabled": true,
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -50,7 +51,7 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.1033798066161-00g31ael0mipkviip26btj04q6090ksq"
+          "iosUrlScheme": "com.googleusercontent.apps.418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f"
         }
       ]
     ]
