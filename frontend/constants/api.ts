@@ -29,19 +29,27 @@ export const RAZORPAY_KEY_ID = getEnvVar(
 );
 
 // Google OAuth 2.0 Client IDs
-// These MUST come from your .env file and match your Google Cloud Console exactly.
+// IMPORTANT: These must match the Firebase project used in google-services.json
+// Firebase Project: grocerease-499205 (Project Number: 418665414188)
+// Web client ID (type 3) from google-services.json - used as webClientId in GoogleSignin.configure()
 export const GOOGLE_CLIENT_ID_WEB = getEnvVar(
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
   'EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB',
-  '517781079379-nkg71u5h723qbeab81005a96l0r2u4tq.apps.googleusercontent.com'
+  '418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com'
 );
+
+// Android client ID (type 1) from google-services.json
 export const GOOGLE_CLIENT_ID_ANDROID = getEnvVar(
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID,
   'EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID',
-  '517781079379-8pll85b985h98b7p5h6j9h5h72j2.apps.googleusercontent.com'
+  '418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com'
 );
+
 export const GOOGLE_CLIENT_ID_IOS = getEnvVar(
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
   'EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS',
-  '517781079379-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com'
+  '418665414188-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com'
 );
+
+// Admin credentials (used for admin login detection)
+export const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL || 'admin@grocereasetv.com';
