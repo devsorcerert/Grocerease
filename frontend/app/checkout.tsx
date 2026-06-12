@@ -33,6 +33,7 @@ type OrderSummary = {
   subtotal: number;
   delivery_fee: number;
   total: number;
+  discount: number;
   rewards_will_earn: number; // FIX [2]: only shows what user WILL earn, not auto-deducted
   tier: string;
 };
