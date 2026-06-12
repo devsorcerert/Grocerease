@@ -1344,20 +1344,31 @@ async def create_brand_banner(banner: dict, user_id: str = Depends(get_current_u
 # ======================== ADMIN ENDPOINTS ========================
 
 # Admin credentials
-ADMIN_EMAIL = "admin@grocereasetv.com"
-ADMIN_PASSWORD_HASH = hash_password("admin123")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@grocereasetv.com")
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", hash_password("admin123"))
 
 # Admin login
 @api_router.post("/admin/login")
 async def admin_login(login_data: UserLogin):
-    if login_data.email != ADMIN_EMAIL:
+            if login_data.email.lower().strip() != ADMIN_EMAIL.lower().strip():
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     
     if not verify_password(login_data.password, ADMIN_PASSWORD_HASH):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     
     token = create_access_token({"user_id": "admin", "is_admin": True})
-    return {"token": token, "message": "Admin login successful"}
+        refresh_token_val = create_access_token({"user_id": "admin", "is_admin": True, "type": "refresh"})
+    return {
+        "token": token,
+        "refresh_token": refresh_token_val,
+        "user": {
+            "id": "admin",
+            "name": "Admin",
+            "email": ADMIN_EMAIL,
+            "is_admin": True
+        },
+        "message": "Admin login successful"
+    }
 
 # Middleware to check admin access
 async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
