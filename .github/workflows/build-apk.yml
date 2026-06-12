@@ -27,13 +27,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Install npm dependencies
         working-directory: frontend
         run: |
-          npm ci --legacy-peer-deps
+          npm install --legacy-peer-deps
           npm install @react-native-google-signin/google-signin @react-navigation/native-stack --legacy-peer-deps
 
       - name: Run lint checks
@@ -80,9 +78,9 @@ jobs:
       - name: Print SHA-1 Certificate Fingerprint
         run: |
           echo "========================================"
-          echo "  GROCEREASE APK - SHA-1 FINGERPRINT"
-          echo "  Use this in Google Cloud Console"
-          echo "  Package: com.grocereasetv.app"
+          echo " GROCEREASE APK - SHA-1 FINGERPRINT"
+          echo " Use this in Google Cloud Console"
+          echo " Package: com.grocereasetv.app"
           echo "========================================"
           keytool -printcert -jarfile frontend/android/app/build/outputs/apk/release/app-release.apk 2>/dev/null | grep -E "SHA1:|SHA-1:" || true
           echo "========================================"
@@ -91,7 +89,7 @@ jobs:
         run: |
           mkdir -p /home/runner/apk-output
           cp frontend/android/app/build/outputs/apk/release/app-release.apk \
-            /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
+          /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
