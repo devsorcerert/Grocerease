@@ -300,7 +300,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ============ LOGIN / REGISTER ============
   const login = async (email: string, password: string) => {
       // Detect admin login by checking the ADMIN_EMAIL env variable
-    const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL || 'admin@grocerease.com';
+    const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL || 'admin@grocereasetv.com';
     const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase();
     const endpoint = isAdmin ? '/admin/login' : '/auth/login';
     const response = await api.post(endpoint, { email, password });
