@@ -5,14 +5,12 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { GOOGLE_CLIENT_ID_WEB, GOOGLE_CLIENT_ID_ANDROID } from '../constants/api';
+import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
 // Configure Google Sign-In on Native
 if (Platform.OS !== 'web') {
   try {
     GoogleSignin.configure({
               webClientId: GOOGLE_CLIENT_ID_WEB,
-          androidClientId: GOOGLE_CLIENT_ID_ANDROID,
       offlineAccess: true,
       scopes: ['profile', 'email'],
     });
