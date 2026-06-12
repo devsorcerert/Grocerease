@@ -283,7 +283,7 @@ async def login(user: UserLogin):
     
     token = create_access_token({"user_id": db_user["id"]})
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
-    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
+    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
 
 @api_router.post("/auth/logout")
 async def logout(user_id: str = Depends(get_current_user)):
@@ -432,7 +432,7 @@ async def google_auth(auth_data: GoogleAuthRequest):
     
     token = create_access_token({"user_id": db_user["id"]})
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
-    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"]}}
+    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
 
 
 class SocialAuthRequest(BaseModel):
@@ -502,7 +502,8 @@ async def social_auth(auth_data: SocialAuthRequest):
             "name": db_user.get("name", ""),
             "email": db_user["email"],
             "photo": db_user.get("photo"),
-            "auth_provider": db_user.get("auth_provider", auth_data.provider)
+            "auth_provider": db_user.get("auth_provider", auth_data.provider),
+            "is_admin": db_user.get("is_admin", False)
         }
     }
 
