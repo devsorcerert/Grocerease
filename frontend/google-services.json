@@ -1,22 +1,46 @@
 {
   "project_info": {
-    "project_number": "123456789",
-    "project_id": "dummy-project"
+    "project_number": "418665414188",
+    "project_id": "grocerease-499205",
+    "storage_bucket": "grocerease-499205.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:123456789:android:123456789",
+        "mobilesdk_app_id": "1:418665414188:android:411c95bc174e3005e59b89",
         "android_client_info": {
           "package_name": "com.grocereasetv.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "a40da8f376768fe64e7eb84799c45d0b49630628"
+          }
+        },
+        {
+          "client_id": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "dummy-api-key"
+          "current_key": "REPLACE_WITH_YOUR_FIREBASE_API_KEY"
         }
-      ]
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
