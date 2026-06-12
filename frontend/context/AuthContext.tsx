@@ -9,16 +9,16 @@ import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-si
 import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
 
 // Configure Google Sign-In on Native
-try {
-  if (Platform.OS !== 'web') {
+if (Platform.OS !== 'web') {
+  try {
     GoogleSignin.configure({
       webClientId: GOOGLE_CLIENT_ID_WEB,
       offlineAccess: true,
       scopes: ['profile', 'email'],
     });
+  } catch (e) {
+    console.warn('GoogleSignin config error:', e);
   }
-} catch (e) {
-  console.warn('GoogleSignin config error:', e);
 }
 interface User {
   id: string;
