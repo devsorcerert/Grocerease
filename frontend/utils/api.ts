@@ -29,12 +29,21 @@ const getToken = async () => {
 };
 
 // Add auth token to requests
-api.interceptors.request.use(async (config) => {
-  const token = await getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await getToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 export default api;

@@ -113,8 +113,8 @@ export default function CheckoutScreen() {
       if (res.data.addresses?.length > 0) {
         setSelectedAddress(res.data.addresses[0]);
       }
-    } catch {
-      // silently fail — user can still type address
+    } catch (error: any) {
+      console.warn('Could not load saved addresses:', error?.message || error);
     }
   }, []);
 
@@ -141,8 +141,8 @@ export default function CheckoutScreen() {
       if (res.data.matched_address) {
         setSelectedAddress(res.data.matched_address);
       }
-    } catch {
-      // Location detection optional — don't block checkout
+    } catch (error: any) {
+      console.log('Location detection skipped or failed:', error?.message || error);
     } finally {
       setDetectingLocation(false);
     }
@@ -160,7 +160,9 @@ export default function CheckoutScreen() {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           coords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
         }
-      } catch {}
+      } catch (error: any) {
+        console.warn('Geolocation auto-detect failed while saving address:', error?.message || error);
+      }
 
       const res = await api.post(
         '/user/addresses',
@@ -247,7 +249,9 @@ export default function CheckoutScreen() {
         // Cancel the pending order on backend
         try {
           await api.post(`/orders/${pendingOrderId}/cancel`, {});
-        } catch {}
+        } catch (error: any) {
+          console.warn('Failed to cancel pending order on server:', error?.message || error);
+        }
         setPendingOrderId(null);
         Alert.alert('Payment Cancelled', 'Your payment was cancelled. Cart is still saved.');
 
@@ -481,6 +485,9 @@ function buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId }: any
   const isMock = razorpay_order_id.startsWith("rzp_mock_");
   
   if (isMock) {
+    if (!__DEV__) {
+      return `<!DOCTYPE html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#FEE2E2;color:#991B1B;font-family:sans-serif"><div style="padding:20px;text-align:center;border:1px solid #FCA5A5;background:#FFF5F5;border-radius:8px"><h2>Payment Error</h2><p>Mock payments are disabled in production builds.</p></div></body></html>`;
+    }
     return `<!DOCTYPE html>
 <html>
 <head>

@@ -303,7 +303,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await storage.setItem('refresh_token', newRefreshToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
       } catch (error) {
-        console.log('Token refresh failed:', error);
+        console.log('Token refresh failed, forcing logout:', error);
+        if (refreshTimerRef.current) {
+          clearInterval(refreshTimerRef.current);
+          refreshTimerRef.current = null;
+        }
+        await logout();
       }
     }, 14 * 60 * 1000);
 
@@ -441,7 +446,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       try {
-        await api.post('/auth/logout');
+        const refreshToken = await storage.getItem('refresh_token');
+        await api.post('/auth/logout', { refresh_token: refreshToken });
       } catch (err: any) {
         console.log('Server logout skipped:', err.message);
       }

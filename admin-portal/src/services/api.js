@@ -10,6 +10,9 @@ const api = axios.create({
 });
 
 // Add auth token to requests
+// SECURITY NOTE: Storing the admin token in localStorage exposes it to XSS vulnerabilities.
+// For higher security, migrate to an HttpOnly cookie flow (e.g. backend sets cookie on login, 
+// and axios requests automatically include it via withCredentials).
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('admin_token');
   if (token) {

@@ -82,6 +82,8 @@ async def startup_db_client():
         await db.products.create_index("category")
         await db.products.create_index("id", unique=True)
         await db.products.create_index([("name", "text"), ("description", "text")])
+        await db.blacklisted_tokens.create_index("token", unique=True)
+        await db.blacklisted_tokens.create_index("expires_at", expireAfterSeconds=0)
         logging.info("MongoDB indexes verified/created successfully!")
     except Exception as e:
         logging.error(f"Failed to connect to MongoDB or initialize indexes on startup: {e}")
@@ -123,9 +125,9 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict, expires_in: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=30)
+    expire = datetime.utcnow() + (expires_in if expires_in is not None else timedelta(minutes=30))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -136,7 +138,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         return user_id
-    except:
+    except jwt.PyJWTError as e:
+        logging.warning(f"User authentication token verification failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # Models
@@ -152,6 +155,7 @@ class UserRegister(BaseModel):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
+    email_otp: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
@@ -282,17 +286,44 @@ async def register(user: UserRegister, _=Depends(rate_limit)):
     }
     await db.users.insert_one(user_dict)
     token = create_access_token({"user_id": user_dict["id"]})
-    refresh_token = create_access_token({"user_id": user_dict["id"], "type": "refresh"})
+    refresh_token = create_access_token({"user_id": user_dict["id"], "type": "refresh"}, expires_in=timedelta(days=30))
     
     return {"token": token, "refresh_token": refresh_token, "user": {"id": user_dict["id"], "name": user_dict["name"], "email": user_dict["email"], "phone": user_dict["phone"], "address": user_dict["address"], "city": user_dict["city"], "pincode": user_dict["pincode"]}}
 
 @api_router.post("/auth/update-profile")
 async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
     update_data = {}
     if profile.name is not None:
         update_data["name"] = profile.name
+        
     if profile.email is not None:
-        update_data["email"] = profile.email
+        new_email = profile.email.strip().lower()
+        if new_email != user.get("email", "").strip().lower():
+            # Check if email is already in use by another user
+            existing = await db.users.find_one({"email": new_email, "id": {"$ne": user_id}})
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already in use")
+                
+            # Verification is required to change email
+            if not profile.email_otp:
+                raise HTTPException(status_code=400, detail="Email verification OTP is required to change email address")
+                
+            stored = _otp_store.get(new_email)
+            if not stored or time.time() > stored["expires"]:
+                if new_email in _otp_store:
+                    del _otp_store[new_email]
+                raise HTTPException(status_code=400, detail="Email OTP expired or not requested. Please request a new OTP.")
+                
+            if stored["otp"] != profile.email_otp:
+                raise HTTPException(status_code=400, detail="Incorrect email OTP. Please check and try again.")
+                
+            update_data["email"] = new_email
+            del _otp_store[new_email]
+            
     if profile.phone is not None:
         update_data["phone"] = profile.phone
     if profile.address is not None:
@@ -316,32 +347,51 @@ async def login(user: UserLogin, _=Depends(rate_limit)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_access_token({"user_id": db_user["id"]})
-    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"}, expires_in=timedelta(days=30))
     return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
 
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
 @api_router.post("/auth/logout")
-async def logout(user_id: str = Depends(get_current_user)):
+async def logout(payload: LogoutRequest, user_id: str = Depends(get_current_user)):
     """
-    Logout endpoint - In JWT implementation, logout is handled client-side
-    by removing the token. Server-side logout would require token blacklisting.
+    Logout endpoint - Blacklists the user's refresh token
     """
     try:
         # Log the logout event for audit purposes
         print(f"User {user_id} logged out at {datetime.utcnow()}")
         
-        # In a production environment, you might want to:
-        # 1. Add token to blacklist in database/Redis
-        # 2. Record logout event for analytics
-        # 3. Clean up any user sessions
+        if payload.refresh_token:
+            try:
+                # Decode to extract the expiration timestamp
+                decoded = jwt.decode(payload.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+                exp = decoded.get("exp")
+                expires_at = datetime.utcfromtimestamp(exp) if exp else datetime.utcnow() + timedelta(days=30)
+                
+                # Insert the token into blacklisted_tokens
+                await db.blacklisted_tokens.update_one(
+                    {"token": payload.refresh_token},
+                    {"$setOnInsert": {
+                        "token": payload.refresh_token,
+                        "expires_at": expires_at,
+                        "blacklisted_at": datetime.utcnow()
+                    }},
+                    upsert=True
+                )
+            except Exception as e:
+                # Invalid or already expired token doesn't need to block logout
+                logging.warning(f"Failed to blacklist refresh token during logout: {e}")
         
         return {"message": "Logout successful", "success": True}
-    except Exception:
+    except Exception as e:
+        logging.error(f"Logout error: {e}")
         raise HTTPException(status_code=500, detail="Logout failed")
 
 @api_router.post("/auth/refresh")
 async def refresh_token(request: dict):
     """
-    Refresh token endpoint for token renewal
+    Refresh token endpoint for token renewal with rotation and blacklisting
     Expects: {"refresh_token": "old_refresh_token"}
     Returns: {"token": "new_access_token", "refresh_token": "new_refresh_token"}
     """
@@ -349,6 +399,11 @@ async def refresh_token(request: dict):
         old_refresh_token = request.get("refresh_token")
         if not old_refresh_token:
             raise HTTPException(status_code=400, detail="Refresh token required")
+            
+        # Check if the token is already blacklisted
+        is_blacklisted = await db.blacklisted_tokens.find_one({"token": old_refresh_token})
+        if is_blacklisted:
+            raise HTTPException(status_code=401, detail="Token has been blacklisted")
         
         # Decode and validate the refresh token
         try:
@@ -368,9 +423,23 @@ async def refresh_token(request: dict):
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
             
-            # Generate new tokens with proper user_id
+            # Rotate refresh token: blacklist the old one and generate a new pair
+            exp = payload.get("exp")
+            expires_at = datetime.utcfromtimestamp(exp) if exp else datetime.utcnow() + timedelta(days=30)
+            
+            await db.blacklisted_tokens.update_one(
+                {"token": old_refresh_token},
+                {"$setOnInsert": {
+                    "token": old_refresh_token,
+                    "expires_at": expires_at,
+                    "blacklisted_at": datetime.utcnow()
+                }},
+                upsert=True
+            )
+            
+            # Generate new tokens
             new_access_token = create_access_token({"user_id": user_id})
-            new_refresh_token = create_access_token({"user_id": user_id, "type": "refresh"})
+            new_refresh_token = create_access_token({"user_id": user_id, "type": "refresh"}, expires_in=timedelta(days=30))
             
             return {
                 "token": new_access_token,
@@ -1411,33 +1480,46 @@ else:
 # Admin login
 @api_router.post("/admin/login")
 async def admin_login(login_data: UserLogin):
-    if login_data.email.lower().strip() != ADMIN_EMAIL.lower().strip():
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    email = login_data.email.lower().strip()
+    db_user = await db.users.find_one({"email": email})
     
-    # Try raw match first, then hashed verification
+    # Check if admin user exists in DB and is marked as admin
+    if not db_user or not db_user.get("is_admin"):
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+        
     password_ok = False
-    if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
-        password_ok = True
-    elif ADMIN_PASSWORD_HASH:
-        try:
-            password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
-        except Exception:
-            # Fallback if ADMIN_PASSWORD_HASH was mistakenly set to a raw password string in environment
-            password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
-            
+    # Verify using database password hash
+    if db_user.get("password"):
+        password_ok = verify_password(login_data.password, db_user["password"])
+    
+    # Fallback to environment credentials if needed (e.g. dev bootstrap)
+    if not password_ok:
+        if email == ADMIN_EMAIL.lower().strip():
+            if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
+                password_ok = True
+            elif ADMIN_PASSWORD_HASH:
+                try:
+                    password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
+                except Exception:
+                    password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
+                    
     if not password_ok:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
+        
+    admin_id = db_user.get("id", "admin")
     
-    token = create_access_token({"user_id": "admin", "is_admin": True})
-    refresh_token_val = create_access_token({"user_id": "admin", "is_admin": True, "type": "refresh"})
+    token = create_access_token({"user_id": admin_id, "role": "admin", "is_admin": True})
+    refresh_token_val = create_access_token({"user_id": admin_id, "role": "admin", "is_admin": True, "type": "refresh"}, expires_in=timedelta(days=30))
+    
     return {
         "token": token,
         "refresh_token": refresh_token_val,
         "user": {
-            "id": "admin",
-            "name": "Admin",
-            "email": ADMIN_EMAIL,
-            "is_admin": True
+            "id": admin_id,
+            "name": db_user.get("name", "Admin"),
+            "email": db_user.get("email", email),
+            "is_admin": True,
+            "role": "admin"
         },
         "message": "Admin login successful"
     }
@@ -1447,10 +1529,12 @@ async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(secur
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         is_admin = payload.get("is_admin", False)
-        if not is_admin:
+        role = payload.get("role", "")
+        if not is_admin or role != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
         return payload
-    except:
+    except jwt.PyJWTError as e:
+        logging.warning(f"Admin authentication failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 # Get all KPIs
@@ -1585,16 +1669,182 @@ async def admin_update_order_status(order_id: str, payload: dict, admin=Depends(
         "message": f"Order status updated to {new_status}"
     })
     
+    update_data = {
+        "status": new_status,
+        "delivery_status": new_status,
+        "tracking_updates": tracking_updates,
+        "updated_at": datetime.utcnow()
+    }
+    
+    if new_status.lower() == "delivered" and order.get("payment_method") == "COD":
+        update_data["payment_status"] = "paid"
+        
     await db.orders.update_one(
         {"id": order_id},
-        {"$set": {
-            "status": new_status,
-            "delivery_status": new_status,
-            "tracking_updates": tracking_updates,
-            "updated_at": datetime.utcnow()
-        }}
+        {"$set": update_data}
     )
     return {"message": "Order status updated successfully"}
+
+class RefundRequest(BaseModel):
+    order_id: str
+    amount: Optional[float] = None
+    reason: Optional[str] = "Customer request"
+
+@api_router.post("/admin/payments/refund")
+async def initiate_refund(payload: RefundRequest, admin=Depends(verify_admin)):
+    order = await db.orders.find_one({"id": payload.order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    if order.get("payment_status") != "paid":
+        raise HTTPException(status_code=400, detail="Only paid orders can be refunded")
+        
+    payment_id = order.get("razorpay_payment_id")
+    if not payment_id:
+        raise HTTPException(status_code=400, detail="No Razorpay payment ID found for this order")
+        
+    refund_amount_rs = payload.amount if payload.amount is not None else order["total"]
+    if refund_amount_rs > order["total"]:
+        raise HTTPException(status_code=400, detail="Refund amount cannot exceed order total")
+        
+    amount_paise = int(refund_amount_rs * 100)
+    client = get_razorpay_client()
+    refund_id = f"ref_mock_{uuid.uuid4().hex[:14]}"
+    status = "processed"
+    
+    if payment_id.startswith("pay_mock_") or not client:
+        if os.environ.get("ENV", "development") != "development":
+            raise HTTPException(status_code=400, detail="Real payment required for refund in production")
+    else:
+        try:
+            refund = client.refund.create({
+                "payment_id": payment_id,
+                "amount": amount_paise,
+                "notes": {
+                    "grocerease_order_id": payload.order_id,
+                    "reason": payload.reason
+                }
+            })
+            refund_id = refund.get("id")
+            status = refund.get("status", "processed")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Razorpay refund failed: {str(e)}")
+            
+    refund_doc = {
+        "id": str(uuid.uuid4()),
+        "order_id": payload.order_id,
+        "razorpay_payment_id": payment_id,
+        "razorpay_refund_id": refund_id,
+        "amount": refund_amount_rs,
+        "reason": payload.reason,
+        "status": status,
+        "created_at": datetime.utcnow()
+    }
+    await db.refunds.insert_one(refund_doc)
+    
+    new_payment_status = "refunded" if refund_amount_rs == order["total"] else "partially_refunded"
+    tracking_updates = order.get("tracking_updates", [])
+    tracking_updates.append({
+        "timestamp": datetime.utcnow(),
+        "status": new_payment_status,
+        "message": f"Refund of INR {refund_amount_rs} initiated. Status: {status}"
+    })
+    
+    await db.orders.update_one(
+        {"id": payload.order_id},
+        {
+            "$set": {
+                "payment_status": new_payment_status,
+                "refund_id": refund_id,
+                "tracking_updates": tracking_updates
+            }
+        }
+    )
+    
+    return {"success": True, "refund_id": refund_id, "status": status}
+
+@api_router.get("/admin/payments/reconciliation")
+async def get_reconciliation_report(admin=Depends(verify_admin)):
+    local_orders = await db.orders.find({"payment_method": "Razorpay"}).to_list(100)
+    
+    reconciled = []
+    discrepancies = []
+    
+    client = get_razorpay_client()
+    rzp_payments = []
+    if client:
+        try:
+            rzp_payments_response = client.payment.all({"count": 100})
+            rzp_payments = rzp_payments_response.get("items", [])
+        except Exception as e:
+            logging.error(f"Failed to fetch Razorpay payments for reconciliation: {e}")
+            
+    rzp_map = {p["id"]: p for p in rzp_payments}
+    
+    for order in local_orders:
+        payment_id = order.get("razorpay_payment_id")
+        
+        if payment_id and payment_id.startswith("pay_mock_"):
+            discrepancies.append({
+                "order_id": order["id"],
+                "payment_id": payment_id,
+                "amount": order["total"],
+                "issue": "Mock payment used in database",
+                "local_status": order.get("payment_status")
+            })
+            continue
+            
+        if not payment_id:
+            if order.get("payment_status") == "paid":
+                discrepancies.append({
+                    "order_id": order["id"],
+                    "payment_id": "N/A",
+                    "amount": order["total"],
+                    "issue": "Local status is paid but no Razorpay payment ID exists",
+                    "local_status": order.get("payment_status")
+                })
+            continue
+            
+        if payment_id in rzp_map:
+            rzp_pay = rzp_map[payment_id]
+            rzp_amount_rs = rzp_pay.get("amount", 0) / 100.0
+            
+            if abs(rzp_amount_rs - order["total"]) > 0.01:
+                discrepancies.append({
+                    "order_id": order["id"],
+                    "payment_id": payment_id,
+                    "amount": order["total"],
+                    "rzp_amount": rzp_amount_rs,
+                    "issue": f"Amount mismatch: Local total is {order['total']} but Razorpay captured {rzp_amount_rs}",
+                    "local_status": order.get("payment_status")
+                })
+            else:
+                reconciled.append({
+                    "order_id": order["id"],
+                    "payment_id": payment_id,
+                    "amount": order["total"],
+                    "status": "matched"
+                })
+        else:
+            if client:
+                discrepancies.append({
+                    "order_id": order["id"],
+                    "payment_id": payment_id,
+                    "amount": order["total"],
+                    "issue": "Payment ID not found in latest 100 Razorpay transactions",
+                    "local_status": order.get("payment_status")
+                })
+                
+    return {
+        "reconciled_count": len(reconciled),
+        "discrepancies_count": len(discrepancies),
+        "discrepancies": discrepancies,
+        "summary": {
+            "total_local_razorpay_orders": len(local_orders),
+            "reconciled_successfully": len(reconciled),
+            "unresolved_discrepancies": len(discrepancies)
+        }
+    }
 
 # Product Management
 @api_router.get("/admin/products")
@@ -1720,23 +1970,30 @@ async def change_password(
     current_password = password_data.get("current_password")
     new_password = password_data.get("new_password")
     
-    if not current_password or not new_password:
-        raise HTTPException(status_code=400, detail="Both passwords required")
+    if not new_password:
+        raise HTTPException(status_code=400, detail="New password is required")
     
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    if not verify_password(current_password, user["password"]):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    user_password = user.get("password")
+    auth_provider = user.get("auth_provider", "email")
     
-    hashed_new_password = hash_password(new_password)
+    if user_password is not None:
+        if not current_password:
+            raise HTTPException(status_code=400, detail="Current password is required")
+        if not verify_password(current_password, user_password):
+            raise HTTPException(status_code=400, detail="Incorrect current password")
+    else:
+        if auth_provider not in ["google", "otp"]:
+            raise HTTPException(status_code=400, detail="Setting password is not allowed for this account type")
+        
     await db.users.update_one(
         {"id": user_id},
-        {"$set": {"password": hashed_new_password, "updated_at": datetime.utcnow()}}
+        {"$set": {"password": hash_password(new_password)}}
     )
-    
-    return {"message": "Password changed successfully", "success": True}
+    return {"success": True, "message": "Password updated successfully"}
 
 @api_router.delete("/auth/delete-account")
 async def delete_account(user_id: str = Depends(get_current_user)):
@@ -2060,6 +2317,22 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
     existing_user = await db.users.find_one({"phone": phone})
     return {"is_new_user": existing_user is None, "message": "OTP sent successfully"}
 
+class SendEmailOtpRequest(BaseModel):
+    email: EmailStr
+
+@api_router.post("/auth/send-email-otp")
+async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
+    email = payload.email.strip().lower()
+    otp = str(random.randint(100000, 999999))
+    _otp_store[email] = {"otp": otp, "expires": time.time() + 300}
+    
+    if DEBUG_MODE:
+        print(f"\n========================================\n[DEV MODE] Email OTP for {email}: {otp}\n========================================\n")
+    else:
+        print(f"\n[EMAIL OTP] OTP requested for {email} (actual OTP hidden in production). SES/Sendgrid integration required.\n")
+        
+    return {"message": "Email verification OTP sent successfully"}
+
 @api_router.post("/auth/verify-otp")
 async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
@@ -2266,15 +2539,15 @@ async def create_order_endpoint(payload: CreateOrderRequest, user_id: str = Depe
         "address_id": payload.address_id,
         "payment_method": payload.payment_method,
         "status": "confirmed",
-        "payment_status": "paid",
+        "payment_status": "pending_cod",
         "created_at": datetime.utcnow(),
-        "delivery_status": "confirmed",
+        "delivery_status": "pending",
         "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
         "tracking_updates": [
             {
                 "timestamp": datetime.utcnow(),
                 "status": "confirmed",
-                "message": "Order confirmed and being prepared"
+                "message": "Order confirmed. Cash on Delivery pending delivery."
             }
         ]
     }
@@ -2380,7 +2653,8 @@ def get_razorpay_client():
         return None
     try:
         return razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-    except:
+    except Exception as e:
+        logging.error(f"Failed to initialize Razorpay Client: {e}")
         return None
 
 @api_router.post("/payments/razorpay/create")
@@ -2423,6 +2697,14 @@ async def create_razorpay_order(payload: CreatePaymentRequest, user_id: str = De
 
 @api_router.post("/payments/razorpay/verify")
 async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
+    order = await db.orders.find_one({"id": payload.order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    # Idempotency Check: Avoid double-processing
+    if order.get("payment_status") == "paid":
+        return {"status": "success", "order_id": payload.order_id, "message": "Already processed"}
+
     if payload.razorpay_order_id.startswith("rzp_mock_"):
         if os.environ.get("ENV", "development") != "development":
             raise HTTPException(status_code=400, detail="Mock payments are disabled in production")
@@ -2459,9 +2741,8 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
         }
     )
     
-    order = await db.orders.find_one({"id": payload.order_id})
     user = await db.users.find_one({"id": user_id})
-    if order and user:
+    if user:
         rewards_will_earn = order.get("rewards_will_earn", 0.0)
         new_spend = user.get("monthly_spend", 0.0) + order["total"]
         new_total_spend = user.get("total_spend", 0.0) + order["total"]
@@ -2491,25 +2772,94 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
 async def razorpay_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("X-Razorpay-Signature", "")
-    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+    webhook_secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+    is_production = os.environ.get("ENV", "development") != "development"
     
+    if is_production:
+        if not webhook_secret:
+            logging.error("RAZORPAY_WEBHOOK_SECRET is not configured in production.")
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        if not signature:
+            logging.error("Missing X-Razorpay-Signature header in production.")
+            raise HTTPException(status_code=400, detail="Missing X-Razorpay-Signature header")
+            
     if webhook_secret and signature:
         expected = hmac.new(webhook_secret.encode(), body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, signature):
+            logging.error("Razorpay webhook signature verification failed.")
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
+    elif is_production:
+        logging.error("Signature verification failed because signature or secret is missing.")
+        raise HTTPException(status_code=400, detail="Signature verification failed")
             
     try:
         event = await request.json()
+    except Exception as e:
+        logging.error(f"Error parsing Razorpay webhook JSON: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+        
+    try:
         if event.get("event") == "payment.captured":
             payment = event["payload"]["payment"]["entity"]
             order_id = payment["notes"].get("grocerease_order_id")
             if order_id:
-                await db.orders.update_one(
-                    {"id": order_id},
-                    {"$set": {"payment_status": "paid", "status": "confirmed"}}
-                )
-    except:
-        pass
+                order = await db.orders.find_one({"id": order_id})
+                if not order:
+                    logging.error(f"Webhook payment.captured: Order {order_id} not found")
+                    raise HTTPException(status_code=404, detail="Order not found")
+                    
+                # Idempotency Check: Avoid double-processing in Webhook
+                if order.get("payment_status") != "paid":
+                    user_id = order.get("user_id")
+                    
+                    # Update order status
+                    await db.orders.update_one(
+                        {"id": order_id},
+                        {
+                            "$set": {
+                                "payment_status": "paid",
+                                "status": "confirmed",
+                                "razorpay_payment_id": payment.get("id"),
+                                "delivery_status": "confirmed",
+                                "tracking_updates": [
+                                    {
+                                        "timestamp": datetime.utcnow(),
+                                        "status": "confirmed",
+                                        "message": "Payment captured via webhook. Preparing your order."
+                                    }
+                                ]
+                            }
+                        }
+                    )
+                    
+                    # Deduct stock, award rewards, clear cart
+                    user = await db.users.find_one({"id": user_id})
+                    if user:
+                        rewards_will_earn = order.get("rewards_will_earn", 0.0)
+                        new_spend = user.get("monthly_spend", 0.0) + order["total"]
+                        new_total_spend = user.get("total_spend", 0.0) + order["total"]
+                        new_reward = user.get("current_reward", 0.0) + rewards_will_earn
+                        
+                        await db.users.update_one(
+                            {"id": user_id},
+                            {"$set": {
+                                "monthly_spend": new_spend,
+                                "total_spend": new_total_spend,
+                                "current_reward": new_reward
+                            }}
+                        )
+                        
+                        # Deduct stock
+                        for item in order.get("items", []):
+                            await db.products.update_one(
+                                {"id": item["product_id"]},
+                                {"$inc": {"stock": -item["quantity"]}}
+                            )
+                        
+                        await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
+    except Exception as e:
+        logging.error(f"Error processing Razorpay webhook captured event: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal webhook processing failure: {str(e)}")
         
     return {"status": "ok"}
 
