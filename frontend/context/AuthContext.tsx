@@ -19,6 +19,13 @@ if (Platform.OS !== 'web') {
     console.warn('GoogleSignin config error:', e);
   }
 }
+
+// Helper to gate console.log behind __DEV__
+const log = (...args: any[]) => {
+  if (__DEV__) {
+    log(...args);
+  }
+};
 interface User {
   id: string;
   name: string;
@@ -123,7 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
-    console.log('[BOOT] AuthProvider mounting, calling initAuth');
+    log('[BOOT] AuthProvider mounting, calling initAuth');
     initAuth();
   }, []);
 
@@ -147,7 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const initAuth = async () => {
-    console.log('[BOOT] initAuth started');
+    log('[BOOT] initAuth started');
     try {
       // On web, check for session_id in URL first (Google OAuth callback)
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -161,7 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Normal auth check - look for stored token
       await checkAuth();
     } catch (error) {
-      console.log('Auth init error:', error);
+      log('Auth init error:', error);
       setLoading(false);
     }
   };
@@ -200,11 +207,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Process session with lock to prevent double calls
   const processSession = async (sessionId: string) => {
     if (processedSessionsRef.current.has(sessionId)) {
-      console.log('Session already processed or in progress, skipping:', sessionId);
+      log('Session already processed or in progress, skipping:', sessionId);
       return;
     }
     if (sessionProcessingRef.current) {
-      console.log('Session already being processed, skipping');
+      log('Session already being processed, skipping');
       return;
     }
     
@@ -251,7 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       startTokenRefreshTimer();
       
-      console.log('Google auth completed successfully for:', userData.email);
+      log('Google auth completed successfully for:', userData.email);
     } catch (error: any) {
       console.error('Session processing failed:', error);
       const errMsg = error?.response?.data?.detail || error?.message || String(error);
@@ -277,7 +284,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         startTokenRefreshTimer();
       }
     } catch (error) {
-      console.log('Auth check failed', error);
+      log('Auth check failed', error);
       await clearAuth();
     } finally {
       setLoading(false);
@@ -303,7 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await storage.setItem('refresh_token', newRefreshToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
       } catch (error) {
-        console.log('Token refresh failed, forcing logout:', error);
+        log('Token refresh failed, forcing logout:', error);
         if (refreshTimerRef.current) {
           clearInterval(refreshTimerRef.current);
           refreshTimerRef.current = null;
@@ -397,7 +404,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Google Sign-In did not return an ID token.');
       }
 
-      console.log('Obtained Google ID Token, exchanging with backend...');
+      log('Obtained Google ID Token, exchanging with backend...');
 
       // Call our backend /auth/google endpoint to exchange ID token
       const response = await api.post('/auth/google', {
@@ -419,7 +426,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       startTokenRefreshTimer();
 
-      console.log('Google Sign-In completed successfully for native client:', userData.email);
+      log('Google Sign-In completed successfully for native client:', userData.email);
 
     } catch (error: any) {
       console.error('Google Sign-In failed:', error);
@@ -449,7 +456,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const refreshToken = await storage.getItem('refresh_token');
         await api.post('/auth/logout', { refresh_token: refreshToken });
       } catch (err: any) {
-        console.log('Server logout skipped:', err.message);
+        log('Server logout skipped:', err.message);
       }
       
       // Sign out from Google if on Native
@@ -457,7 +464,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           await GoogleSignin.signOut();
         } catch (googleErr) {
-          console.log('Google Sign-Out error:', googleErr);
+          log('Google Sign-Out error:', googleErr);
         }
       }
       
@@ -484,7 +491,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.get('/auth/me');
       setUser(response.data);
     } catch (error) {
-      console.log('Failed to refresh user', error);
+      log('Failed to refresh user', error);
     }
   };
 

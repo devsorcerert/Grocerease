@@ -149,21 +149,15 @@ export default function AdvancedSearchPage() {
     }
   };
 
-  const handleCompare = async () => {
+  const handleCompare = () => {
     if (selectedForCompare.length < 2) {
       Alert.alert('Select Products', 'Please select at least 2 products to compare');
       return;
     }
-
-    try {
-      const response = await api.post('/products/compare', selectedForCompare);
-      // Navigate to comparison page (to be created)
-      Alert.alert('Comparison', `Comparing ${response.data.products.length} products`);
-      // TODO: Navigate to dedicated comparison page
-    } catch (error) {
-      console.error('Comparison error:', error);
-      Alert.alert('Error', 'Failed to compare products');
-    }
+    router.push({
+      pathname: '/product/compare',
+      params: { ids: selectedForCompare.join(',') }
+    });
   };
 
   const clearFilters = () => {

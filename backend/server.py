@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import random
@@ -12,56 +11,32 @@ import hashlib
 import httpx
 import razorpay
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 import uuid
 from datetime import datetime, timedelta
-from passlib.context import CryptContext
 import jwt
 
-
+# Load environment
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ.get('MONGO_URL') or os.environ.get('MONGODB_URL')
-if not mongo_url:
-    # Default fallback for local testing if nothing is provided
-    mongo_url = "mongodb://localhost:27017"
-client = AsyncIOMotorClient(mongo_url)
-db_name = os.environ.get('DB_NAME') or 'grocerease'
-db = client[db_name]
-
-_otp_store = {}
-DEBUG_MODE = os.environ.get("DEBUG", "false").lower() == "true"
-FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID") or ""
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET") or ""
-
-if os.environ.get("ENV", "development") != "development":
-    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
-        raise RuntimeError("FATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be configured via environment variables in production mode.")
-else:
-    if not RAZORPAY_KEY_ID:
-        RAZORPAY_KEY_ID = "rzp_test_T0sGXqleYVJXe7"
-    if not RAZORPAY_KEY_SECRET:
-        RAZORPAY_KEY_SECRET = "wPwUglFR3xnF1SAE5dTcTemd"
-# Rate Limiting Store and Dependency
-_rate_limit_store = {}
-
-async def rate_limit(request: Request):
-    ip = request.client.host if request.client else "unknown"
-    now = time.time()
-    if ip not in _rate_limit_store:
-        _rate_limit_store[ip] = []
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < 60]
-    if len(_rate_limit_store[ip]) >= 5:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again in a minute."
-        )
-    _rate_limit_store[ip].append(now)
-
+# Import shared database, auth, models
+from database import (
+    db, client, SECRET_KEY, ALGORITHM, pwd_context, security,
+    hash_password, verify_password, create_access_token,
+    get_current_user, verify_admin, clean_mongo_doc,
+    clean_mongo_docs, rate_limit, set_otp, verify_and_clear_otp,
+    send_sms_twilio, DEBUG_MODE
+)
+from models import (
+    UserRegister, ProfileUpdate, UserLogin, GoogleAuthRequest,
+    CableTVLink, ProductCreate, BulkProductUpload, CartItem,
+    OrderCreate, VideoCreate, SendOtpRequest, VerifyOtpRequest,
+    CreatePaymentRequest, VerifyPaymentRequest, CouponCreate,
+    CouponValidate, CreateOrderRequest, LogoutRequest,
+    SocialAuthRequest, RefundRequest, NearestAddressRequest,
+    SupportMessage, SendEmailOtpRequest
+)
 
 # Create the main app
 app = FastAPI()
@@ -84,6 +59,30 @@ async def startup_db_client():
         await db.products.create_index([("name", "text"), ("description", "text")])
         await db.blacklisted_tokens.create_index("token", unique=True)
         await db.blacklisted_tokens.create_index("expires_at", expireAfterSeconds=0)
+        # Create persistent OTP index
+        await db.otps.create_index("key", unique=True)
+        await db.otps.create_index("expires_at", expireAfterSeconds=0)
+        # Create admin indexes
+        await db.admins.create_index("email", unique=True)
+        await db.admins.create_index("id", unique=True)
+        
+        # Seed default admin if empty
+        admin_count = await db.admins.count_documents({})
+        if admin_count == 0:
+            admin_email = os.environ.get("ADMIN_EMAIL", "grocereasetv@gmail.com")
+            # Default to request 7's password if not provided
+            admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+            
+            await db.admins.insert_one({
+                "id": "default-admin-id",
+                "email": admin_email.lower().strip(),
+                "password": hash_password(admin_password),
+                "role": "super-admin",
+                "name": "Super Admin",
+                "created_at": datetime.utcnow()
+            })
+            logging.info(f"Startup seeded default admin: {admin_email}")
+            
         logging.info("MongoDB indexes verified/created successfully!")
     except Exception as e:
         logging.error(f"Failed to connect to MongoDB or initialize indexes on startup: {e}")
@@ -96,168 +95,6 @@ async def health_check():
 async def api_health_check():
     return {"status": "ok"}
 
-
-
-def clean_mongo_doc(doc):
-    """Remove MongoDB _id field from document"""
-    if isinstance(doc, dict) and "_id" in doc:
-        del doc["_id"]
-    return doc
-
-def clean_mongo_docs(docs):
-    """Remove MongoDB _id field from list of documents"""
-    return [clean_mongo_doc(doc) for doc in docs]
-
-# Security
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
-
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET")
-if not SECRET_KEY:
-    logging.warning("JWT_SECRET_KEY environment variable is not set! Using insecure fallback secret key.")
-    raise RuntimeError("FATAL: JWT_SECRET_KEY environment variable is not set. Refusing to start with insecure fallback.")
-
-ALGORITHM = "HS256"
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-def create_access_token(data: dict, expires_in: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_in if expires_in is not None else timedelta(minutes=30))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("user_id")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return user_id
-    except jwt.PyJWTError as e:
-        logging.warning(f"User authentication token verification failed: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-# Models
-class UserRegister(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    pincode: Optional[str] = None
-
-class ProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    email_otp: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    pincode: Optional[str] = None
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class GoogleAuthRequest(BaseModel):
-    id_token: str
-    name: str
-    email: Optional[str] = None
-    photo: Optional[str] = None
-
-class CableTVLink(BaseModel):
-    user_id_nuid: str
-    phone: str
-    service_provider: str
-
-class ProductCreate(BaseModel):
-    name: str
-    category: str
-    subcategory: str
-    price: float
-    original_price: Optional[float] = None
-    image: str
-    stock: int = 100
-    unit: str = "1 kg"
-    description: Optional[str] = ""
-    sku: Optional[str] = None
-    barcode: Optional[str] = None
-    brand: Optional[str] = None
-    supplier: Optional[str] = None
-    min_stock_level: Optional[int] = 10
-    max_stock_level: Optional[int] = 1000
-    discount_percentage: Optional[float] = 0.0
-    is_active: Optional[bool] = True
-    tags: Optional[List[str]] = []
-    weight: Optional[float] = None
-    dimensions: Optional[str] = None
-    shelf_life_days: Optional[int] = None
-
-class BulkProductUpload(BaseModel):
-    products: List[dict]
-
-class CartItem(BaseModel):
-    product_id: str
-    quantity: int
-
-class OrderCreate(BaseModel):
-    items: List[dict]
-    subtotal: float = 0
-    reward_applied: float = 0
-    total: float = 0
-    payment_method: str = "COD"
-    delivery_address: Optional[str] = None
-    phone: Optional[str] = None
-
-class VideoCreate(BaseModel):
-    title: str
-    description: str
-    thumbnail: str
-    stream_url: Optional[str] = None
-    duration: str = "00:00"
-    ingredients: List[dict] = []
-    is_live: bool = False
-
-class SendOtpRequest(BaseModel):
-    phone: str
-
-class VerifyOtpRequest(BaseModel):
-    phone: str
-    otp: str
-    name: Optional[str] = None
-
-class CreatePaymentRequest(BaseModel):
-    order_id: str
-
-class VerifyPaymentRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-    order_id: str
-
-class CouponCreate(BaseModel):
-    code: str
-    discount_percentage: Optional[float] = 0.0
-    discount_amount: Optional[float] = 0.0
-    min_order_value: float = 0.0
-    max_discount: Optional[float] = None
-    valid_until: datetime
-    is_active: bool = True
-
-class CouponValidate(BaseModel):
-    code: str
-    subtotal: float
-
-class CreateOrderRequest(BaseModel):
-    address_id: str
-    payment_method: str
-    coupon_code: Optional[str] = None
 
 
 # Auth Routes
@@ -312,17 +149,10 @@ async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_curr
             if not profile.email_otp:
                 raise HTTPException(status_code=400, detail="Email verification OTP is required to change email address")
                 
-            stored = _otp_store.get(new_email)
-            if not stored or time.time() > stored["expires"]:
-                if new_email in _otp_store:
-                    del _otp_store[new_email]
-                raise HTTPException(status_code=400, detail="Email OTP expired or not requested. Please request a new OTP.")
-                
-            if stored["otp"] != profile.email_otp:
-                raise HTTPException(status_code=400, detail="Incorrect email OTP. Please check and try again.")
+            if not await verify_and_clear_otp(new_email, profile.email_otp):
+                raise HTTPException(status_code=400, detail="Incorrect or expired email OTP. Please check and try again.")
                 
             update_data["email"] = new_email
-            del _otp_store[new_email]
             
     if profile.phone is not None:
         update_data["phone"] = profile.phone
@@ -350,8 +180,6 @@ async def login(user: UserLogin, _=Depends(rate_limit)):
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"}, expires_in=timedelta(days=30))
     return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
 
-class LogoutRequest(BaseModel):
-    refresh_token: Optional[str] = None
 
 @api_router.post("/auth/logout")
 async def logout(payload: LogoutRequest, user_id: str = Depends(get_current_user)):
@@ -551,14 +379,6 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
     return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
 
-
-class SocialAuthRequest(BaseModel):
-    provider: str  # "google", "apple", "email"
-    email: str
-    name: Optional[str] = None
-    photo: Optional[str] = None
-    session_token: Optional[str] = None
-
 @api_router.post("/auth/social")
 async def social_auth(auth_data: SocialAuthRequest, _=Depends(rate_limit)):
     """Unified social auth endpoint for Google, Apple, and other providers"""
@@ -650,38 +470,12 @@ async def get_me(user_id: str = Depends(get_current_user)):
 @api_router.post("/cable-tv/link")
 async def link_cable_tv(data: CableTVLink, user_id: str = Depends(get_current_user)):
     """
-    Cable TV linking with infrastructure ready for real API integration
-    Future: Will integrate with actual cable TV provider APIs for verification
+    Cable TV linking is not implemented yet. Real-time billing integrations are gated.
     """
-    try:
-        # Infrastructure provision: Real API integration placeholder
-        verification_result = await verify_cable_tv_details(data.dict())
-        
-        cable_tv_details = {
-            **data.dict(),
-            "verification_status": verification_result.get("status", "mock_success"),
-            "api_response": verification_result.get("response", "Mock verification - API integration pending"),
-            "linked_at": datetime.utcnow(),
-            "sync_enabled": True,  # Provision for real-time spending sync
-            "last_sync": datetime.utcnow()
-        }
-        
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {
-                "cable_tv_linked": True,
-                "cable_tv_details": cable_tv_details
-            }}
-        )
-        
-        return {
-            "success": True,
-            "message": "Cable TV linked successfully",
-            "verification_status": cable_tv_details["verification_status"],
-            "infrastructure_ready": True
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cable TV linking failed: {str(e)}")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Cable TV verification is not implemented yet. Real-time billing integrations are gated."
+    )
 
 async def verify_cable_tv_details(cable_details: dict) -> dict:
     """
@@ -982,341 +776,10 @@ async def delete_product(product_id: str, user_id: str = Depends(get_current_use
     
     return {"success": True, "message": "Product deleted"}
 
-# Cart Routes
-@api_router.get("/cart")
-async def get_cart(user_id: str = Depends(get_current_user)):
-    cart = await db.carts.find_one({"user_id": user_id})
-    if not cart:
-        return {"user_id": user_id, "items": []}
-    return clean_mongo_doc(cart)
+# Cart routes are imported from routers/cart.py
+from routers.orders import calculate_spending_tiers_and_rewards
 
-@api_router.post("/cart/add")
-async def add_to_cart(item: CartItem, user_id: str = Depends(get_current_user)):
-    cart = await db.carts.find_one({"user_id": user_id})
-    
-    if not cart:
-        cart = {"user_id": user_id, "items": []}
-    
-    item_exists = False
-    for cart_item in cart["items"]:
-        if cart_item["product_id"] == item.product_id:
-            cart_item["quantity"] += item.quantity
-            item_exists = True
-            break
-    
-    if not item_exists:
-        cart["items"].append(item.dict())
-    
-    cart["updated_at"] = datetime.utcnow()
-    
-    await db.carts.update_one({"user_id": user_id}, {"$set": cart}, upsert=True)
-    return clean_mongo_doc(cart)
-
-@api_router.post("/cart/add-bulk")
-async def add_bulk_ingredients_to_cart(ingredients: dict, user_id: str = Depends(get_current_user)):
-    """
-    Bulk add ingredients from GrocerEase TV videos to cart
-    Infrastructure ready for real ingredient-product mapping APIs
-    """
-    try:
-        cart = await db.carts.find_one({"user_id": user_id})
-        
-        if not cart:
-            cart = {"user_id": user_id, "items": []}
-        
-        added_count = 0
-        failed_ingredients = []
-        
-        for ingredient in ingredients.get("ingredient_list", []):
-            product_id = ingredient.get("product_id")
-            quantity = ingredient.get("quantity", 1)
-            
-            if not product_id:
-                # Infrastructure provision: Future API integration for ingredient-product mapping
-                failed_ingredients.append({
-                    "name": ingredient.get("name", "Unknown"),
-                    "reason": "Product mapping not available - API integration required"
-                })
-                continue
-                
-            # Verify product exists
-            product = await db.products.find_one({"id": product_id})
-            if not product:
-                failed_ingredients.append({
-                    "name": ingredient.get("name", product_id),
-                    "reason": "Product not found in database"
-                })
-                continue
-            
-            # Add to cart logic
-            item_exists = False
-            for cart_item in cart["items"]:
-                if cart_item["product_id"] == product_id:
-                    cart_item["quantity"] += quantity
-                    item_exists = True
-                    break
-            
-            if not item_exists:
-                cart["items"].append({"product_id": product_id, "quantity": quantity})
-            
-            added_count += 1
-        
-        cart["updated_at"] = datetime.utcnow()
-        await db.carts.update_one({"user_id": user_id}, {"$set": cart}, upsert=True)
-        
-        return {
-            "success": True,
-            "cart": clean_mongo_doc(cart),
-            "added_count": added_count,
-            "failed_ingredients": failed_ingredients,
-            "message": f"Successfully added {added_count} ingredients to cart"
-        }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add ingredients: {str(e)}")
-
-@api_router.post("/cart/update")
-async def update_cart_item(item: CartItem, user_id: str = Depends(get_current_user)):
-    cart = await db.carts.find_one({"user_id": user_id})
-    if not cart:
-        raise HTTPException(status_code=404, detail="Cart not found")
-    
-    for cart_item in cart["items"]:
-        if cart_item["product_id"] == item.product_id:
-            if item.quantity <= 0:
-                cart["items"].remove(cart_item)
-            else:
-                cart_item["quantity"] = item.quantity
-            break
-    
-    await db.carts.update_one({"user_id": user_id}, {"$set": {"items": cart["items"]}})
-    return clean_mongo_doc(cart)
-
-@api_router.delete("/cart/clear")
-async def clear_cart(user_id: str = Depends(get_current_user)):
-    await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
-    return {"success": True}
-
-# Auto-Rewards Calculation
-def calculate_spending_tiers_and_rewards(current_monthly_spend: float, order_total: float) -> dict:
-    """
-    Calculate automatic rewards based on spending tiers
-    Infrastructure ready for advanced reward algorithms and external reward APIs
-    """
-    new_monthly_spend = current_monthly_spend + order_total
-    
-    # Current tier system - can be enhanced with external reward APIs
-    tiers = [
-        {"threshold": 25000, "reward": 1000, "tier_name": "Platinum"},
-        {"threshold": 13000, "reward": 500, "tier_name": "Gold"},
-        {"threshold": 7000, "reward": 250, "tier_name": "Silver"},
-        {"threshold": 0, "reward": 0, "tier_name": "Base"}
-    ]
-    
-    current_tier = {"threshold": 0, "reward": 0, "tier_name": "Base"}
-    for tier in tiers:
-        if new_monthly_spend >= tier["threshold"]:
-            current_tier = tier
-            break
-    
-    # Calculate additional rewards for order
-    order_reward_percentage = 0.01  # 1% cashback base
-    if current_tier["tier_name"] == "Platinum":
-        order_reward_percentage = 0.05  # 5% for platinum
-    elif current_tier["tier_name"] == "Gold":
-        order_reward_percentage = 0.03  # 3% for gold
-    elif current_tier["tier_name"] == "Silver":
-        order_reward_percentage = 0.02  # 2% for silver
-    
-    order_cashback = order_total * order_reward_percentage
-    
-    return {
-        "new_monthly_spend": new_monthly_spend,
-        "current_tier": current_tier,
-        "order_cashback": order_cashback,
-        "total_available_reward": current_tier["reward"],
-        "rewards_breakdown": {
-            "tier_reward": current_tier["reward"],
-            "order_cashback": order_cashback,
-            "infrastructure_ready": True
-        }
-    }
-
-@api_router.post("/checkout/calculate-rewards")
-async def calculate_checkout_rewards(checkout_data: dict, user_id: str = Depends(get_current_user)):
-    """
-    Calculate rewards that will be auto-applied during checkout
-    """
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    subtotal = checkout_data.get("subtotal", 0)
-    current_monthly_spend = user.get("monthly_spend", 0.0)
-    current_reward_balance = user.get("current_reward", 0.0)
-    
-    rewards_info = calculate_spending_tiers_and_rewards(current_monthly_spend, subtotal)
-    
-    # Auto-apply available rewards (up to order total)
-    max_applicable_reward = min(current_reward_balance, subtotal)
-    
-    # Calculate final totals
-    reward_applied = max_applicable_reward
-    final_total = subtotal - reward_applied
-    
-    return {
-        "subtotal": subtotal,
-        "current_reward_balance": current_reward_balance,
-        "rewards_auto_applied": reward_applied,
-        "final_total": final_total,
-        "new_tier_info": rewards_info["current_tier"],
-        "order_cashback_earned": rewards_info["order_cashback"],
-        "infrastructure_ready": True,
-        "breakdown": {
-            "original_amount": subtotal,
-            "rewards_applied": reward_applied,
-            "amount_to_pay": final_total,
-            "cashback_earning": rewards_info["order_cashback"]
-        }
-    }
-
-# Order Routes
-@api_router.post("/orders")
-async def create_order(order_data: OrderCreate, user_id: str = Depends(get_current_user)):
-    """
-    Create order with automatic rewards application
-    """
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Calculate subtotal from items if not provided
-    subtotal = order_data.subtotal
-    if subtotal == 0 and order_data.items:
-        subtotal = sum(item.get("price", 0) * item.get("quantity", 1) for item in order_data.items)
-    
-    # Calculate rewards and apply them automatically
-    rewards_info = calculate_spending_tiers_and_rewards(
-        user.get("monthly_spend", 0.0), 
-        subtotal
-    )
-    
-    # Auto-apply rewards (user's available reward balance)
-    current_reward_balance = user.get("current_reward", 0.0)
-    reward_applied = min(current_reward_balance, subtotal)
-    final_total = subtotal - reward_applied
-    
-    # Build delivery address
-    delivery_address = order_data.delivery_address
-    if not delivery_address:
-        delivery_address = f"{user.get('address', '')}, {user.get('city', '')}, {user.get('pincode', '')}"
-    
-    order_dict = {
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "items": order_data.items,
-        "subtotal": subtotal,
-        "reward_applied": reward_applied,
-        "total": final_total,
-        "payment_method": order_data.payment_method,
-        "phone": order_data.phone or user.get("phone", ""),
-        "tier_info": rewards_info["current_tier"],
-        "order_cashback_earned": rewards_info["order_cashback"],
-        "rewards_auto_applied": True,
-        "status": "confirmed",
-        "delivery_status": "confirmed",
-        "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
-        "delivery_address": delivery_address,
-        "created_at": datetime.utcnow(),
-        "tracking_updates": [
-            {
-                "timestamp": datetime.utcnow(),
-                "status": "confirmed",
-                "message": "Order confirmed and being prepared"
-            }
-        ]
-    }
-    
-    await db.orders.insert_one(order_dict)
-    
-    # Update user spending and rewards
-    new_reward_balance = (current_reward_balance - reward_applied) + rewards_info["order_cashback"]
-    
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {
-            "monthly_spend": rewards_info["new_monthly_spend"],
-            "total_spend": user.get("total_spend", 0.0) + order_data.subtotal,
-            "current_reward": rewards_info["total_available_reward"] + rewards_info["order_cashback"]
-        }}
-    )
-    
-    # Clear cart
-    await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
-    
-    return {
-        **clean_mongo_doc(order_dict),
-        "rewards_breakdown": {
-            "rewards_used": reward_applied,
-            "cashback_earned": rewards_info["order_cashback"],
-            "new_reward_balance": new_reward_balance,
-            "new_tier": rewards_info["current_tier"]["tier_name"]
-        },
-        "tracking_url": f"/order-tracking/{order_dict['id']}"
-    }
-
-@api_router.get("/orders/{order_id}/tracking")
-async def get_order_tracking(order_id: str, user_id: str = Depends(get_current_user)):
-    """
-    Get real-time order tracking information with delivery partner details
-    Infrastructure ready for GPS tracking and delivery partner APIs
-    """
-    order = await db.orders.find_one({"id": order_id, "user_id": user_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    # Mock delivery partner data - Infrastructure ready for real delivery partner APIs
-    delivery_partner_data = {
-        "id": "dp_001",
-        "name": "Rajesh Kumar",
-        "phone": "+91 98765 43210", 
-        "vehicle": "Bike - MH 12 AB 1234",
-        "rating": 4.8,
-        "current_location": {
-            "latitude": 19.0760 + (hash(order_id) % 100) * 0.001,  # Mock location variation
-            "longitude": 72.8777 + (hash(order_id) % 100) * 0.001
-        },
-        "estimated_arrival": "15 minutes"
-    }
-    
-    # Enhanced tracking data with infrastructure provisions
-    tracking_data = {
-        "order_id": order_id,
-        "status": order.get("delivery_status", "confirmed"),
-        "delivery_partner": delivery_partner_data if order.get("delivery_status") in ["picked_up", "out_for_delivery"] else None,
-        "delivery_address": order.get("delivery_address", ""),
-        "estimated_delivery": order.get("estimated_delivery", datetime.utcnow() + timedelta(hours=1)),
-        "tracking_updates": order.get("tracking_updates", []),
-        "infrastructure_ready": True,
-        "gps_tracking_enabled": True,
-        "real_time_updates": True
-    }
-    
-    return clean_mongo_doc(tracking_data)
-
-@api_router.get("/orders")
-async def get_user_orders(user_id: str = Depends(get_current_user)):
-    """
-    Get all orders for the current user with tracking capabilities
-    """
-    orders_cursor = db.orders.find({"user_id": user_id}).sort("created_at", -1)
-    orders = await orders_cursor.to_list(length=50)
-    
-    for order in orders:
-        order["tracking_available"] = True
-        order["tracking_url"] = f"/order-tracking/{order['id']}"
-    
-    return [clean_mongo_doc(order) for order in orders]
+# Redundant local rewards and order routes removed (handled by routers/orders.py)
 
 # Video Routes
 @api_router.get("/videos")
@@ -1481,19 +944,21 @@ else:
 @api_router.post("/admin/login")
 async def admin_login(login_data: UserLogin):
     email = login_data.email.lower().strip()
-    db_user = await db.users.find_one({"email": email})
+    db_admin = await db.admins.find_one({"email": email})
     
-    # Check if admin user exists in DB and is marked as admin
-    if not db_user or not db_user.get("is_admin"):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
-        
     password_ok = False
-    # Verify using database password hash
-    if db_user.get("password"):
-        password_ok = verify_password(login_data.password, db_user["password"])
+    admin_id = "admin"
+    admin_name = "Admin"
+    admin_role = "admin"
     
-    # Fallback to environment credentials if needed (e.g. dev bootstrap)
-    if not password_ok:
+    if db_admin:
+        admin_id = db_admin.get("id", "admin")
+        admin_name = db_admin.get("name", "Admin")
+        admin_role = db_admin.get("role", "admin")
+        if db_admin.get("password"):
+            password_ok = verify_password(login_data.password, db_admin["password"])
+    else:
+        # Fallback to environment credentials if needed (e.g. dev bootstrap)
         if email == ADMIN_EMAIL.lower().strip():
             if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
                 password_ok = True
@@ -1502,349 +967,29 @@ async def admin_login(login_data: UserLogin):
                     password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
                 except Exception:
                     password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
-                    
+            
+            if password_ok:
+                admin_name = "System Admin"
+                admin_role = "super-admin"
+                
     if not password_ok:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
         
-    admin_id = db_user.get("id", "admin")
-    
-    token = create_access_token({"user_id": admin_id, "role": "admin", "is_admin": True})
-    refresh_token_val = create_access_token({"user_id": admin_id, "role": "admin", "is_admin": True, "type": "refresh"}, expires_in=timedelta(days=30))
-    
+    token = create_access_token({"user_id": admin_id, "role": admin_role, "is_admin": True})
+    refresh_token_val = create_access_token({"user_id": admin_id, "role": admin_role, "is_admin": True, "type": "refresh"}, expires_in=timedelta(days=30))
     return {
         "token": token,
         "refresh_token": refresh_token_val,
         "user": {
             "id": admin_id,
-            "name": db_user.get("name", "Admin"),
-            "email": db_user.get("email", email),
-            "is_admin": True,
-            "role": "admin"
-        },
-        "message": "Admin login successful"
-    }
-
-# Middleware to check admin access
-async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        is_admin = payload.get("is_admin", False)
-        role = payload.get("role", "")
-        if not is_admin or role != "admin":
-            raise HTTPException(status_code=403, detail="Admin access required")
-        return payload
-    except jwt.PyJWTError as e:
-        logging.warning(f"Admin authentication failed: {e}")
-        raise HTTPException(status_code=401, detail="Invalid admin token")
-
-# Get all KPIs
-@api_router.get("/admin/kpis")
-async def get_all_kpis(admin=Depends(verify_admin)):
-    # Get all orders
-    orders = await db.orders.find().to_list(None)
-    users = await db.users.find().to_list(None)
-    products = await db.products.find().to_list(None)
-    
-    # Calculate all KPIs
-    total_orders = len(orders)
-    total_revenue = sum(order.get("total", 0) for order in orders)
-    total_deliveries = len([o for o in orders if o.get("status") == "delivered"])
-    
-    # Operational KPIs
-    avg_delivery_time = 45  # Mock value
-    delivery_efficiency = 92.5 if total_deliveries > 0 else 0
-    order_accuracy_rate = 95.0
-    fulfilment_speed = 30  # minutes
-    
-    # Financial KPIs
-    aov = total_revenue / total_orders if total_orders > 0 else 0
-    revenue_per_delivery = total_revenue / total_deliveries if total_deliveries > 0 else 0
-    gross_margin = 25.0
-    cost_per_delivery = 50.0
-    
-    # Customer KPIs
-    total_customers = len(users)
-    returning_customers = len([u for u in users if u.get("order_count", 0) > 1])
-    customer_retention_rate = (returning_customers / total_customers * 100) if total_customers > 0 else 0
-    customer_satisfaction = 87.0  # Based on NPS
-    cac = 250.0  # Customer acquisition cost
-    clv = 5000.0  # Customer lifetime value
-    
-    # Inventory KPIs
-    total_products = len(products)
-    out_of_stock = len([p for p in products if p.get("stock", 0) == 0])
-    inventory_turnover = 4.5
-    
-    # TV Integration KPIs
-    orders_via_qr = len([o for o in orders if o.get("source") == "qr_code"])
-    tv_users_linked = len([u for u in users if u.get("cable_tv_linked", False)])
-    qr_conversion_rate = (orders_via_qr / total_orders * 100) if total_orders > 0 else 0
-    
-    # Brand Analytics
-    brand_orders = {}
-    for order in orders:
-        items = order.get("items", [])
-        for item in items:
-            brand = item.get("brand", "Unknown")
-            brand_orders[brand] = brand_orders.get(brand, 0) + 1
-    
-    top_brand = max(brand_orders.items(), key=lambda x: x[1])[0] if brand_orders else "N/A"
-    avg_brand_consumption = sum(brand_orders.values()) / len(users) if users else 0
-    
-    return {
-        # Operational
-        "nps": 72,  # Net Promoter Score
-        "avgDeliveryTime": avg_delivery_time,
-        "deliveryEfficiency": delivery_efficiency,
-        "orderAccuracyRate": order_accuracy_rate,
-        "fulfilmentSpeed": fulfilment_speed,
-        "totalDeliveries": total_deliveries,
-        
-        # Financial
-        "totalRevenue": total_revenue,
-        "aov": round(aov, 2),
-        "revenuePerDelivery": round(revenue_per_delivery, 2),
-        "grossMargin": gross_margin,
-        "costPerDelivery": cost_per_delivery,
-        
-        # Customer
-        "customerRetentionRate": round(customer_retention_rate, 2),
-        "customerSatisfaction": customer_satisfaction,
-        "cac": cac,
-        "clv": clv,
-        
-        # Inventory
-        "inventoryTurnover": inventory_turnover,
-        "totalProducts": total_products,
-        "outOfStock": out_of_stock,
-        
-        # TV Integration
-        "ordersViaQR": orders_via_qr,
-        "tvUsersLinked": tv_users_linked,
-        "qrConversionRate": round(qr_conversion_rate, 2),
-        
-        # Brand Analytics
-        "topBrand": top_brand,
-        "avgBrandConsumption": round(avg_brand_consumption, 2),
-        "competitivePricingIndex": 1.05
-    }
-
-# Admin Orders
-@api_router.get("/admin/orders")
-async def admin_get_orders(
-    status: Optional[str] = None,
-    payment_method: Optional[str] = None,
-    admin=Depends(verify_admin),
-    limit: int = 100,
-    skip: int = 0
-):
-    query = {}
-    if status:
-        query["status"] = status
-    if payment_method:
-        query["payment_method"] = payment_method
-        
-    orders = await db.orders.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
-    total = await db.orders.count_documents(query)
-    
-    return {
-        "orders": clean_mongo_docs(orders),
-        "total": total
-    }
-
-@api_router.put("/admin/orders/{order_id}/status")
-async def admin_update_order_status(order_id: str, payload: dict, admin=Depends(verify_admin)):
-    new_status = payload.get("status")
-    if not new_status:
-        raise HTTPException(status_code=400, detail="Status is required")
-        
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    tracking_updates = order.get("tracking_updates", [])
-    tracking_updates.append({
-        "timestamp": datetime.utcnow(),
-        "status": new_status,
-        "message": f"Order status updated to {new_status}"
-    })
-    
-    update_data = {
-        "status": new_status,
-        "delivery_status": new_status,
-        "tracking_updates": tracking_updates,
-        "updated_at": datetime.utcnow()
-    }
-    
-    if new_status.lower() == "delivered" and order.get("payment_method") == "COD":
-        update_data["payment_status"] = "paid"
-        
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": update_data}
-    )
-    return {"message": "Order status updated successfully"}
-
-class RefundRequest(BaseModel):
-    order_id: str
-    amount: Optional[float] = None
-    reason: Optional[str] = "Customer request"
-
-@api_router.post("/admin/payments/refund")
-async def initiate_refund(payload: RefundRequest, admin=Depends(verify_admin)):
-    order = await db.orders.find_one({"id": payload.order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    if order.get("payment_status") != "paid":
-        raise HTTPException(status_code=400, detail="Only paid orders can be refunded")
-        
-    payment_id = order.get("razorpay_payment_id")
-    if not payment_id:
-        raise HTTPException(status_code=400, detail="No Razorpay payment ID found for this order")
-        
-    refund_amount_rs = payload.amount if payload.amount is not None else order["total"]
-    if refund_amount_rs > order["total"]:
-        raise HTTPException(status_code=400, detail="Refund amount cannot exceed order total")
-        
-    amount_paise = int(refund_amount_rs * 100)
-    client = get_razorpay_client()
-    refund_id = f"ref_mock_{uuid.uuid4().hex[:14]}"
-    status = "processed"
-    
-    if payment_id.startswith("pay_mock_") or not client:
-        if os.environ.get("ENV", "development") != "development":
-            raise HTTPException(status_code=400, detail="Real payment required for refund in production")
-    else:
-        try:
-            refund = client.refund.create({
-                "payment_id": payment_id,
-                "amount": amount_paise,
-                "notes": {
-                    "grocerease_order_id": payload.order_id,
-                    "reason": payload.reason
-                }
-            })
-            refund_id = refund.get("id")
-            status = refund.get("status", "processed")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Razorpay refund failed: {str(e)}")
-            
-    refund_doc = {
-        "id": str(uuid.uuid4()),
-        "order_id": payload.order_id,
-        "razorpay_payment_id": payment_id,
-        "razorpay_refund_id": refund_id,
-        "amount": refund_amount_rs,
-        "reason": payload.reason,
-        "status": status,
-        "created_at": datetime.utcnow()
-    }
-    await db.refunds.insert_one(refund_doc)
-    
-    new_payment_status = "refunded" if refund_amount_rs == order["total"] else "partially_refunded"
-    tracking_updates = order.get("tracking_updates", [])
-    tracking_updates.append({
-        "timestamp": datetime.utcnow(),
-        "status": new_payment_status,
-        "message": f"Refund of INR {refund_amount_rs} initiated. Status: {status}"
-    })
-    
-    await db.orders.update_one(
-        {"id": payload.order_id},
-        {
-            "$set": {
-                "payment_status": new_payment_status,
-                "refund_id": refund_id,
-                "tracking_updates": tracking_updates
-            }
-        }
-    )
-    
-    return {"success": True, "refund_id": refund_id, "status": status}
-
-@api_router.get("/admin/payments/reconciliation")
-async def get_reconciliation_report(admin=Depends(verify_admin)):
-    local_orders = await db.orders.find({"payment_method": "Razorpay"}).to_list(100)
-    
-    reconciled = []
-    discrepancies = []
-    
-    client = get_razorpay_client()
-    rzp_payments = []
-    if client:
-        try:
-            rzp_payments_response = client.payment.all({"count": 100})
-            rzp_payments = rzp_payments_response.get("items", [])
-        except Exception as e:
-            logging.error(f"Failed to fetch Razorpay payments for reconciliation: {e}")
-            
-    rzp_map = {p["id"]: p for p in rzp_payments}
-    
-    for order in local_orders:
-        payment_id = order.get("razorpay_payment_id")
-        
-        if payment_id and payment_id.startswith("pay_mock_"):
-            discrepancies.append({
-                "order_id": order["id"],
-                "payment_id": payment_id,
-                "amount": order["total"],
-                "issue": "Mock payment used in database",
-                "local_status": order.get("payment_status")
-            })
-            continue
-            
-        if not payment_id:
-            if order.get("payment_status") == "paid":
-                discrepancies.append({
-                    "order_id": order["id"],
-                    "payment_id": "N/A",
-                    "amount": order["total"],
-                    "issue": "Local status is paid but no Razorpay payment ID exists",
-                    "local_status": order.get("payment_status")
-                })
-            continue
-            
-        if payment_id in rzp_map:
-            rzp_pay = rzp_map[payment_id]
-            rzp_amount_rs = rzp_pay.get("amount", 0) / 100.0
-            
-            if abs(rzp_amount_rs - order["total"]) > 0.01:
-                discrepancies.append({
-                    "order_id": order["id"],
-                    "payment_id": payment_id,
-                    "amount": order["total"],
-                    "rzp_amount": rzp_amount_rs,
-                    "issue": f"Amount mismatch: Local total is {order['total']} but Razorpay captured {rzp_amount_rs}",
-                    "local_status": order.get("payment_status")
-                })
-            else:
-                reconciled.append({
-                    "order_id": order["id"],
-                    "payment_id": payment_id,
-                    "amount": order["total"],
-                    "status": "matched"
-                })
-        else:
-            if client:
-                discrepancies.append({
-                    "order_id": order["id"],
-                    "payment_id": payment_id,
-                    "amount": order["total"],
-                    "issue": "Payment ID not found in latest 100 Razorpay transactions",
-                    "local_status": order.get("payment_status")
-                })
-                
-    return {
-        "reconciled_count": len(reconciled),
-        "discrepancies_count": len(discrepancies),
-        "discrepancies": discrepancies,
-        "summary": {
-            "total_local_razorpay_orders": len(local_orders),
-            "reconciled_successfully": len(reconciled),
-            "unresolved_discrepancies": len(discrepancies)
+            "name": admin_name,
+            "email": email,
+            "role": admin_role,
+            "is_admin": True
         }
     }
+
+# Admin KPI and Order management endpoints are imported from routers/kpis.py and routers/orders.py
 
 # Product Management
 @api_router.get("/admin/products")
@@ -2009,10 +1154,6 @@ async def delete_account(user_id: str = Depends(get_current_user)):
     return {"message": "Account deleted successfully", "success": True}
 
 # Address Management Routes
-
-class NearestAddressRequest(BaseModel):
-    lat: float
-    lng: float
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Distance in km between two lat/lng points."""
@@ -2236,10 +1377,6 @@ async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
     return {"message": "Order cancelled successfully", "success": True}
 
 
-# Support Messages
-class SupportMessage(BaseModel):
-    message: str
-
 @api_router.post("/support/messages")
 async def send_support_message(msg: SupportMessage, user_id: str = Depends(get_current_user)):
     """Save support message and return auto-response"""
@@ -2316,9 +1453,6 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
     
     existing_user = await db.users.find_one({"phone": phone})
     return {"is_new_user": existing_user is None, "message": "OTP sent successfully"}
-
-class SendEmailOtpRequest(BaseModel):
-    email: EmailStr
 
 @api_router.post("/auth/send-email-otp")
 async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
@@ -2440,428 +1574,42 @@ async def validate_coupon(payload: CouponValidate, user_id: str = Depends(get_cu
         
     return {"valid": True, "discount": round(discount, 2), "code": coupon["code"]}
 
-# Checkout & Order Routing
+# Register modular routers
+from routers.cart import router as cart_router
+from routers.orders import router as orders_router
+from routers.payments import router as payments_router
+from routers.kpis import router as kpis_router
+
+api_router.include_router(cart_router)
+api_router.include_router(orders_router)
+api_router.include_router(payments_router)
+api_router.include_router(kpis_router)
+
+from routers.orders import get_checkout_summary, admin_get_orders, admin_update_order_status
+
 @api_router.get("/checkout/summary")
-async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str = Depends(get_current_user)):
-    cart = await db.carts.find_one({"user_id": user_id})
-    if not cart or not cart.get("items"):
-        raise HTTPException(status_code=400, detail="Cart is empty")
-    
-    # Freeze prices from DB
-    subtotal = 0
-    for item in cart["items"]:
-        product = await db.products.find_one({"id": item["product_id"]})
-        if product:
-            item["price"] = product.get("price", item["price"])
-            subtotal += item["price"] * item["quantity"]
-        
-    delivery_fee = 0.0 if subtotal >= 299 else 30.0
-    discount = 0.0
-    
-    if coupon_code:
-        coupon = await db.coupons.find_one({"code": coupon_code.upper(), "is_active": True})
-        if coupon and datetime.utcnow() <= coupon["valid_until"] and subtotal >= coupon.get("min_order_value", 0):
-            if coupon.get("discount_percentage", 0) > 0:
-                discount = (subtotal * coupon["discount_percentage"]) / 100.0
-                if coupon.get("max_discount") and discount > coupon["max_discount"]:
-                    discount = coupon["max_discount"]
-            elif coupon.get("discount_amount", 0) > 0:
-                discount = coupon["discount_amount"]
-                
-    total = subtotal + delivery_fee - discount
-    if total < 0: total = 0
-    
-    user = await db.users.find_one({"id": user_id})
-    rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
-    rewards_will_earn = rewards_info["order_cashback"]
-    
-    return {
-        "subtotal": round(subtotal, 2),
-        "delivery_fee": round(delivery_fee, 2),
-        "discount": round(discount, 2),
-        "total": round(total, 2),
-        "rewards_will_earn": rewards_will_earn,
-        "tier": rewards_info["current_tier"]["tier_name"]
-    }
+async def get_checkout_summary_get(coupon_code: Optional[str] = None, user_id: str = Depends(get_current_user)):
+    return await get_checkout_summary(coupon_code=coupon_code, user_id=user_id)
 
-@api_router.post("/orders/create")
-async def create_order_endpoint(payload: CreateOrderRequest, user_id: str = Depends(get_current_user)):
-    cart = await db.carts.find_one({"user_id": user_id})
-    if not cart or not cart.get("items"):
-        raise HTTPException(status_code=400, detail="Cart is empty")
-        
-    address = await db.addresses.find_one({"id": payload.address_id, "user_id": user_id})
-    if not address:
-        raise HTTPException(status_code=404, detail="Address not found")
-        
-    subtotal = 0
-    # Price freeze & stock validation
-    for item in cart["items"]:
-        product = await db.products.find_one({"id": item["product_id"]})
-        if not product:
-            raise HTTPException(status_code=400, detail=f"Product not found: {item['product_id']}")
-        if product.get("stock", 0) < item["quantity"]:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.get('name')}")
-        item["price"] = product.get("price", item["price"])
-        subtotal += item["price"] * item["quantity"]
-        
-    delivery_fee = 0.0 if subtotal >= 299 else 30.0
-    discount = 0.0
-    
-    if payload.coupon_code:
-        coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True})
-        if coupon and datetime.utcnow() <= coupon["valid_until"] and subtotal >= coupon.get("min_order_value", 0):
-            if coupon.get("discount_percentage", 0) > 0:
-                discount = (subtotal * coupon["discount_percentage"]) / 100.0
-                if coupon.get("max_discount") and discount > coupon["max_discount"]:
-                    discount = coupon["max_discount"]
-            elif coupon.get("discount_amount", 0) > 0:
-                discount = coupon["discount_amount"]
-                
-    total = subtotal + delivery_fee - discount
-    if total < 0: total = 0
-    
-    user = await db.users.find_one({"id": user_id})
-    rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
-    rewards_will_earn = rewards_info["order_cashback"]
-    
-    order_dict = {
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "items": cart["items"],
-        "subtotal": round(subtotal, 2),
-        "delivery_fee": round(delivery_fee, 2),
-        "discount": round(discount, 2),
-        "coupon_code": payload.coupon_code.upper() if payload.coupon_code else None,
-        "total": round(total, 2),
-        "rewards_will_earn": rewards_will_earn,
-        "delivery_address": address["full_address"],
-        "address_id": payload.address_id,
-        "payment_method": payload.payment_method,
-        "status": "confirmed",
-        "payment_status": "pending_cod",
-        "created_at": datetime.utcnow(),
-        "delivery_status": "pending",
-        "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
-        "tracking_updates": [
-            {
-                "timestamp": datetime.utcnow(),
-                "status": "confirmed",
-                "message": "Order confirmed. Cash on Delivery pending delivery."
-            }
-        ]
-    }
-    await db.orders.insert_one(order_dict)
-    
-    # Deduct stock for COD
-    for item in cart["items"]:
-        await db.products.update_one(
-            {"id": item["product_id"]},
-            {"$inc": {"stock": -item["quantity"]}}
-        )
-        
-    new_spend = user.get("monthly_spend", 0.0) + total
-    new_total_spend = user.get("total_spend", 0.0) + total
-    new_reward = user.get("current_reward", 0.0) + rewards_will_earn
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {
-            "monthly_spend": new_spend,
-            "total_spend": new_total_spend,
-            "current_reward": new_reward
-        }}
-    )
-        
-    await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
-    return {"success": True, "order_id": order_dict["id"]}
+@api_router.post("/orders/summary")
+async def get_checkout_summary_post(payload: dict = {}, user_id: str = Depends(get_current_user)):
+    coupon_code = payload.get("coupon_code")
+    return await get_checkout_summary(coupon_code=coupon_code, user_id=user_id)
 
-@api_router.post("/orders/create-pending")
-async def create_pending_order(payload: CreateOrderRequest, user_id: str = Depends(get_current_user)):
-    cart = await db.carts.find_one({"user_id": user_id})
-    if not cart or not cart.get("items"):
-        raise HTTPException(status_code=400, detail="Cart is empty")
-        
-    address = await db.addresses.find_one({"id": payload.address_id, "user_id": user_id})
-    if not address:
-        raise HTTPException(status_code=404, detail="Address not found")
-        
-    subtotal = 0
-    # Price freeze & stock validation
-    for item in cart["items"]:
-        product = await db.products.find_one({"id": item["product_id"]})
-        if not product:
-            raise HTTPException(status_code=400, detail=f"Product not found: {item['product_id']}")
-        if product.get("stock", 0) < item["quantity"]:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.get('name')}")
-        item["price"] = product.get("price", item["price"])
-        subtotal += item["price"] * item["quantity"]
-        
-    delivery_fee = 0.0 if subtotal >= 299 else 30.0
-    discount = 0.0
-    
-    if payload.coupon_code:
-        coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True})
-        if coupon and datetime.utcnow() <= coupon["valid_until"] and subtotal >= coupon.get("min_order_value", 0):
-            if coupon.get("discount_percentage", 0) > 0:
-                discount = (subtotal * coupon["discount_percentage"]) / 100.0
-                if coupon.get("max_discount") and discount > coupon["max_discount"]:
-                    discount = coupon["max_discount"]
-            elif coupon.get("discount_amount", 0) > 0:
-                discount = coupon["discount_amount"]
-                
-    total = subtotal + delivery_fee - discount
-    if total < 0: total = 0
-    
-    user = await db.users.find_one({"id": user_id})
-    rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
-    rewards_will_earn = rewards_info["order_cashback"]
-    
-    order_dict = {
-        "id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "items": cart["items"],
-        "subtotal": round(subtotal, 2),
-        "delivery_fee": round(delivery_fee, 2),
-        "discount": round(discount, 2),
-        "coupon_code": payload.coupon_code.upper() if payload.coupon_code else None,
-        "total": round(total, 2),
-        "rewards_will_earn": rewards_will_earn,
-        "delivery_address": address["full_address"],
-        "address_id": payload.address_id,
-        "payment_method": payload.payment_method,
-        "status": "payment_pending",
-        "payment_status": "pending",
-        "created_at": datetime.utcnow(),
-        "delivery_status": "pending",
-        "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
-        "tracking_updates": [
-            {
-                "timestamp": datetime.utcnow(),
-                "status": "pending",
-                "message": "Waiting for payment verification"
-            }
-        ]
-    }
-    await db.orders.insert_one(order_dict)
-    
-    return {"success": True, "order_id": order_dict["id"]}
+@api_router.get("/admin/orders")
+async def admin_orders_list_wrapper(
+    status: Optional[str] = None,
+    payment_method: Optional[str] = None,
+    admin=Depends(verify_admin),
+    limit: int = 100,
+    skip: int = 0
+):
+    return await admin_get_orders(status=status, payment_method=payment_method, admin=admin, limit=limit, skip=skip)
 
-
-# Razorpay Payments Integration
-def get_razorpay_client():
-    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
-        return None
-    try:
-        return razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-    except Exception as e:
-        logging.error(f"Failed to initialize Razorpay Client: {e}")
-        return None
-
-@api_router.post("/payments/razorpay/create")
-async def create_razorpay_order(payload: CreatePaymentRequest, user_id: str = Depends(get_current_user)):
-    order = await db.orders.find_one({"id": payload.order_id, "user_id": user_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    amount_paise = int(order["total"] * 100)
-    client = get_razorpay_client()
-    
-    if client:
-        try:
-            rz_order = client.order.create({
-                "amount": amount_paise,
-                "currency": "INR",
-                "receipt": payload.order_id,
-                "notes": {"grocerease_order_id": payload.order_id}
-            })
-            rz_order_id = rz_order["id"]
-        except Exception as e:
-            if os.environ.get("ENV", "development") != "development":
-                raise HTTPException(status_code=400, detail=f"Razorpay order creation failed: {str(e)}")
-            rz_order_id = f"rzp_mock_{uuid.uuid4().hex[:14]}"
-    else:
-        if os.environ.get("ENV", "development") != "development":
-            raise HTTPException(status_code=400, detail="Razorpay is not configured on the server")
-        rz_order_id = f"rzp_mock_{uuid.uuid4().hex[:14]}"
-        
-    await db.orders.update_one(
-        {"id": payload.order_id},
-        {"$set": {"razorpay_order_id": rz_order_id, "payment_status": "pending"}}
-    )
-    
-    return {
-        "razorpay_order_id": rz_order_id,
-        "amount": amount_paise,
-        "currency": "INR"
-    }
-
-@api_router.post("/payments/razorpay/verify")
-async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
-    order = await db.orders.find_one({"id": payload.order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    # Idempotency Check: Avoid double-processing
-    if order.get("payment_status") == "paid":
-        return {"status": "success", "order_id": payload.order_id, "message": "Already processed"}
-
-    if payload.razorpay_order_id.startswith("rzp_mock_"):
-        if os.environ.get("ENV", "development") != "development":
-            raise HTTPException(status_code=400, detail="Mock payments are disabled in production")
-        success = True
-    else:
-        if not RAZORPAY_KEY_SECRET:
-            raise HTTPException(status_code=500, detail="Razorpay keys not configured for verification")
-            
-        body = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}"
-        expected_sig = hmac.new(
-            RAZORPAY_KEY_SECRET.encode(), body.encode(), hashlib.sha256
-        ).hexdigest()
-        success = hmac.compare_digest(expected_sig, payload.razorpay_signature)
-        
-    if not success:
-        raise HTTPException(status_code=400, detail="Invalid payment signature")
-        
-    await db.orders.update_one(
-        {"id": payload.order_id},
-        {
-            "$set": {
-                "payment_status": "paid",
-                "status": "confirmed",
-                "razorpay_payment_id": payload.razorpay_payment_id,
-                "delivery_status": "confirmed",
-                "tracking_updates": [
-                    {
-                        "timestamp": datetime.utcnow(),
-                        "status": "confirmed",
-                        "message": "Payment verified. Preparing your order."
-                    }
-                ]
-            }
-        }
-    )
-    
-    user = await db.users.find_one({"id": user_id})
-    if user:
-        rewards_will_earn = order.get("rewards_will_earn", 0.0)
-        new_spend = user.get("monthly_spend", 0.0) + order["total"]
-        new_total_spend = user.get("total_spend", 0.0) + order["total"]
-        new_reward = user.get("current_reward", 0.0) + rewards_will_earn
-        
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {
-                "monthly_spend": new_spend,
-                "total_spend": new_total_spend,
-                "current_reward": new_reward
-            }}
-        )
-        
-        # Deduct stock
-        for item in order.get("items", []):
-            await db.products.update_one(
-                {"id": item["product_id"]},
-                {"$inc": {"stock": -item["quantity"]}}
-            )
-        
-        await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
-        
-    return {"status": "success", "order_id": payload.order_id}
-
-@api_router.post("/payments/razorpay/webhook")
-async def razorpay_webhook(request: Request):
-    body = await request.body()
-    signature = request.headers.get("X-Razorpay-Signature", "")
-    webhook_secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
-    is_production = os.environ.get("ENV", "development") != "development"
-    
-    if is_production:
-        if not webhook_secret:
-            logging.error("RAZORPAY_WEBHOOK_SECRET is not configured in production.")
-            raise HTTPException(status_code=500, detail="Webhook secret not configured")
-        if not signature:
-            logging.error("Missing X-Razorpay-Signature header in production.")
-            raise HTTPException(status_code=400, detail="Missing X-Razorpay-Signature header")
-            
-    if webhook_secret and signature:
-        expected = hmac.new(webhook_secret.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, signature):
-            logging.error("Razorpay webhook signature verification failed.")
-            raise HTTPException(status_code=400, detail="Invalid webhook signature")
-    elif is_production:
-        logging.error("Signature verification failed because signature or secret is missing.")
-        raise HTTPException(status_code=400, detail="Signature verification failed")
-            
-    try:
-        event = await request.json()
-    except Exception as e:
-        logging.error(f"Error parsing Razorpay webhook JSON: {e}")
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-        
-    try:
-        if event.get("event") == "payment.captured":
-            payment = event["payload"]["payment"]["entity"]
-            order_id = payment["notes"].get("grocerease_order_id")
-            if order_id:
-                order = await db.orders.find_one({"id": order_id})
-                if not order:
-                    logging.error(f"Webhook payment.captured: Order {order_id} not found")
-                    raise HTTPException(status_code=404, detail="Order not found")
-                    
-                # Idempotency Check: Avoid double-processing in Webhook
-                if order.get("payment_status") != "paid":
-                    user_id = order.get("user_id")
-                    
-                    # Update order status
-                    await db.orders.update_one(
-                        {"id": order_id},
-                        {
-                            "$set": {
-                                "payment_status": "paid",
-                                "status": "confirmed",
-                                "razorpay_payment_id": payment.get("id"),
-                                "delivery_status": "confirmed",
-                                "tracking_updates": [
-                                    {
-                                        "timestamp": datetime.utcnow(),
-                                        "status": "confirmed",
-                                        "message": "Payment captured via webhook. Preparing your order."
-                                    }
-                                ]
-                            }
-                        }
-                    )
-                    
-                    # Deduct stock, award rewards, clear cart
-                    user = await db.users.find_one({"id": user_id})
-                    if user:
-                        rewards_will_earn = order.get("rewards_will_earn", 0.0)
-                        new_spend = user.get("monthly_spend", 0.0) + order["total"]
-                        new_total_spend = user.get("total_spend", 0.0) + order["total"]
-                        new_reward = user.get("current_reward", 0.0) + rewards_will_earn
-                        
-                        await db.users.update_one(
-                            {"id": user_id},
-                            {"$set": {
-                                "monthly_spend": new_spend,
-                                "total_spend": new_total_spend,
-                                "current_reward": new_reward
-                            }}
-                        )
-                        
-                        # Deduct stock
-                        for item in order.get("items", []):
-                            await db.products.update_one(
-                                {"id": item["product_id"]},
-                                {"$inc": {"stock": -item["quantity"]}}
-                            )
-                        
-                        await db.carts.update_one({"user_id": user_id}, {"$set": {"items": []}})
-    except Exception as e:
-        logging.error(f"Error processing Razorpay webhook captured event: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal webhook processing failure: {str(e)}")
-        
-    return {"status": "ok"}
+@api_router.put("/admin/orders/{order_id}/status")
+@api_router.post("/admin/orders/{order_id}/status")
+async def admin_order_status_wrapper(order_id: str, payload: dict, admin=Depends(verify_admin)):
+    return await admin_update_order_status(order_id=order_id, payload=payload, admin=admin)
 
 
 app.include_router(api_router)

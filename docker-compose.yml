@@ -1,12 +1,27 @@
 version: "3.9"
 
 services:
+  mongodb:
+    image: mongo:6.0
+    container_name: grocerease-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     ports:
       - "8001:8001"
     environment:
-      - MONGODB_URL=${MONGODB_URL}
+      - MONGO_URL=mongodb://mongodb:27017/grocerease
+      - MONGODB_URL=mongodb://mongodb:27017/grocerease
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
@@ -14,6 +29,9 @@ services:
       - FAST2SMS_API_KEY=${FAST2SMS_API_KEY}
       - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY}
     restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
@@ -30,3 +48,6 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+
+volumes:
+  mongo-data:

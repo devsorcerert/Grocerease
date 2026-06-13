@@ -576,8 +576,11 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
 
-            <TouchableOpacity style={styles.submitButton} onPress={handleLinkCableTV}>
-              <Text style={styles.submitButtonText}>{t('submit')}</Text>
+            <TouchableOpacity 
+              style={[styles.submitButton, { backgroundColor: '#9CA3AF' }]} 
+              disabled={true}
+            >
+              <Text style={styles.submitButtonText}>Coming Soon</Text>
             </TouchableOpacity>
           </View>
         </View>

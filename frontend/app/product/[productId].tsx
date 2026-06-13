@@ -64,33 +64,12 @@ export default function ProductDetailPage() {
         );
       }
       
-      // Fetch mock reviews (in production, this would be a separate endpoint)
-      setReviews([
-        {
-          id: '1',
-          user_name: 'Rajesh Kumar',
-          rating: 5,
-          comment: 'Excellent quality product. Fresh and well-packaged!',
-          date: '2025-05-20',
-          helpful_count: 12
-        },
-        {
-          id: '2',
-          user_name: 'Priya Sharma',
-          rating: 4,
-          comment: 'Good product but delivery was a bit delayed.',
-          date: '2025-05-18',
-          helpful_count: 8
-        },
-        {
-          id: '3',
-          user_name: 'Amit Patel',
-          rating: 5,
-          comment: 'Best price in the market. Highly recommend!',
-          date: '2025-05-15',
-          helpful_count: 15
-        },
-      ]);
+      // Fetch reviews from response if they exist, otherwise default to empty
+      if (response.data.reviews && Array.isArray(response.data.reviews)) {
+        setReviews(response.data.reviews);
+      } else {
+        setReviews([]);
+      }
       
     } catch (error) {
       console.error('Failed to fetch product details:', error);
@@ -166,10 +145,10 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Product images (mock multiple images from single image)
-  const productImages = product.image
-    ? [product.image, product.image, product.image]
-    : [];
+  // Product images
+  const productImages = product.images && Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : (product.image ? [product.image] : []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -315,88 +294,82 @@ export default function ProductDetailPage() {
             </View>
           </View>
 
-          {/* Nutritional Info (Mock) */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Nutritional Information</Text>
-            <View style={styles.nutritionGrid}>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionLabel}>Energy</Text>
-                <Text style={styles.nutritionValue}>250 kcal</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionLabel}>Protein</Text>
-                <Text style={styles.nutritionValue}>8g</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionLabel}>Carbs</Text>
-                <Text style={styles.nutritionValue}>45g</Text>
-              </View>
-              <View style={styles.nutritionItem}>
-                <Text style={styles.nutritionLabel}>Fat</Text>
-                <Text style={styles.nutritionValue}>5g</Text>
+          {/* Nutritional Info */}
+          {product.nutrition && Object.keys(product.nutrition).length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Nutritional Information</Text>
+              <View style={styles.nutritionGrid}>
+                {Object.entries(product.nutrition).map(([key, val]: [string, any]) => (
+                  <View key={key} style={styles.nutritionItem}>
+                    <Text style={styles.nutritionLabel}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+                    <Text style={styles.nutritionValue}>{String(val)}</Text>
+                  </View>
+                ))}
               </View>
             </View>
-          </View>
+          )}
 
           {/* Reviews */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Customer Reviews</Text>
-              <TouchableOpacity>
-                <Text style={styles.seeAllText}>See All</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.reviewSummary}>
-              <View style={styles.ratingLarge}>
-                <Text style={styles.ratingLargeNumber}>{averageRating.toFixed(1)}</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Ionicons
-                      key={star}
-                      name={star <= averageRating ? "star" : "star-outline"}
-                      size={16}
-                      color="#FF8C42"
-                    />
-                  ))}
-                </View>
-                <Text style={styles.reviewSummaryText}>{reviews.length} reviews</Text>
+          {reviews.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Customer Reviews</Text>
+                <TouchableOpacity>
+                  <Text style={styles.seeAllText}>See All</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-
-            {reviews.slice(0, 2).map((review) => (
-              <View key={review.id} style={styles.reviewCard}>
-                <View style={styles.reviewHeader}>
-                  <View style={styles.reviewerInfo}>
-                    <View style={styles.reviewerAvatar}>
-                      <Text style={styles.reviewerInitial}>
-                        {review.user_name.charAt(0)}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={styles.reviewerName}>{review.user_name}</Text>
-                      <Text style={styles.reviewDate}>{review.date}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.reviewRating}>
+              
+              <View style={styles.reviewSummary}>
+                <View style={styles.ratingLarge}>
+                  <Text style={styles.ratingLargeNumber}>{averageRating.toFixed(1)}</Text>
+                  <View style={styles.starsRow}>
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Ionicons
                         key={star}
-                        name={star <= review.rating ? "star" : "star-outline"}
-                        size={14}
+                        name={star <= averageRating ? "star" : "star-outline"}
+                        size={16}
                         color="#FF8C42"
                       />
                     ))}
                   </View>
+                  <Text style={styles.reviewSummaryText}>{reviews.length} reviews</Text>
                 </View>
-                <Text style={styles.reviewComment}>{review.comment}</Text>
-                <TouchableOpacity style={styles.helpfulButton}>
-                  <Ionicons name="thumbs-up-outline" size={14} color="#6B7280" />
-                  <Text style={styles.helpfulText}>Helpful ({review.helpful_count})</Text>
-                </TouchableOpacity>
               </View>
-            ))}
-          </View>
+
+              {reviews.slice(0, 2).map((review) => (
+                <View key={review.id} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <View style={styles.reviewerInfo}>
+                      <View style={styles.reviewerAvatar}>
+                        <Text style={styles.reviewerInitial}>
+                          {review.user_name.charAt(0)}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={styles.reviewerName}>{review.user_name}</Text>
+                        <Text style={styles.reviewDate}>{review.date}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.reviewRating}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons
+                          key={star}
+                          name={star <= review.rating ? "star" : "star-outline"}
+                          size={14}
+                          color="#FF8C42"
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                  <TouchableOpacity style={styles.helpfulButton}>
+                    <Ionicons name="thumbs-up-outline" size={14} color="#6B7280" />
+                    <Text style={styles.helpfulText}>Helpful ({review.helpful_count})</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Related Products */}
           {relatedProducts.length > 0 && (
