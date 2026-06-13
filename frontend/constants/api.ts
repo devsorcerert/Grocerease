@@ -2,11 +2,11 @@
 
 // Helper function to get environment variables with warning and fallback logic
 const getEnvVar = (value: string | undefined, name: string, fallback: string): string => {
-  if (!value) {
-    console.warn(`🚨 WARNING: Missing environment variable: ${name}. Using fallback value.`);
+  if (!value || value.trim() === '' || value === 'undefined' || value === 'null' || value.includes('REPLACE_')) {
+    console.warn(`🚨 WARNING: Missing or empty environment variable: ${name}. Using fallback value.`);
     return fallback;
   }
-  return value;
+  return value.trim();
 };
 
 // GrocerEase API Configuration

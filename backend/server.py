@@ -1385,18 +1385,32 @@ async def create_brand_banner(banner: dict, user_id: str = Depends(get_current_u
 # Admin credentials
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@grocereasetv.com")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", hash_password("admin123"))
+ADMIN_PASSWORD_RAW = os.environ.get("ADMIN_PASSWORD", "")
 
 # Admin login
 @api_router.post("/admin/login")
 async def admin_login(login_data: UserLogin):
-            if login_data.email.lower().strip() != ADMIN_EMAIL.lower().strip():
+    if login_data.email.lower().strip() != ADMIN_EMAIL.lower().strip():
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     
-    if not verify_password(login_data.password, ADMIN_PASSWORD_HASH):
+    # Try raw match first, then default fallback, then try hashed verification
+    password_ok = False
+    if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
+        password_ok = True
+    elif not ADMIN_PASSWORD_RAW and not os.environ.get("ADMIN_PASSWORD_HASH") and login_data.password == "admin123":
+        password_ok = True
+    else:
+        try:
+            password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
+        except Exception:
+            # Fallback if ADMIN_PASSWORD_HASH was mistakenly set to a raw password string in environment
+            password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
+            
+    if not password_ok:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     
     token = create_access_token({"user_id": "admin", "is_admin": True})
-        refresh_token_val = create_access_token({"user_id": "admin", "is_admin": True, "type": "refresh"})
+    refresh_token_val = create_access_token({"user_id": "admin", "is_admin": True, "type": "refresh"})
     return {
         "token": token,
         "refresh_token": refresh_token_val,
