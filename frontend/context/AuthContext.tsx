@@ -110,6 +110,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const sessionProcessingRef = useRef(false);
   const processedSessionsRef = useRef<Set<string>>(new Set());
+  const refreshTimerRef = useRef<any>(null);
+
+  // Cleanup refresh timer on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current);
+      }
+    };
+  }, []);
 
   // ============ AUTH INIT CHECK ============
   useEffect(() => {
@@ -276,6 +286,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ============ TOKEN REFRESH LOGIC ============
   const startTokenRefreshTimer = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
     const interval = setInterval(async () => {
       try {
         const refreshToken = await storage.getItem('refresh_token');
@@ -293,7 +307,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, 14 * 60 * 1000);
 
-    return () => clearInterval(interval);
+    refreshTimerRef.current = interval;
   }, []);
 
   // ============ LOGIN / REGISTER ============
@@ -448,6 +462,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearAuth = async () => {
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
     await storage.removeItem('token');
     await storage.removeItem('refresh_token');
     delete api.defaults.headers.common['Authorization'];

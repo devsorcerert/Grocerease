@@ -10,7 +10,7 @@ import os
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer()
 
-GOOGLE_CLIENT_ID = "1033798066161-00g31ael0mipkviip26btj04q6090ksq.apps.googleusercontent.com"
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID") or os.environ.get("EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB") or "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com"
 JWT_SECRET       = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM    = "HS256"
 JWT_EXPIRES_DAYS = 30

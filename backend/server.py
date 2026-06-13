@@ -36,6 +36,21 @@ _otp_store = {}
 FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+# Rate Limiting Store and Dependency
+_rate_limit_store = {}
+
+async def rate_limit(request: Request):
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    if ip not in _rate_limit_store:
+        _rate_limit_store[ip] = []
+    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < 60]
+    if len(_rate_limit_store[ip]) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again in a minute."
+        )
+    _rate_limit_store[ip].append(now)
 
 
 # Create the main app
@@ -48,9 +63,18 @@ async def startup_db_client():
         # Ping the database to verify the connection
         await client.admin.command('ping')
         logging.info("Successfully connected to MongoDB!")
+        
+        # Create MongoDB indexes
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("phone", unique=True, sparse=True)
+        await db.orders.create_index("user_id")
+        await db.orders.create_index("id", unique=True)
+        await db.products.create_index("category")
+        await db.products.create_index("id", unique=True)
+        await db.products.create_index([("name", "text"), ("description", "text")])
+        logging.info("MongoDB indexes verified/created successfully!")
     except Exception as e:
-        logging.error(f"Failed to connect to MongoDB on startup: {e}")
-        # Log critical error but allow application startup for local mock runtimes if necessary
+        logging.error(f"Failed to connect to MongoDB or initialize indexes on startup: {e}")
 
 @app.get("/health")
 async def health_check():
@@ -224,7 +248,7 @@ class CreateOrderRequest(BaseModel):
 
 # Auth Routes
 @api_router.post("/auth/register")
-async def register(user: UserRegister):
+async def register(user: UserRegister, _=Depends(rate_limit)):
     existing_user = await db.users.find_one({"email": user.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -276,7 +300,7 @@ async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_curr
     return {"success": True}
 
 @api_router.post("/auth/login")
-async def login(user: UserLogin):
+async def login(user: UserLogin, _=Depends(rate_limit)):
     db_user = await db.users.find_one({"email": user.email})
     if not db_user or not verify_password(user.password, db_user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -353,7 +377,7 @@ async def refresh_token(request: dict):
         raise HTTPException(status_code=500, detail="Token refresh failed")
 
 @api_router.post("/auth/google")
-async def google_auth(auth_data: GoogleAuthRequest):
+async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
     # Verify the Google ID Token securely
     try:
         async with httpx.AsyncClient() as client:
@@ -443,7 +467,7 @@ class SocialAuthRequest(BaseModel):
     session_token: Optional[str] = None
 
 @api_router.post("/auth/social")
-async def social_auth(auth_data: SocialAuthRequest):
+async def social_auth(auth_data: SocialAuthRequest, _=Depends(rate_limit)):
     """Unified social auth endpoint for Google, Apple, and other providers"""
     if not auth_data.email:
         raise HTTPException(status_code=400, detail="Email is required")
@@ -1967,7 +1991,7 @@ async def send_sms_fast2sms(phone: str, otp: str):
         return False
 
 @api_router.post("/auth/send-otp")
-async def send_otp(payload: SendOtpRequest):
+async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
     if not phone.startswith("+91") or len(phone) != 13:
         raise HTTPException(status_code=422, detail="Invalid Indian phone number. Format: +91XXXXXXXXXX")
@@ -1981,7 +2005,7 @@ async def send_otp(payload: SendOtpRequest):
     return {"is_new_user": existing_user is None, "message": "OTP sent successfully"}
 
 @api_router.post("/auth/verify-otp")
-async def verify_otp(payload: VerifyOtpRequest):
+async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
     stored = _otp_store.get(phone)
     is_master_otp = payload.otp == "123456"
@@ -2324,9 +2348,13 @@ async def create_razorpay_order(payload: CreatePaymentRequest, user_id: str = De
                 "notes": {"grocerease_order_id": payload.order_id}
             })
             rz_order_id = rz_order["id"]
-        except Exception:
+        except Exception as e:
+            if os.environ.get("ENV", "development") != "development":
+                raise HTTPException(status_code=400, detail=f"Razorpay order creation failed: {str(e)}")
             rz_order_id = f"rzp_mock_{uuid.uuid4().hex[:14]}"
     else:
+        if os.environ.get("ENV", "development") != "development":
+            raise HTTPException(status_code=400, detail="Razorpay is not configured on the server")
         rz_order_id = f"rzp_mock_{uuid.uuid4().hex[:14]}"
         
     await db.orders.update_one(
@@ -2343,6 +2371,8 @@ async def create_razorpay_order(payload: CreatePaymentRequest, user_id: str = De
 @api_router.post("/payments/razorpay/verify")
 async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = Depends(get_current_user)):
     if payload.razorpay_order_id.startswith("rzp_mock_"):
+        if os.environ.get("ENV", "development") != "development":
+            raise HTTPException(status_code=400, detail="Mock payments are disabled in production")
         success = True
     else:
         if not RAZORPAY_KEY_SECRET:
@@ -2434,10 +2464,14 @@ async def razorpay_webhook(request: Request):
 app.include_router(api_router)
 
 
+env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if os.environ.get("ENV", "development") != "development" and not env_origins:
+    raise RuntimeError("ALLOWED_ORIGINS must be set in non-development environments")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
+    allow_origins=env_origins.split(",") if env_origins else ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
