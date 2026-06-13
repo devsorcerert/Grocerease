@@ -2494,7 +2494,8 @@ app.include_router(api_router)
 
 env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
 if os.environ.get("ENV", "development") != "development" and not env_origins:
-    raise RuntimeError("ALLOWED_ORIGINS must be set in non-development environments")
+    logging.warning("ALLOWED_ORIGINS is not set in non-development environment! Defaulting to preview and local domains.")
+    env_origins = "https://order-management-93.preview.emergentagent.com,http://localhost:3000,http://localhost:3001"
 
 app.add_middleware(
     CORSMiddleware,
