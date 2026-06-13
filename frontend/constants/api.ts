@@ -48,7 +48,7 @@ export const GOOGLE_CLIENT_ID_ANDROID = getEnvVar(
 export const GOOGLE_CLIENT_ID_IOS = getEnvVar(
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
   'EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS',
-  '418665414188-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com'
+  '418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com'
 );
 
 // Admin credentials (used for admin login detection)

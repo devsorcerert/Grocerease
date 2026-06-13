@@ -34,8 +34,8 @@ db = client[db_name]
 
 _otp_store = {}
 FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID") or "rzp_test_T0sGXqleYVJXe7"
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET") or "wPwUglFR3xnF1SAE5dTcTemd"
 # Rate Limiting Store and Dependency
 _rate_limit_store = {}
 
@@ -400,6 +400,20 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, 
                     detail="Email address not found in Google ID Token"
+                )
+            
+            # Verify the audience (client ID) matches our app's client IDs
+            aud = token_info.get("aud")
+            allowed_clients = {
+                "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
+                "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
+                "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com"
+            }
+            if aud not in allowed_clients:
+                logging.error(f"Google ID Token audience mismatch: {aud}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Google ID Token audience verification failed"
                 )
             
             # Use securely verified email and details
