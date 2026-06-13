@@ -175,27 +175,45 @@ async def seed_videos():
 async def seed_admin():
     # Create an admin user if not exists
     from passlib.context import CryptContext
+    import secrets
     
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     
-    existing_admin = await db.users.find_one({"email": "admin@grocereasetv.com"})
-    if not existing_admin:
-        admin_user = {
-            "id": str(uuid.uuid4()),
-            "name": "Admin",
-            "email": "admin@grocereasetv.com",
-            "password": pwd_context.hash("admin123"),
-            "phone": "9999999999",
-            "cable_tv_linked": False,
-            "cable_tv_details": None,
-            "monthly_spend": 0.0,
-            "total_spend": 0.0,
-            "current_reward": 0.0,
-            "is_admin": True,
-            "created_at": datetime.utcnow()
-        }
-        await db.users.insert_one(admin_user)
-        print("Admin user created: admin@grocereasetv.com / admin123")
+    # Clean up old default admins to ensure no stale credentials remain
+    await db.users.delete_many({"is_admin": True})
+    
+    # Generate secure random password
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&"
+    admin_password = "".join(secrets.choice(alphabet) for _ in range(16))
+    admin_email = "grocereasetv@gmail.com"
+    
+    admin_user = {
+        "id": str(uuid.uuid4()),
+        "name": "Admin",
+        "email": admin_email,
+        "password": pwd_context.hash(admin_password),
+        "phone": "9999999999",
+        "cable_tv_linked": False,
+        "cable_tv_details": None,
+        "monthly_spend": 0.0,
+        "total_spend": 0.0,
+        "current_reward": 0.0,
+        "is_admin": True,
+        "created_at": datetime.utcnow()
+    }
+    await db.users.insert_one(admin_user)
+    
+    # Save to a local gitignored file
+    password_file = ROOT_DIR / ".seeded_admin_password.txt"
+    try:
+        password_file.write_text(f"Admin Email: {admin_email}\nAdmin Password: {admin_password}\n")
+        print(f"Seeded admin credentials saved to {password_file}")
+    except Exception as e:
+        print(f"Warning: Could not write admin credentials to file: {e}")
+        
+    print(f"Admin user seeded successfully!")
+    print(f"EMAIL: {admin_email}")
+    print(f"PASSWORD: {admin_password}")
 
 async def main():
     print("Seeding database...")
@@ -207,3 +225,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

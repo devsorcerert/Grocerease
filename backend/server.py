@@ -33,9 +33,19 @@ db_name = os.environ.get('DB_NAME') or 'grocerease'
 db = client[db_name]
 
 _otp_store = {}
+DEBUG_MODE = os.environ.get("DEBUG", "false").lower() == "true"
 FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID") or "rzp_test_T0sGXqleYVJXe7"
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET") or "wPwUglFR3xnF1SAE5dTcTemd"
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID") or ""
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET") or ""
+
+if os.environ.get("ENV", "development") != "development":
+    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        raise RuntimeError("FATAL: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be configured via environment variables in production mode.")
+else:
+    if not RAZORPAY_KEY_ID:
+        RAZORPAY_KEY_ID = "rzp_test_T0sGXqleYVJXe7"
+    if not RAZORPAY_KEY_SECRET:
+        RAZORPAY_KEY_SECRET = "wPwUglFR3xnF1SAE5dTcTemd"
 # Rate Limiting Store and Dependency
 _rate_limit_store = {}
 
@@ -1239,11 +1249,6 @@ async def get_user_orders(user_id: str = Depends(get_current_user)):
     
     return [clean_mongo_doc(order) for order in orders]
 
-@api_router.get("/orders")
-async def get_orders_legacy(user_id: str = Depends(get_current_user)):  # NOTE: duplicate route removed - use get_user_orders above
-    orders = await db.orders.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
-    return clean_mongo_docs(orders)
-
 # Video Routes
 @api_router.get("/videos")
 async def get_videos():
@@ -1383,9 +1388,25 @@ async def create_brand_banner(banner: dict, user_id: str = Depends(get_current_u
 # ======================== ADMIN ENDPOINTS ========================
 
 # Admin credentials
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@grocereasetv.com")
-ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", hash_password("admin123"))
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 ADMIN_PASSWORD_RAW = os.environ.get("ADMIN_PASSWORD", "")
+
+if os.environ.get("ENV", "development") != "development":
+    if not ADMIN_EMAIL or (not ADMIN_PASSWORD_HASH and not ADMIN_PASSWORD_RAW):
+        raise RuntimeError("FATAL: ADMIN_EMAIL and either ADMIN_PASSWORD or ADMIN_PASSWORD_HASH must be configured via environment variables in production mode.")
+else:
+    if not ADMIN_EMAIL:
+        ADMIN_EMAIL = "grocereasetv@gmail.com"
+    if not ADMIN_PASSWORD_HASH and not ADMIN_PASSWORD_RAW:
+        import secrets
+        generated_pwd = secrets.token_urlsafe(12)
+        ADMIN_PASSWORD_RAW = generated_pwd
+        print(f"\n==================================================")
+        print(f"BOOTSTRAP: Generated development admin password:")
+        print(f"  Email: {ADMIN_EMAIL}")
+        print(f"  Password: {generated_pwd}")
+        print(f"==================================================\n")
 
 # Admin login
 @api_router.post("/admin/login")
@@ -1393,13 +1414,11 @@ async def admin_login(login_data: UserLogin):
     if login_data.email.lower().strip() != ADMIN_EMAIL.lower().strip():
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     
-    # Try raw match first, then default fallback, then try hashed verification
+    # Try raw match first, then hashed verification
     password_ok = False
     if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
         password_ok = True
-    elif not ADMIN_PASSWORD_RAW and not os.environ.get("ADMIN_PASSWORD_HASH") and login_data.password == "admin123":
-        password_ok = True
-    else:
+    elif ADMIN_PASSWORD_HASH:
         try:
             password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
         except Exception:
@@ -1996,7 +2015,10 @@ async def send_support_message(msg: SupportMessage, user_id: str = Depends(get_c
 # SMS OTP Utilities & Routes
 async def send_sms_fast2sms(phone: str, otp: str):
     if not FAST2SMS_API_KEY:
-        print(f"\n========================================\n[DEV MODE] OTP for {phone}: {otp}\n========================================\n")
+        if DEBUG_MODE:
+            print(f"\n========================================\n[DEV MODE] OTP for {phone}: {otp}\n========================================\n")
+        else:
+            print(f"\n========================================\n[DEV MODE] OTP requested for {phone} (actual OTP hidden in production)\n========================================\n")
         return True
     try:
         async with httpx.AsyncClient() as client:
@@ -2011,11 +2033,17 @@ async def send_sms_fast2sms(phone: str, otp: str):
                 timeout=10,
             )
             if resp.status_code != 200 or not resp.json().get("return"):
-                print(f"[SMS FAILED] Fallback to printing OTP for {phone}: {otp}")
+                if DEBUG_MODE:
+                    print(f"[SMS FAILED] Fallback to printing OTP for {phone}: {otp}")
+                else:
+                    print(f"[SMS FAILED] Fallback: SMS failed to send to {phone}")
                 return False
             return True
     except Exception as e:
-        print(f"[SMS EXCEPTION] Fallback to printing OTP for {phone}: {otp} (Error: {str(e)})")
+        if DEBUG_MODE:
+            print(f"[SMS EXCEPTION] Fallback to printing OTP for {phone}: {otp} (Error: {str(e)})")
+        else:
+            print(f"[SMS EXCEPTION] Fallback: SMS exception for {phone}")
         return False
 
 @api_router.post("/auth/send-otp")
@@ -2036,19 +2064,16 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
 async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
     stored = _otp_store.get(phone)
-    is_master_otp = payload.otp == "123456"
     
-    if not is_master_otp:
-        if not stored:
-            raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new OTP.")
-        if time.time() > stored["expires"]:
-            del _otp_store[phone]
-            raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
-        if stored["otp"] != payload.otp:
-            raise HTTPException(status_code=400, detail="Incorrect OTP. Please check and try again.")
-            
-    if stored:
+    if not stored:
+        raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new OTP.")
+    if time.time() > stored["expires"]:
         del _otp_store[phone]
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
+    if stored["otp"] != payload.otp:
+        raise HTTPException(status_code=400, detail="Incorrect OTP. Please check and try again.")
+            
+    del _otp_store[phone]
         
     user = await db.users.find_one({"phone": phone})
     
@@ -2493,14 +2518,25 @@ app.include_router(api_router)
 
 
 env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
-if os.environ.get("ENV", "development") != "development" and not env_origins:
-    logging.warning("ALLOWED_ORIGINS is not set in non-development environment! Defaulting to preview and local domains.")
-    env_origins = "https://order-management-93.preview.emergentagent.com,http://localhost:3000,http://localhost:3001"
+if os.environ.get("ENV", "development") != "development":
+    if not env_origins:
+        raise RuntimeError("FATAL: ALLOWED_ORIGINS environment variable must be configured in production mode.")
+    origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+else:
+    if env_origins:
+        origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+    else:
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:8081",
+            "http://localhost:19006"
+        ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=env_origins.split(",") if env_origins else ["*"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

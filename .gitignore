@@ -84,3 +84,9 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Project Specific Ignored Files
+*seeded_admin_password.txt
+.metro-cache/
+*.keystore
+*.jks

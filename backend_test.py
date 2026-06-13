@@ -9,10 +9,24 @@ import json
 import sys
 from datetime import datetime
 
-# Configuration
-BASE_URL = "https://order-management-93.preview.emergentagent.com/api"
-ADMIN_EMAIL = "admin@grocereasetv.com"
-ADMIN_PASSWORD = "admin123"
+import os
+from pathlib import Path
+
+BASE_URL = os.environ.get("BACKEND_API_URL", "http://localhost:8000/api")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "grocereasetv@gmail.com")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+if not ADMIN_PASSWORD:
+    try:
+        # Check backend/.seeded_admin_password.txt relative to the script directory
+        seeded_path = Path(__file__).parent / "backend" / ".seeded_admin_password.txt"
+        if seeded_path.exists():
+            for line in seeded_path.read_text().splitlines():
+                if line.startswith("Admin Password:"):
+                    ADMIN_PASSWORD = line.split(":", 1)[1].strip()
+                    break
+    except Exception:
+        pass
 
 class AdminAPITester:
     def __init__(self):

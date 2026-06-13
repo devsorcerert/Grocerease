@@ -8,7 +8,9 @@ import requests
 import json
 import uuid
 
-BASE_URL = "https://order-management-93.preview.emergentagent.com/api"
+import os
+
+BASE_URL = os.environ.get("BACKEND_API_URL", "http://localhost:8000/api")
 
 def test_auth_endpoints():
     print("🔐 Testing Authentication Endpoints")
