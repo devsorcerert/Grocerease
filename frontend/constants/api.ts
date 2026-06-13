@@ -25,7 +25,7 @@ export const API_BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || process.env.
 export const RAZORPAY_KEY_ID = getEnvVar(
   process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID,
   'EXPO_PUBLIC_RAZORPAY_KEY_ID',
-  'rzp_test_REPLACE_WITH_YOUR_TEST_KEY'
+  'rzp_test_T0sGXqleYVJXe7'
 );
 
 // Google OAuth 2.0 Client IDs
