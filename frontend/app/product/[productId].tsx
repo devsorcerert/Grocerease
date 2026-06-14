@@ -185,7 +185,7 @@ export default function ProductDetailPage() {
                   setSelectedImageIndex(index);
                 }}
               >
-                {productImages.map((img, index) => (
+                {productImages.map((img: string, index: number) => (
                   <Image
                     key={index}
                     source={{ uri: img }}
@@ -194,7 +194,7 @@ export default function ProductDetailPage() {
                 ))}
               </ScrollView>
               <View style={styles.imageIndicators}>
-                {productImages.map((_, index) => (
+                {productImages.map((_: any, index: number) => (
                   <View
                     key={index}
                     style={[
