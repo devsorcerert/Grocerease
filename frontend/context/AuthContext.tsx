@@ -8,22 +8,29 @@ import api from '../utils/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
 // Configure Google Sign-In on Native
-if (Platform.OS !== 'web') {
-  try {
-    GoogleSignin.configure({
-              webClientId: GOOGLE_CLIENT_ID_WEB,
-      offlineAccess: true,
-      scopes: ['profile', 'email'],
-    });
-  } catch (e) {
-    console.warn('GoogleSignin config error:', e);
+let googleSigninConfigured = false;
+
+const ensureGoogleSigninConfigured = () => {
+  if (Platform.OS === 'web') return;
+  if (googleSigninConfigured) return;
+
+  if (!GOOGLE_CLIENT_ID_WEB || !GOOGLE_CLIENT_ID_WEB.trim()) {
+    throw new Error('Google Sign-In is not configured: missing EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB.');
   }
-}
+
+  GoogleSignin.configure({
+    webClientId: GOOGLE_CLIENT_ID_WEB.trim(),
+    offlineAccess: true,
+    scopes: ['profile', 'email'],
+  });
+
+  googleSigninConfigured = true;
+};
 
 // Helper to gate console.log behind __DEV__
 const log = (...args: any[]) => {
   if (__DEV__) {
-    log(...args);
+    console.log(...args);
   }
 };
 interface User {
@@ -386,6 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Native Direct Google Sign-In Flow
+      ensureGoogleSigninConfigured();
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const signInResult: any = await GoogleSignin.signIn();
       
