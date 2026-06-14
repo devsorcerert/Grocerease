@@ -13,8 +13,8 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Sample base64 placeholder image (1x1 green pixel)
-PLACEHOLDER_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+# Sample placeholder image
+PLACEHOLDER_IMAGE = "https://placehold.co/400x400/2D8B47/white?text=Product"
 
 async def seed_products():
     # Clear existing products

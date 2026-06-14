@@ -1,5 +1,10 @@
 // constants/api.ts
 
+const rawBackendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL;
+if (!rawBackendUrl || !rawBackendUrl.trim() || rawBackendUrl.includes('REPLACE_')) {
+  throw new Error("FATAL: No backend URL configured. Set EXPO_PUBLIC_BACKEND_URL in your .env file.");
+}
+
 // Helper function to get environment variables with warning and fallback logic
 const getEnvVar = (value: string | undefined, name: string, fallback: string): string => {
   if (!value || value.trim() === '' || value === 'undefined' || value === 'null' || value.includes('REPLACE_')) {
@@ -11,9 +16,9 @@ const getEnvVar = (value: string | undefined, name: string, fallback: string): s
 
 // GrocerEase API Configuration
 const PRODUCTION_BACKEND_URL = getEnvVar(
-  process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL,
+  rawBackendUrl,
   'EXPO_PUBLIC_BACKEND_URL',
-  'https://order-management-93.preview.emergentagent.com'
+  ''
 );
 const DEV_BACKEND_URL = process.env.EXPO_PUBLIC_DEV_BACKEND_URL || 'http://localhost:8001';
 

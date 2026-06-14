@@ -71,6 +71,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// NOTE: These URLs are used only for the web platform OAuth flow.
+// They should point to GrocerEase's own OAuth proxy, not Emergent's demo backend.
 const EMERGENT_AUTH_URL = process.env.EXPO_PUBLIC_EMERGENT_AUTH_URL || '';
 const EMERGENT_SESSION_URL = process.env.EXPO_PUBLIC_EMERGENT_SESSION_URL || '';
 
