@@ -125,19 +125,46 @@ def clean_mongo_docs(docs):
     return [clean_mongo_doc(doc) for doc in docs]
 
 # Rate Limiting Store
-_rate_limit_store = {}
+import redis.asyncio as aioredis
+
+REDIS_URL = os.environ.get("REDIS_URL", "")
+_redis_client = None
+_rate_limit_store = {}  # Fallback for dev when Redis is not available
+
+async def get_redis():
+    global _redis_client
+    if REDIS_URL and _redis_client is None:
+        _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+    return _redis_client
 
 async def rate_limit(request: Request):
     ip = request.client.host if request.client else "unknown"
     now = time.time()
+    window = 60
+    max_requests = 5
+    
+    redis = await get_redis()
+    if redis:
+        key = f"rate_limit:{ip}"
+        try:
+            current = await redis.incr(key)
+            if current == 1:
+                await redis.expire(key, window)
+            if current > max_requests:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many requests. Please try again in a minute."
+                )
+            return
+        except Exception as e:
+            logging.warning(f"Redis rate limit error, falling back to in-memory: {e}")
+    
+    # In-memory fallback (dev only)
     if ip not in _rate_limit_store:
         _rate_limit_store[ip] = []
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < 60]
-    if len(_rate_limit_store[ip]) >= 5:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again in a minute."
-        )
+    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < window]
+    if len(_rate_limit_store[ip]) >= max_requests:
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again in a minute.")
     _rate_limit_store[ip].append(now)
 
 # Persistent OTP helpers using MongoDB

@@ -15,6 +15,13 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: grocerease-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   backend:
     build: ./backend
     ports:
@@ -22,6 +29,7 @@ services:
     environment:
       - MONGO_URL=mongodb://mongodb:27017/grocerease
       - MONGODB_URL=mongodb://mongodb:27017/grocerease
+      - REDIS_URL=redis://redis:6379
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
