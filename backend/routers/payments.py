@@ -11,8 +11,15 @@ from routers.orders import transition_order_status
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID") or "rzp_test_T0sGXqleYVJXe7"
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET") or "wPwUglFR3xnF1SAE5dTcTemd"
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")
+
+if not RAZORPAY_KEY_ID:
+    raise RuntimeError("FATAL: RAZORPAY_KEY_ID environment variable is not set. Refusing to start with insecure fallback.")
+
+if not RAZORPAY_KEY_SECRET:
+    raise RuntimeError("FATAL: RAZORPAY_KEY_SECRET environment variable is not set. Refusing to start with insecure fallback.")
+
 RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET") or ""
 
 def get_razorpay_client():

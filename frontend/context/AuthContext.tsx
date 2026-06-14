@@ -70,8 +70,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const EMERGENT_AUTH_URL = process.env.EXPO_PUBLIC_EMERGENT_AUTH_URL || 'https://auth.emergentagent.com/';
-const EMERGENT_SESSION_URL = process.env.EXPO_PUBLIC_EMERGENT_SESSION_URL || 'https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data';
+const EMERGENT_AUTH_URL = process.env.EXPO_PUBLIC_EMERGENT_AUTH_URL || '';
+const EMERGENT_SESSION_URL = process.env.EXPO_PUBLIC_EMERGENT_SESSION_URL || '';
 
 
 // Helper for cross-platform secure storage

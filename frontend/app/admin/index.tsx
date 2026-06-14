@@ -18,7 +18,7 @@ export default function AdminDashboard() {
   }, []);
 
   const checkAdminAccess = () => {
-    if (!user || user.email !== 'admin@grocereasetv.com') {
+    if (!user || user.is_admin !== true) {
       Alert.alert('Access Denied', 'Admin access required');
       router.back();
     }

@@ -70,8 +70,11 @@ async def startup_db_client():
         admin_count = await db.admins.count_documents({})
         if admin_count == 0:
             admin_email = os.environ.get("ADMIN_EMAIL", "grocereasetv@gmail.com")
-            # Default to request 7's password if not provided
-            admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+            admin_password = os.environ.get("ADMIN_PASSWORD")
+            if not admin_password:
+                if os.environ.get("ENV") == "production":
+                    raise RuntimeError("FATAL: ADMIN_PASSWORD environment variable is not set. Refusing to start in production without it.")
+                admin_password = ""
             
             await db.admins.insert_one({
                 "id": "default-admin-id",
