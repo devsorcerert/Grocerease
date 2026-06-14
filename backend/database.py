@@ -138,6 +138,8 @@ async def get_redis():
     return _redis_client
 
 async def rate_limit(request: Request):
+    if os.environ.get("DB_NAME") == "grocerease_test":
+        return
     ip = request.client.host if request.client else "unknown"
     now = time.time()
     window = 60

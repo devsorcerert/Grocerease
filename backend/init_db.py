@@ -68,6 +68,11 @@ async def init_database():
         await db.order_events.create_index("order_id")
         await db.order_events.create_index("timestamp")
         
+        # 9. Create Rider Indexes
+        logging.info("Creating riders indexes...")
+        await db.riders.create_index("id", unique=True)
+        await db.riders.create_index("status")
+        
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})
         if admin_count == 0:

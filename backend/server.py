@@ -65,6 +65,9 @@ async def startup_db_client():
         # Create admin indexes
         await db.admins.create_index("email", unique=True)
         await db.admins.create_index("id", unique=True)
+        # Create rider indexes
+        await db.riders.create_index("id", unique=True)
+        await db.riders.create_index("status")
         
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})

@@ -334,3 +334,68 @@ def test_razorpay_payment_verification(mock_get_client, client_fixture):
     o_status, o_payment = asyncio.run(check_order_paid())
     assert o_status == "paid"
     assert o_payment == "paid"
+
+def test_order_tracking_with_rider(client_fixture):
+    # 1. Register a new user
+    reg_data = {
+        "name": "Tracking User",
+        "email": "trackinguser@example.com",
+        "password": "Password123",
+        "phone": "+919999999988"
+    }
+    resp = client_fixture.post("/api/auth/register", json=reg_data)
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Get user id
+    async def get_user_id():
+        u = await db.users.find_one({"email": "trackinguser@example.com"})
+        return u["id"]
+    user_id = asyncio.run(get_user_id())
+    
+    # 2. Insert a mock order and a mock rider
+    import uuid
+    from datetime import datetime, timedelta
+    order_id = str(uuid.uuid4())
+    async def insert_mock_order_and_rider():
+        await db.orders.insert_one({
+            "id": order_id,
+            "user_id": user_id,
+            "status": "picked_up",
+            "delivery_address": "Test Address",
+            "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
+            "tracking_updates": [],
+            "assigned_rider_id": "rider-abc"
+        })
+        
+        await db.riders.delete_many({})
+        await db.riders.insert_one({
+            "id": "rider-abc",
+            "name": "Rider Name",
+            "phone": "+91 99999 88888",
+            "vehicle": "Hero Splendor - AP39XX1234",
+            "rating": 4.9,
+            "current_location": {
+                "latitude": 13.6284,
+                "longitude": 79.4192
+            },
+            "estimated_delivery_minutes": 12,
+            "status": "active"
+        })
+    asyncio.run(insert_mock_order_and_rider())
+    
+    # 3. Fetch tracking and assert correctness
+    resp = client_fixture.get(f"/api/orders/{order_id}/tracking", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "picked_up"
+    assert data["delivery_partner"] is not None
+    assert data["delivery_partner"]["id"] == "rider-abc"
+    assert data["delivery_partner"]["name"] == "Rider Name"
+    assert data["delivery_partner"]["phone"] == "+91 99999 88888"
+    assert data["delivery_partner"]["vehicle"] == "Hero Splendor - AP39XX1234"
+    assert data["delivery_partner"]["rating"] == 4.9
+    assert data["delivery_partner"]["current_location"]["latitude"] == 13.6284
+    assert data["delivery_partner"]["current_location"]["longitude"] == 79.4192
+    assert data["delivery_partner"]["estimated_arrival"] == "12 minutes"

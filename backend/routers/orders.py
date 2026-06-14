@@ -343,19 +343,26 @@ async def get_order_tracking(order_id: str, user_id: str = Depends(get_current_u
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
         
-    # Standard Tirupati base coordinates for delivery tracking
-    delivery_partner_data = {
-        "id": "dp_001",
-        "name": "Rajesh Kumar",
-        "phone": "+91 98765 43210", 
-        "vehicle": "Bike - AP 39 AB 1234", # Andhra Pradesh plate
-        "rating": 4.8,
-        "current_location": {
-            "latitude": 13.6284 + (hash(order_id) % 100) * 0.0001,
-            "longitude": 79.4192 + (hash(order_id) % 100) * 0.0001
-        },
-        "estimated_arrival": "15 minutes"
-    }
+    assigned_rider_id = order.get("assigned_rider_id")
+    delivery_partner_data = None
+    if assigned_rider_id:
+        rider = await db.riders.find_one({"id": assigned_rider_id})
+        if rider:
+            est_mins = rider.get("estimated_delivery_minutes")
+            est_arrival = f"{est_mins} minutes" if est_mins is not None else "15 minutes"
+            
+            delivery_partner_data = {
+                "id": rider.get("id"),
+                "name": rider.get("name", "Unknown Rider"),
+                "phone": rider.get("phone", ""),
+                "vehicle": rider.get("vehicle", "Bike"),
+                "rating": rider.get("rating", 4.8),
+                "current_location": rider.get("current_location") or {
+                    "latitude": 13.6284 + (hash(order_id) % 100) * 0.0001,
+                    "longitude": 79.4192 + (hash(order_id) % 100) * 0.0001
+                },
+                "estimated_arrival": est_arrival
+            }
     
     tracking_data = {
         "order_id": order_id,

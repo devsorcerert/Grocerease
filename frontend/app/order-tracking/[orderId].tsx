@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,19 +34,36 @@ export default function OrderTrackingPage() {
   const [tracking, setTracking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const TERMINAL_STATUSES = ['delivered', 'cancelled'];
 
   useEffect(() => {
-    fetchTracking();
-  }, [orderId]);
+    fetchTracking(true);
+    
+    // Don't poll if already in terminal state
+    if (TERMINAL_STATUSES.includes(tracking?.status)) return;
+    
+    const pollInterval = setInterval(() => {
+      fetchTracking(false);
+    }, 15000);
+    
+    return () => clearInterval(pollInterval);
+  }, [orderId, tracking?.status]);
 
-  const fetchTracking = async () => {
+  const fetchTracking = async (showLoader = false) => {
     try {
-      setLoading(true);
+      if (showLoader || !tracking) {
+        setLoading(true);
+      }
       const response = await api.get(`/orders/${orderId}/tracking`);
       setTracking(response.data);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to fetch tracking:', error);
-      Alert.alert('Error', 'Failed to load tracking information');
+      if (showLoader || !tracking) {
+        Alert.alert('Error', 'Failed to load tracking information');
+      }
     } finally {
       setLoading(false);
     }
@@ -85,7 +102,7 @@ export default function OrderTrackingPage() {
     }
   };
 
-  if (loading) {
+  if (loading && !tracking) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -124,12 +141,23 @@ export default function OrderTrackingPage() {
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Track Order</Text>
-        <TouchableOpacity onPress={fetchTracking}>
+        <TouchableOpacity onPress={() => fetchTracking(true)}>
           <Ionicons name="refresh" size={24} color="#2D8B47" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={loading} 
+            onRefresh={() => fetchTracking(true)} 
+            colors={['#2D8B47']}
+            tintColor="#2D8B47"
+          />
+        }
+      >
         {/* Order ID */}
         <View style={styles.orderIdCard}>
           <View style={styles.orderIdLeft}>
@@ -226,6 +254,10 @@ export default function OrderTrackingPage() {
               );
             })}
           </View>
+        )}
+
+        {lastUpdated && (
+          <Text style={styles.lastUpdated}>Last updated: {lastUpdated.toLocaleTimeString()}</Text>
         )}
 
         {/* Delivery Partner */}
@@ -521,4 +553,11 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   helpButtonText: { fontSize: 14, color: '#6B7280' },
+  lastUpdated: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: -4,
+    marginBottom: 16,
+  },
 });
