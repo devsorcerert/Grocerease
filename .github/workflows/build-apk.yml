@@ -132,6 +132,16 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      - name: Generate Debug Keystore if missing
+        working-directory: frontend/android/app
+        run: |
+          if [ ! -f debug.keystore ]; then
+            echo "debug.keystore not found, generating a new one..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "debug.keystore already exists"
+          fi
+
       - name: Make gradlew executable
         working-directory: frontend/android
         run: chmod +x gradlew
