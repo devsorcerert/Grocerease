@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -108,9 +108,13 @@ export default function CartScreen() {
 
           return (
             <View key={item.product_id} style={styles.cartItem}>
-              <View style={styles.productImage}>
-                <Ionicons name="bag-outline" size={32} color="#2D8B47" />
-              </View>
+              <TouchableOpacity onPress={() => router.push(`/product/${item.product_id}` as any)} style={styles.productImage}>
+                {product.image?.startsWith('http') ? (
+                  <Image source={{ uri: product.image }} style={{ width: '100%', height: '100%', borderRadius: 8 }} resizeMode="cover" />
+                ) : (
+                  <Ionicons name="bag-outline" size={32} color="#2D8B47" />
+                )}
+              </TouchableOpacity>
               <View style={styles.productDetails}>
                 <Text style={styles.productName}>{product.name}</Text>
                 <Text style={styles.productPrice}>₹{product.price}</Text>

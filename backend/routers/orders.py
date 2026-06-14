@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import uuid
 import logging
 from typing import Optional, List
-from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification
+from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from models import CreateOrderRequest, OrderCreate
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -270,7 +270,14 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             }}
         )
         await db.cart_items.delete_many({"user_id": user_id})
-        
+        await insert_notification(
+            user_id,
+            "Order Confirmed! 🎉",
+            f"Your order #{order_dict['id'][:8].upper()} has been confirmed. Expected delivery in ~60 minutes.",
+            "order",
+            f"/order-tracking/{order_dict['id']}",
+        )
+
     final_order = await db.orders.find_one({"id": order_dict["id"]})
     res_dict = clean_mongo_doc(final_order)
     res_dict["success"] = True

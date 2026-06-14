@@ -44,7 +44,15 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     fetchProductDetails();
+    fetchWishlistStatus();
   }, [productId]);
+
+  const fetchWishlistStatus = async () => {
+    try {
+      const res = await api.get('/wishlist/ids');
+      setInWishlist((res.data.product_ids || []).includes(productId as string));
+    } catch {}
+  };
 
   const fetchProductDetails = async () => {
     try {
@@ -101,12 +109,18 @@ export default function ProductDetailPage() {
     }
   };
 
-  const toggleWishlist = () => {
-    setInWishlist(!inWishlist);
-    Alert.alert(
-      inWishlist ? 'Removed from Wishlist' : 'Added to Wishlist',
-      inWishlist ? 'Product removed from your wishlist' : 'Product added to your wishlist'
-    );
+  const toggleWishlist = async () => {
+    const newState = !inWishlist;
+    setInWishlist(newState);
+    try {
+      if (newState) {
+        await api.post(`/wishlist/${productId}`);
+      } else {
+        await api.delete(`/wishlist/${productId}`);
+      }
+    } catch {
+      setInWishlist(!newState);
+    }
   };
 
   const calculateDiscount = () => {

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,201 +10,137 @@ interface Notification {
   title: string;
   message: string;
   type: 'order' | 'reward' | 'system' | 'promotion';
-  timestamp: string;
+  created_at: string;
   read: boolean;
-  action?: {
-    label: string;
-    route?: string;
-  };
+  action_route?: string;
+}
+
+const BRAND = '#2D8B47';
+
+function getIcon(type: string) {
+  switch (type) {
+    case 'order': return 'cube';
+    case 'reward': return 'gift';
+    case 'promotion': return 'megaphone';
+    default: return 'notifications';
+  }
+}
+
+function getColor(type: string) {
+  switch (type) {
+    case 'order': return BRAND;
+    case 'reward': return '#FF8C42';
+    case 'promotion': return '#EF4444';
+    default: return '#6B7280';
+  }
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await api.get('/user/notifications');
-        const formatted = (response.data.notifications || []).map((n: any) => ({
-          ...n,
-          timestamp: n.created_at || n.timestamp || new Date().toISOString()
-        }));
-        setNotifications(formatted);
-      } catch (error) {
-        console.warn('Could not load notifications:', error);
-        setNotifications([]);
-      }
-    };
-    fetchNotifications();
+  const fetchNotifications = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res = await api.get('/notifications');
+      setNotifications(res.data);
+    } catch {}
+    finally { setLoading(false); setRefreshing(false); }
   }, []);
+
+  useEffect(() => { fetchNotifications(); }, []);
+
+  const handlePress = async (n: Notification) => {
+    if (!n.read) {
+      try {
+        await api.post(`/notifications/${n.id}/read`);
+        setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+      } catch {}
+    }
+    if (n.action_route) router.push(n.action_route as any);
+  };
+
+  const markAllRead = async () => {
+    try {
+      await api.post('/notifications/read-all');
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch {}
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'order': return 'cube';
-      case 'reward': return 'gift';
-      case 'promotion': return 'megaphone';
-      case 'system': return 'settings';
-      default: return 'notifications';
-    }
-  };
-
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'order': return '#2D8B47';
-      case 'reward': return '#FF8C42';
-      case 'promotion': return '#EF4444';
-      case 'system': return '#6B7280';
-      default: return '#9CA3AF';
-    }
-  };
-
-  const handleNotificationPress = (notification: Notification) => {
-    // Mark as read
-    setNotifications(prev => 
-      prev.map(n => 
-        n.id === notification.id ? { ...n, read: true } : n
-      )
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}><ActivityIndicator size="large" color={BRAND} /></View>
+      </SafeAreaView>
     );
-
-    // Navigate if action exists
-    if (notification.action?.route) {
-      router.push(notification.action.route as any);
-    }
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(n => ({ ...n, read: true }))
-    );
-  };
-
-  const clearAllNotifications = () => {
-    Alert.alert(
-      'Clear All Notifications',
-      'Are you sure you want to delete all notifications? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: () => setNotifications([])
-        }
-      ]
-    );
-  };
+  }
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/home')} style={styles.headerButton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
             <Ionicons name="arrow-back" size={24} color="#111" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
-            Notifications {unreadCount > 0 && <Text style={styles.unreadBadge}>({unreadCount})</Text>}
+            Notifications{unreadCount > 0 ? ` (${unreadCount})` : ''}
           </Text>
-          <TouchableOpacity onPress={markAllAsRead} style={styles.headerButton}>
-            <Ionicons name="checkmark-done" size={24} color="#2D8B47" />
-          </TouchableOpacity>
+          {unreadCount > 0 ? (
+            <TouchableOpacity onPress={markAllRead} style={styles.headerButton}>
+              <Ionicons name="checkmark-done" size={24} color={BRAND} />
+            </TouchableOpacity>
+          ) : <View style={styles.headerButton} />}
         </View>
 
-      {notifications.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="notifications-outline" size={64} color="#9CA3AF" />
-          <Text style={styles.emptyTitle}>No Notifications</Text>
-          <Text style={styles.emptyText}>
-            You&apos;re all caught up! Check back later for updates on your orders and rewards.
-          </Text>
-        </View>
-      ) : (
-        <>
-          <ScrollView style={styles.content}>
-            {notifications.map((notification) => (
-              <View
-                key={notification.id}
-                style={[
-                  styles.notificationCard,
-                  !notification.read && styles.unreadCard
-                ]}
-              >
-                <TouchableOpacity
-                  onPress={() => handleNotificationPress(notification)}
-                  activeOpacity={0.7}
-                  disabled={!!notification.action}
-                >
-                  <View style={styles.notificationHeader}>
-                    <View style={[
-                      styles.notificationIcon,
-                      { backgroundColor: `${getNotificationColor(notification.type)}20` }
-                    ]}>
-                      <Ionicons 
-                        name={getNotificationIcon(notification.type) as any} 
-                        size={20} 
-                        color={getNotificationColor(notification.type)} 
-                      />
-                    </View>
-                    <View style={styles.notificationContent}>
-                      <Text style={[
-                        styles.notificationTitle,
-                        !notification.read && styles.unreadTitle
-                      ]}>
-                        {notification.title}
-                      </Text>
-                      <Text style={styles.notificationMessage}>
-                        {notification.message}
-                      </Text>
-                      <Text style={styles.notificationTime}>
-                        {new Date(notification.timestamp).toLocaleString()}
-                      </Text>
-                    </View>
-                    {!notification.read && (
-                      <View style={styles.unreadIndicator} />
-                    )}
+        {notifications.length === 0 ? (
+          <View style={styles.center}>
+            <Ionicons name="notifications-outline" size={64} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>All caught up!</Text>
+            <Text style={styles.emptyText}>No notifications yet. Order something to get started.</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.list}
+            contentContainerStyle={{ paddingBottom: 32 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchNotifications(true); }} colors={[BRAND]} />}
+          >
+            {notifications.map(n => (
+              <TouchableOpacity key={n.id} style={[styles.card, !n.read && styles.cardUnread]} onPress={() => handlePress(n)} activeOpacity={0.75}>
+                <View style={[styles.iconWrap, { backgroundColor: `${getColor(n.type)}18` }]}>
+                  <Ionicons name={getIcon(n.type) as any} size={22} color={getColor(n.type)} />
+                </View>
+                <View style={styles.cardBody}>
+                  <View style={styles.cardTop}>
+                    <Text style={[styles.cardTitle, !n.read && styles.cardTitleBold]} numberOfLines={1}>{n.title}</Text>
+                    <Text style={styles.cardTime}>{timeAgo(n.created_at)}</Text>
                   </View>
-                </TouchableOpacity>
-                
-                {notification.action && (
-                  <View style={styles.actionSection}>
-                    <TouchableOpacity 
-                      style={styles.actionButton}
-                      onPress={() => {
-                        // Mark as read
-                        setNotifications(prev => 
-                          prev.map(n => 
-                            n.id === notification.id ? { ...n, read: true } : n
-                          )
-                        );
-                        // Navigate to route
-                        if (notification.action?.route) {
-                          router.push(notification.action.route as any);
-                        }
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>
-                        {notification.action.label}
-                      </Text>
-                      <Ionicons name="chevron-forward" size={16} color="#2D8B47" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+                  <Text style={styles.cardMsg} numberOfLines={2}>{n.message}</Text>
+                  {n.action_route && (
+                    <View style={styles.actionRow}>
+                      <Text style={styles.actionText}>View details</Text>
+                      <Ionicons name="chevron-forward" size={14} color={BRAND} />
+                    </View>
+                  )}
+                </View>
+                {!n.read && <View style={styles.dot} />}
+              </TouchableOpacity>
             ))}
           </ScrollView>
-
-          <View style={styles.footer}>
-            <TouchableOpacity 
-              style={styles.clearButton} 
-              onPress={clearAllNotifications}
-            >
-              <Ionicons name="trash-outline" size={20} color="#EF4444" />
-              <Text style={styles.clearButtonText}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+        )}
       </SafeAreaView>
     </View>
   );
@@ -213,136 +149,23 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   safeArea: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   headerButton: { padding: 8, minWidth: 40, alignItems: 'center' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111', flex: 1, textAlign: 'center' },
-  unreadBadge: { color: '#EF4444', fontSize: 16 },
-  
-  content: { flex: 1, padding: 16 },
-  
-  notificationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6'
-  },
-  unreadCard: {
-    borderColor: '#2D8B47',
-    borderWidth: 1,
-    backgroundColor: '#FAFFFE'
-  },
-  
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start'
-  },
-  
-  notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12
-  },
-  
-  notificationContent: { flex: 1 },
-  notificationTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111',
-    marginBottom: 4
-  },
-  unreadTitle: {
-    fontWeight: 'bold'
-  },
-  notificationMessage: {
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 18,
-    marginBottom: 8
-  },
-  notificationTime: {
-    fontSize: 11,
-    color: '#9CA3AF'
-  },
-  
-  unreadIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2D8B47',
-    marginLeft: 8,
-    marginTop: 4
-  },
-  
-  actionSection: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6'
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#2D8B47'
-  },
-  
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    backgroundColor: '#fff'
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    borderRadius: 12
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#EF4444'
-  },
-  
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111',
-    marginTop: 16,
-    marginBottom: 8
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20
-  }
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#374151' },
+  emptyText: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
+  list: { flex: 1, padding: 16 },
+  card: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#fff', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#F3F4F6', gap: 12 },
+  cardUnread: { borderColor: BRAND, backgroundColor: '#FAFFFE' },
+  iconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  cardBody: { flex: 1 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  cardTitle: { fontSize: 14, fontWeight: '500', color: '#111', flex: 1 },
+  cardTitleBold: { fontWeight: '700' },
+  cardTime: { fontSize: 11, color: '#9CA3AF', marginLeft: 8 },
+  cardMsg: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+  actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 2 },
+  actionText: { fontSize: 12, fontWeight: '600', color: BRAND },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: BRAND, marginTop: 6 },
 });

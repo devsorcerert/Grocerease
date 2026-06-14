@@ -44,6 +44,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   // Address states
   const [currentAddress, setCurrentAddress] = useState<any>(null);
@@ -63,6 +64,7 @@ export default function HomeScreen() {
     fetchCategories();
     fetchVideos();
     detectLocation();
+    fetchUnreadNotifCount();
   }, []);
 
   const detectLocation = async () => {
@@ -189,6 +191,13 @@ export default function HomeScreen() {
     }
   };
 
+  const fetchUnreadNotifCount = async () => {
+    try {
+      const res = await api.get('/notifications');
+      setUnreadNotifCount((res.data as any[]).filter((n: any) => !n.read).length);
+    } catch {}
+  };
+
   const handleLinkCableTV = async () => {
     if (!userIdNuid || !phone || !serviceProvider) {
       Alert.alert('Error', 'Please fill all fields');
@@ -277,9 +286,11 @@ export default function HomeScreen() {
             {/* Admin access removed - now available via separate web dashboard */}
             <TouchableOpacity style={styles.notificationButton} onPress={() => router.push('/notifications')}>
               <Ionicons name="notifications-outline" size={24} color="#fff" />
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>3</Text>
-              </View>
+              {unreadNotifCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{unreadNotifCount > 9 ? '9+' : unreadNotifCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>

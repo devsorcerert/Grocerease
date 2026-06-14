@@ -4,6 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import time
+import uuid
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import jwt
@@ -237,4 +238,21 @@ async def send_push_notification(push_token: str, title: str, body: str, data: d
             )
     except Exception as e:
         logging.error(f"Push notification failed: {e}")
+
+
+async def insert_notification(user_id: str, title: str, message: str, notif_type: str, action_route: str = ""):
+    """Store an in-app notification in MongoDB."""
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "title": title,
+            "message": message,
+            "type": notif_type,
+            "action_route": action_route,
+            "read": False,
+            "created_at": datetime.utcnow(),
+        })
+    except Exception as e:
+        logging.error(f"insert_notification failed: {e}")
 

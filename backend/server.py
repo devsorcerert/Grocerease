@@ -485,7 +485,7 @@ async def save_push_token(payload: dict, user_id: str = Depends(get_current_user
     return {"success": True}
 
 @api_router.get("/user/notifications")
-async def get_notifications(user_id: str = Depends(get_current_user)):
+async def get_user_notifications_legacy(user_id: str = Depends(get_current_user)):
     notifications = await db.notifications.find(
         {"user_id": user_id}
     ).sort("created_at", -1).limit(50).to_list(50)
@@ -1399,7 +1399,85 @@ async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
                 {"$inc": {"stock": item.get("quantity", 1)}}
             )
     
+    await push_notification(
+        user_id,
+        "Order Cancelled",
+        f"Your order #{order_id[:8].upper()} has been cancelled. If you paid online, a refund will be processed in 5-7 business days.",
+        "order",
+    )
     return {"message": "Order cancelled successfully", "success": True}
+
+
+# ── Wishlist ────────────────────────────────────────────────────────────────
+
+@api_router.get("/wishlist/ids")
+async def get_wishlist_ids(user_id: str = Depends(get_current_user)):
+    doc = await db.wishlists.find_one({"user_id": user_id})
+    return {"product_ids": doc.get("product_ids", []) if doc else []}
+
+@api_router.get("/wishlist")
+async def get_wishlist(user_id: str = Depends(get_current_user)):
+    doc = await db.wishlists.find_one({"user_id": user_id})
+    product_ids = doc.get("product_ids", []) if doc else []
+    if not product_ids:
+        return {"items": []}
+    products = await db.products.find({"id": {"$in": product_ids}}).to_list(length=200)
+    return {"items": [clean_mongo_doc(p) for p in products]}
+
+@api_router.post("/wishlist/{product_id}")
+async def add_to_wishlist(product_id: str, user_id: str = Depends(get_current_user)):
+    await db.wishlists.update_one(
+        {"user_id": user_id},
+        {"$addToSet": {"product_ids": product_id}},
+        upsert=True,
+    )
+    return {"status": "added"}
+
+@api_router.delete("/wishlist/{product_id}")
+async def remove_from_wishlist(product_id: str, user_id: str = Depends(get_current_user)):
+    await db.wishlists.update_one(
+        {"user_id": user_id},
+        {"$pull": {"product_ids": product_id}},
+    )
+    return {"status": "removed"}
+
+
+# ── Notifications ────────────────────────────────────────────────────────────
+
+@api_router.get("/notifications")
+async def get_notifications(user_id: str = Depends(get_current_user)):
+    notes = await db.notifications.find({"user_id": user_id}).sort("created_at", -1).to_list(length=50)
+    return [clean_mongo_doc(n) for n in notes]
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, user_id: str = Depends(get_current_user)):
+    await db.notifications.update_one(
+        {"id": notification_id, "user_id": user_id},
+        {"$set": {"read": True}},
+    )
+    return {"status": "ok"}
+
+@api_router.post("/notifications/read-all")
+async def mark_all_notifications_read(user_id: str = Depends(get_current_user)):
+    await db.notifications.update_many(
+        {"user_id": user_id, "read": False},
+        {"$set": {"read": True}},
+    )
+    return {"status": "ok"}
+
+
+async def push_notification(user_id: str, title: str, message: str, notif_type: str, action_route: str = ""):
+    """Insert an in-app notification for a user."""
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "type": notif_type,
+        "action_route": action_route,
+        "read": False,
+        "created_at": datetime.utcnow(),
+    })
 
 
 @api_router.post("/support/messages")

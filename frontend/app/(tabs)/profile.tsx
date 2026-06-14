@@ -216,6 +216,18 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/wishlist' as any)}>
+            <Ionicons name="heart-outline" size={24} color="#EF4444" />
+            <Text style={styles.menuText}>My Wishlist</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notifications' as any)}>
+            <Ionicons name="notifications-outline" size={24} color="#374151" />
+            <Text style={styles.menuText}>Notifications</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/addresses')}>
             <Ionicons name="location-outline" size={24} color="#374151" />
             <Text style={styles.menuText}>{t('addresses')}</Text>
