@@ -196,3 +196,16 @@ async def send_sms_twilio(phone: str, message_body: str) -> bool:
         logging.error(f"Twilio SMS exception for {phone}: {e}")
         return False
 
+async def send_push_notification(push_token: str, title: str, body: str, data: dict = {}):
+    if not push_token or not push_token.startswith("ExponentPushToken"):
+        return
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json={"to": push_token, "title": title, "body": body, "data": data},
+                timeout=10
+            )
+    except Exception as e:
+        logging.error(f"Push notification failed: {e}")
+

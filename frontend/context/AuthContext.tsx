@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
+import * as Notifications from 'expo-notifications';
 // Configure Google Sign-In on Native
 let googleSigninConfigured = false;
 
@@ -128,6 +129,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const sessionProcessingRef = useRef(false);
   const processedSessionsRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<any>(null);
+
+  const registerPushToken = async () => {
+    try {
+      if (Platform.OS === 'web') return;
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+      const token = (await Notifications.getExpoPushTokenAsync()).data;
+      await api.post('/user/push-token', { token });
+    } catch (err) {
+      log('Push token registration failed:', err);
+    }
+  };
 
   // Cleanup refresh timer on unmount
   useEffect(() => {
@@ -266,6 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await storage.setItem('refresh_token', refresh_token);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
+      registerPushToken();
       startTokenRefreshTimer();
       
       log('Google auth completed successfully for:', userData.email);
@@ -347,6 +361,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.setItem('refresh_token', refresh_token || '');
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    registerPushToken();
     startTokenRefreshTimer();
       };
 
@@ -358,6 +373,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.setItem('refresh_token', refresh_token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    registerPushToken();
     startTokenRefreshTimer();
   };
 
@@ -369,6 +385,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.setItem('refresh_token', refresh_token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    registerPushToken();
     startTokenRefreshTimer();
   };
 
@@ -435,6 +452,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await storage.setItem('refresh_token', refresh_token);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
+      registerPushToken();
       startTokenRefreshTimer();
 
       log('Google Sign-In completed successfully for native client:', userData.email);
@@ -520,6 +538,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.setItem('refresh_token', refresh_token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(userData);
+    registerPushToken();
     startTokenRefreshTimer();
   };
 

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import api from '../utils/api';
 
 interface Notification {
   id: string;
@@ -19,51 +20,24 @@ interface Notification {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: '1',
-      title: 'Order Delivered! 🎉',
-      message: 'Your order #12345 has been successfully delivered. Enjoy your fresh groceries!',
-      type: 'order',
-      timestamp: '2025-01-15T14:30:00Z',
-      read: false,
-      action: { label: 'Track Order', route: '/order-tracking/12345' }
-    },
-    {
-      id: '2',
-      title: 'Cashback Earned! 💰',
-      message: 'You earned ₹25 cashback on your recent purchase. Keep shopping to earn more!',
-      type: 'reward',
-      timestamp: '2025-01-15T12:15:00Z',
-      read: false
-    },
-    {
-      id: '3',
-      title: 'Flash Sale Alert! ⚡',
-      message: 'Get 50% off on fresh fruits and vegetables. Limited time offer!',
-      type: 'promotion',
-      timestamp: '2025-01-15T10:00:00Z',
-      read: true,
-      action: { label: 'Shop Now', route: '/(tabs)/categories' }
-    },
-    {
-      id: '4',
-      title: 'Cable TV Sync Complete',
-      message: 'Your spending data has been synchronized with your cable TV account.',
-      type: 'system',
-      timestamp: '2025-01-14T18:45:00Z',
-      read: true
-    },
-    {
-      id: '5',
-      title: 'New Recipe Added! 👨‍🍳',
-      message: 'Check out "Butter Chicken" on GrocerEase TV with one-click ingredient shopping.',
-      type: 'system',
-      timestamp: '2025-01-14T16:20:00Z',
-      read: true,
-      action: { label: 'Watch Now', route: '/(tabs)/videos' }
-    }
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await api.get('/user/notifications');
+        const formatted = (response.data.notifications || []).map((n: any) => ({
+          ...n,
+          timestamp: n.created_at || n.timestamp || new Date().toISOString()
+        }));
+        setNotifications(formatted);
+      } catch (error) {
+        console.warn('Could not load notifications:', error);
+        setNotifications([]);
+      }
+    };
+    fetchNotifications();
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

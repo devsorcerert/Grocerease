@@ -469,6 +469,24 @@ async def get_me(user_id: str = Depends(get_current_user)):
         "is_admin": user.get("is_admin", False)
     }
 
+@api_router.post("/user/push-token")
+async def save_push_token(payload: dict, user_id: str = Depends(get_current_user)):
+    token = payload.get("token", "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"push_token": token, "push_token_updated_at": datetime.utcnow()}}
+    )
+    return {"success": True}
+
+@api_router.get("/user/notifications")
+async def get_notifications(user_id: str = Depends(get_current_user)):
+    notifications = await db.notifications.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    return {"notifications": clean_mongo_docs(notifications)}
+
 # Cable TV Routes
 @api_router.post("/cable-tv/link")
 async def link_cable_tv(data: CableTVLink, user_id: str = Depends(get_current_user)):

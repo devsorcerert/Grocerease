@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import uuid
 import logging
 from typing import Optional, List
-from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs
+from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification
 from models import CreateOrderRequest, OrderCreate
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -112,6 +112,30 @@ async def transition_order_status(order_id: str, to_status: str, changed_by: str
         "reason": reason,
         "timestamp": datetime.utcnow()
     })
+
+    # Trigger push notification & insert to notifications collection
+    STATUS_MESSAGES = {
+        "confirmed": ("Order Confirmed ✅", "Your order has been received and is being prepared."),
+        "out_for_delivery": ("Order On The Way 🛵", "Your delivery partner is heading to you!"),
+        "delivered": ("Order Delivered 🎉", "Your order has arrived. Enjoy your groceries!"),
+        "cancelled": ("Order Cancelled", "Your order has been cancelled."),
+    }
+    user_id_of_order = order["user_id"]
+    if to_status in STATUS_MESSAGES:
+        title, body = STATUS_MESSAGES[to_status]
+        user = await db.users.find_one({"id": user_id_of_order})
+        if user and user.get("push_token"):
+            await send_push_notification(user["push_token"], title, body, {"order_id": order_id})
+        # Also save to notifications collection
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id_of_order,
+            "title": title,
+            "message": body,
+            "type": "order",
+            "read": False,
+            "created_at": datetime.utcnow()
+        })
 
 # Helper for atomic stock reservation
 async def try_reserve_stock(items: List[dict]) -> List[dict]:
