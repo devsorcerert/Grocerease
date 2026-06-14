@@ -84,15 +84,22 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
         raise HTTPException(status_code=500, detail="Razorpay integration not configured")
         
     # 2. Verify signature
-    try:
-        client.utility.verify_payment_signature({
-            'razorpay_order_id': payload.razorpay_order_id,
-            'razorpay_payment_id': payload.razorpay_payment_id,
-            'razorpay_signature': payload.razorpay_signature
-        })
-    except Exception as e:
-        logging.error(f"Razorpay signature verification failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid payment signature")
+    is_dev = os.environ.get("ENV", "development") != "production"
+    is_mock_order = payload.razorpay_order_id.startswith("rzp_mock_")
+
+    if is_mock_order and is_dev:
+        # Bypass signature check for dev mock payments
+        logging.warning("DEV MODE: Skipping signature verification for mock payment")
+    else:
+        try:
+            client.utility.verify_payment_signature({
+                'razorpay_order_id': payload.razorpay_order_id,
+                'razorpay_payment_id': payload.razorpay_payment_id,
+                'razorpay_signature': payload.razorpay_signature
+            })
+        except Exception as e:
+            logging.error(f"Razorpay signature verification failed: {e}")
+            raise HTTPException(status_code=400, detail="Invalid payment signature")
         
     # 3. Handle successful capture actions: transition status, award rewards, clear cart
     await transition_order_status(order["id"], "paid", user_id, "Razorpay payment verified")

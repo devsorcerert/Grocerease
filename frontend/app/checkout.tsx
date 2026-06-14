@@ -184,7 +184,7 @@ export default function CheckoutScreen() {
   // ── FIX [1]: Place order — for Razorpay, only create order (not confirm) ─
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
-      Alert.alert('Address Required', 'Please select or add a delivery address.');
+      Alert.alert('No Address Selected', 'Please select or add a delivery address before placing your order.');
       return;
     }
     setPlacing(true);
