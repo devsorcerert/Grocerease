@@ -65,6 +65,7 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: write
+      secrets: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -160,7 +161,6 @@ jobs:
               -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
             echo "WARNING: Generated a new random keystore. Google Sign-In may fail."
-            echo "See Upload debug keystore artifact step - download it and save as DEBUG_KEYSTORE_BASE64 secret."
           else
             echo "debug.keystore already present"
           fi
@@ -173,9 +173,23 @@ jobs:
           echo " Use this in Google Cloud Console"
           echo " Package: com.grocereasetv.app"
           echo "========================================"
-          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey 2>&1 | grep -E "^SHA1:|^\s*SHA1:" || \
           keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey 2>&1 | grep -i "sha1"
           echo "========================================"
+
+      - name: Auto-save keystore as GitHub secret (locks SHA-1 for all future builds)
+        working-directory: frontend/android/app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "DEBUG_KEYSTORE_BASE64 secret not set - saving keystore now to lock SHA-1..."
+            KEYSTORE_B64=$(base64 -w 0 debug.keystore)
+            echo "$KEYSTORE_B64" | gh secret set DEBUG_KEYSTORE_BASE64 --repo ${{ github.repository }}
+            echo "SUCCESS: DEBUG_KEYSTORE_BASE64 secret saved. SHA-1 is now locked for all future builds."
+          else
+            echo "DEBUG_KEYSTORE_BASE64 already set - SHA-1 is stable."
+          fi
 
       - name: Upload debug keystore artifact
         uses: actions/upload-artifact@v4
