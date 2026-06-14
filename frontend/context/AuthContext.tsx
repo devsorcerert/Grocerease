@@ -6,8 +6,15 @@ import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { GOOGLE_CLIENT_ID_WEB } from '../constants/api';
+import { GOOGLE_CLIENT_ID_WEB, ADMIN_EMAIL } from '../constants/api';
 import * as Notifications from 'expo-notifications';
+
+// Fallback in case env var not baked into APK
+const GOOGLE_WEB_CLIENT_ID =
+  (GOOGLE_CLIENT_ID_WEB && GOOGLE_CLIENT_ID_WEB.trim())
+    ? GOOGLE_CLIENT_ID_WEB.trim()
+    : '418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com';
+
 // Configure Google Sign-In on Native
 let googleSigninConfigured = false;
 
@@ -15,13 +22,8 @@ const ensureGoogleSigninConfigured = () => {
   if (Platform.OS === 'web') return;
   if (googleSigninConfigured) return;
 
-  if (!GOOGLE_CLIENT_ID_WEB || !GOOGLE_CLIENT_ID_WEB.trim()) {
-    console.error("FATAL: EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB is not set. Google Sign-In will not work. Set this env var to 418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com");
-    throw new Error('Google Sign-In is not configured: missing EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB.');
-  }
-
   GoogleSignin.configure({
-    webClientId: GOOGLE_CLIENT_ID_WEB.trim(),
+    webClientId: GOOGLE_WEB_CLIENT_ID,
     offlineAccess: true,
     scopes: ['profile', 'email'],
   });
@@ -348,8 +350,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ============ LOGIN / REGISTER ============
   const login = async (email: string, password: string) => {
-      // Detect admin login by checking the ADMIN_EMAIL env variable
-    const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL || 'admin@grocereasetv.com';
     const isAdmin = email.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase();
     const endpoint = isAdmin ? '/admin/login' : '/auth/login';
     const response = await api.post(endpoint, { email, password });

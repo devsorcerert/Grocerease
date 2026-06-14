@@ -114,6 +114,7 @@ jobs:
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=${GOOGLE_CLIENT_ID_IOS:-418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com}" >> .env
           echo "EXPO_PUBLIC_RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}" >> .env
           echo "FIREBASE_API_KEY=${FIREBASE_API_KEY:-}" >> .env
+          echo "EXPO_PUBLIC_ADMIN_EMAIL=grocereasetv@gmail.com" >> .env
           echo "Backend URL set to: $BACKEND_URL"
 
       - name: Generate google-services.json for Android
@@ -148,15 +149,24 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Generate Debug Keystore if missing
+      - name: Restore or generate consistent debug keystore
         working-directory: frontend/android/app
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
-          if [ ! -f debug.keystore ]; then
-            echo "debug.keystore not found, generating a new one..."
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > debug.keystore
+            echo "debug.keystore restored from secret (consistent SHA-1)"
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            echo "WARNING: Generated a new random keystore. Google Sign-In may fail."
+            echo "Run: base64 -i debug.keystore | pbcopy and save as DEBUG_KEYSTORE_BASE64 secret."
           else
-            echo "debug.keystore already exists"
+            echo "debug.keystore already present"
           fi
+          keytool -list -keystore debug.keystore -storepass android -alias androiddebugkey 2>/dev/null | grep -i "SHA1:" || true
 
       - name: Make gradlew executable
         working-directory: frontend/android
