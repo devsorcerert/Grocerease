@@ -71,6 +71,7 @@ async def init_database():
         # 9. Create Rider Indexes
         logging.info("Creating riders indexes...")
         await db.riders.create_index("id", unique=True)
+        await db.riders.create_index("phone", unique=True)
         await db.riders.create_index("status")
         
         # Seed default admin if empty

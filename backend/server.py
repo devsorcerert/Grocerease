@@ -67,6 +67,7 @@ async def startup_db_client():
         await db.admins.create_index("id", unique=True)
         # Create rider indexes
         await db.riders.create_index("id", unique=True)
+        await db.riders.create_index("phone", unique=True)
         await db.riders.create_index("status")
         
         # Seed default admin if empty
@@ -1603,6 +1604,7 @@ from routers.cart import router as cart_router
 from routers.orders import router as orders_router
 from routers.payments import router as payments_router
 from routers.kpis import router as kpis_router
+from routers.riders import router as riders_router
 
 api_router.include_router(cart_router)
 api_router.include_router(orders_router)
@@ -1637,6 +1639,7 @@ async def admin_order_status_wrapper(order_id: str, payload: dict, admin=Depends
 
 
 app.include_router(api_router)
+app.include_router(riders_router, prefix="/api")
 
 
 env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()

@@ -15,7 +15,7 @@ os.environ["RAZORPAY_KEY_SECRET"] = "dummypaymentsecret"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
 
 from server import app
-from database import db, client, db_name
+from database import db, client, db_name, hash_password
 from init_db import init_database
 import asyncio
 from unittest.mock import MagicMock, patch
@@ -399,3 +399,132 @@ def test_order_tracking_with_rider(client_fixture):
     assert data["delivery_partner"]["current_location"]["latitude"] == 13.6284
     assert data["delivery_partner"]["current_location"]["longitude"] == 79.4192
     assert data["delivery_partner"]["estimated_arrival"] == "12 minutes"
+
+def test_rider_endpoints(client_fixture):
+    # 1. Seed a mock active rider and a mock suspended rider
+    async def seed_riders():
+        await db.riders.delete_many({})
+        # Active rider
+        await db.riders.insert_one({
+            "id": "rider-1",
+            "name": "Test Rider",
+            "phone": "+919988776655",
+            "password": hash_password("riderpass123"),
+            "status": "offline",
+            "current_order_id": None
+        })
+        # Suspended rider
+        await db.riders.insert_one({
+            "id": "rider-suspended",
+            "name": "Suspended Rider",
+            "phone": "+918877665544",
+            "password": hash_password("riderpass123"),
+            "status": "suspended"
+        })
+    asyncio.run(seed_riders())
+
+    # 2. Test login success
+    login_data = {"phone": "+919988776655", "password": "riderpass123"}
+    resp = client_fixture.post("/api/rider/login", json=login_data)
+    assert resp.status_code == 200
+    login_res = resp.json()
+    assert "token" in login_res
+    assert login_res["rider_id"] == "rider-1"
+    assert login_res["name"] == "Test Rider"
+    assert login_res["current_order"] is None
+
+    token = login_res["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Test login failure (wrong password)
+    bad_login = {"phone": "+919988776655", "password": "wrongpassword"}
+    resp = client_fixture.post("/api/rider/login", json=bad_login)
+    assert resp.status_code == 401
+
+    # 4. Test login suspended
+    suspended_login = {"phone": "+918877665544", "password": "riderpass123"}
+    resp = client_fixture.post("/api/rider/login", json=suspended_login)
+    assert resp.status_code == 403
+    assert "suspended" in resp.json()["detail"].lower()
+
+    # 5. Test update location
+    location_data = {"lat": 13.0827, "lng": 80.2707}
+    resp = client_fixture.post("/api/rider/location", json=location_data, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+    # Verify database update
+    async def get_rider_from_db():
+        return await db.riders.find_one({"id": "rider-1"})
+    rider_db = asyncio.run(get_rider_from_db())
+    assert rider_db["last_lat"] == 13.0827
+    assert rider_db["last_lng"] == 80.2707
+
+    # 6. Test push token registration
+    push_data = {"token": "exponent-push-token-rider"}
+    resp = client_fixture.post("/api/rider/push-token", json=push_data, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+    
+    rider_db = asyncio.run(get_rider_from_db())
+    assert rider_db["push_token"] == "exponent-push-token-rider"
+
+    # 7. Seed user and order to test order status transitions
+    # First register a user
+    reg_data = {
+        "name": "Rider Order User",
+        "email": "riderorderuser@example.com",
+        "password": "Password123",
+        "phone": "+919999999911"
+    }
+    resp = client_fixture.post("/api/auth/register", json=reg_data)
+    assert resp.status_code == 200
+    user_id = resp.json()["user"]["id"]
+
+    import uuid
+    from datetime import datetime
+    order_id = str(uuid.uuid4())
+    
+    async def seed_order_and_assign():
+        await db.orders.insert_one({
+            "id": order_id,
+            "user_id": user_id,
+            "status": "confirmed",
+            "delivery_address": "Rider Test Address",
+            "assigned_rider_id": "rider-1",
+            "tracking_updates": []
+        })
+        await db.riders.update_one({"id": "rider-1"}, {"$set": {"current_order_id": order_id}})
+    asyncio.run(seed_order_and_assign())
+
+    # Test get current order
+    resp = client_fixture.get("/api/rider/current-order", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["order"] is not None
+    assert resp.json()["order"]["id"] == order_id
+
+    # Test status transition: reached_store (not mapped to order state)
+    status_data = {"order_id": order_id, "status": "reached_store"}
+    resp = client_fixture.post("/api/rider/order-status", json=status_data, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+    # Test status transition: picked_up (mapped to picked_up order state)
+    status_data = {"order_id": order_id, "status": "picked_up"}
+    resp = client_fixture.post("/api/rider/order-status", json=status_data, headers=headers)
+    assert resp.status_code == 200
+    
+    async def get_order_status():
+        o = await db.orders.find_one({"id": order_id})
+        return o["status"]
+    assert asyncio.run(get_order_status()) == "picked_up"
+
+    # Test status transition: delivered (resets rider active order)
+    status_data = {"order_id": order_id, "status": "delivered"}
+    resp = client_fixture.post("/api/rider/order-status", json=status_data, headers=headers)
+    assert resp.status_code == 200
+
+    assert asyncio.run(get_order_status()) == "delivered"
+    rider_db = asyncio.run(get_rider_from_db())
+    assert rider_db["current_order_id"] is None
+    assert rider_db["status"] == "online"
