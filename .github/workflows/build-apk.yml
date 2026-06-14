@@ -105,6 +105,7 @@ jobs:
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=${{ secrets.GOOGLE_CLIENT_ID_ANDROID }}" >> .env
           echo "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=${{ secrets.GOOGLE_CLIENT_ID_IOS }}" >> .env
           echo "EXPO_PUBLIC_RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }}" >> .env
+          echo "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" >> .env
 
       - name: Generate google-services.json for Android
         working-directory: frontend
@@ -117,6 +118,12 @@ jobs:
           else
             echo "WARNING: GOOGLE_SERVICES_JSON secret not set - Google Sign-In may not work on Android"
           fi
+
+      - name: Inject secrets into google-services.json
+        working-directory: frontend
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+        run: node scripts/inject-secrets.js
 
       - name: Generate native Android folder
         working-directory: frontend

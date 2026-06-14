@@ -15,6 +15,7 @@ const ensureGoogleSigninConfigured = () => {
   if (googleSigninConfigured) return;
 
   if (!GOOGLE_CLIENT_ID_WEB || !GOOGLE_CLIENT_ID_WEB.trim()) {
+    console.error("FATAL: EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB is not set. Google Sign-In will not work. Set this env var to 418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com");
     throw new Error('Google Sign-In is not configured: missing EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB.');
   }
 
