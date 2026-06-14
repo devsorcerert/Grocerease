@@ -1,30 +1,17 @@
 // constants/api.ts
 
+const DEFAULT_BACKEND_URL = 'https://api.grocereasetv.com';
+
 const rawBackendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL;
-if (!rawBackendUrl || !rawBackendUrl.trim() || rawBackendUrl.includes('REPLACE_')) {
-  throw new Error("FATAL: No backend URL configured. Set EXPO_PUBLIC_BACKEND_URL in your .env file.");
-}
 
-// Helper function to get environment variables with warning and fallback logic
-const getEnvVar = (value: string | undefined, name: string, fallback: string): string => {
-  if (!value || value.trim() === '' || value === 'undefined' || value === 'null' || value.includes('REPLACE_')) {
-    console.warn(`🚨 WARNING: Missing or empty environment variable: ${name}. Using fallback value.`);
-    return fallback;
-  }
-  return value.trim();
-};
+const isValidUrl = (url: string | undefined): boolean =>
+  !!url && url.trim() !== '' && !url.includes('REPLACE_') && url !== 'undefined' && url !== 'null';
 
-// GrocerEase API Configuration
-const PRODUCTION_BACKEND_URL = getEnvVar(
-  rawBackendUrl,
-  'EXPO_PUBLIC_BACKEND_URL',
-  ''
-);
 const DEV_BACKEND_URL = process.env.EXPO_PUBLIC_DEV_BACKEND_URL || 'http://localhost:8001';
 
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL)
-  ? PRODUCTION_BACKEND_URL
-  : (__DEV__ ? DEV_BACKEND_URL : PRODUCTION_BACKEND_URL);
+export const API_BASE_URL = isValidUrl(rawBackendUrl)
+  ? rawBackendUrl!.trim()
+  : (__DEV__ ? DEV_BACKEND_URL : DEFAULT_BACKEND_URL);
 
 export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || '';
 
