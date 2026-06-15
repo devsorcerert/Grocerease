@@ -18,7 +18,7 @@
           "client_type": 1,
           "android_info": {
             "package_name": "com.grocereasetv.app",
-            "certificate_hash": "a40da8f376768fe64e7eb84799c45d0b49630628"
+            "certificate_hash": "f8f255382c96a6719f5ad4aec704de901a1cef2e"
           }
         },
         {
@@ -28,7 +28,7 @@
       ],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_YOUR_FIREBASE_API_KEY"
+          "current_key": "AIzaSyD8bD_rX8KoFAi0aBenABaGRuN8XxU3s1I"
         }
       ],
       "services": {
@@ -37,6 +37,13 @@
             {
               "client_id": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.grocerease.app"
+              }
             }
           ]
         }
