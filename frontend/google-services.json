@@ -14,6 +14,30 @@
       },
       "oauth_client": [
         {
+          "client_id": "418665414188-m1mffc26v4tu1nstlsesvgg9tnjmcmnt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "a40da8f376768fe64e7eb84799c45d0b49630628"
+          }
+        },
+        {
+          "client_id": "418665414188-7pv8nmqhjeft1lm30op078c8qehfc0jb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d54787676baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "418665414188-7kpqp9m1jdgcur0eodir1f99mbqo4fq5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "d7bb68f76d5f78faa11f1c33bd600be6d6915fb6"
+          }
+        },
+        {
           "client_id": "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
