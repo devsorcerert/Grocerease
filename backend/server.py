@@ -290,57 +290,59 @@ async def refresh_token(request: dict):
     except Exception:
         raise HTTPException(status_code=500, detail="Token refresh failed")
 
+# All valid OAuth client IDs for this Firebase project (Web, Android, iOS)
+_GOOGLE_ALLOWED_CLIENTS = {
+    "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",  # Web
+    "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",  # Android
+    "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com",  # iOS
+}
+
 @api_router.post("/auth/google")
 async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
-    # Verify the Google ID Token securely
+    # Verify Google ID Token locally using google-auth (no quota / no deprecated tokeninfo endpoint)
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"https://oauth2.googleapis.com/tokeninfo?id_token={auth_data.id_token}",
-                timeout=10
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        # verify_oauth2_token is synchronous — run in thread pool to avoid blocking the event loop
+        token_info = await loop.run_in_executor(
+            None,
+            lambda: google_id_token.verify_oauth2_token(
+                auth_data.id_token,
+                google_requests.Request(),
+                clock_skew_in_seconds=10,
+            ),
+        )
+
+        # Validate audience matches one of our registered client IDs
+        aud = token_info.get("aud", "")
+        if aud not in _GOOGLE_ALLOWED_CLIENTS:
+            logging.error(f"Google ID Token audience mismatch: {aud}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Google ID Token audience verification failed",
             )
-            if response.status_code != 200:
-                logging.error(f"Google TokenInfo verification failed: {response.text}")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, 
-                    detail="Invalid or expired Google ID Token"
-                )
-            
-            token_info = response.json()
-            
-            # Additional validation
-            verified_email = token_info.get("email")
-            if not verified_email:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, 
-                    detail="Email address not found in Google ID Token"
-                )
-            
-            # Verify the audience (client ID) matches our app's client IDs
-            aud = token_info.get("aud")
-            allowed_clients = {
-                "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
-                "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
-                "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com"
-            }
-            if aud not in allowed_clients:
-                logging.error(f"Google ID Token audience mismatch: {aud}")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Google ID Token audience verification failed"
-                )
-            
-            # Use securely verified email and details
-            email = verified_email.lower()
-            name = token_info.get("name", auth_data.name)
-            photo = token_info.get("picture", auth_data.photo)
+
+        verified_email = token_info.get("email")
+        if not verified_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email address not found in Google ID Token",
+            )
+
+        email = verified_email.lower()
+        name = token_info.get("name") or auth_data.name
+        photo = token_info.get("picture") or auth_data.photo
+
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Google authentication error during token verification: {e}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail=f"Google authentication failed: {str(e)}"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Google authentication failed: {str(e)}",
         )
         
     db_user = await db.users.find_one({"email": email})

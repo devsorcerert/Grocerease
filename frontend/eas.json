@@ -9,6 +9,11 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.grocereasetv.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_WITH_YOUR_FIREBASE_API_KEY"
       }
     },
     "preview": {
@@ -18,12 +23,22 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.grocereasetv.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_WITH_YOUR_FIREBASE_API_KEY"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.grocereasetv.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_WITH_YOUR_FIREBASE_API_KEY"
       }
     }
   },

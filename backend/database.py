@@ -144,7 +144,7 @@ async def rate_limit(request: Request):
     ip = request.client.host if request.client else "unknown"
     now = time.time()
     window = 60
-    max_requests = 5
+    max_requests = 30
     
     redis = await get_redis()
     if redis:

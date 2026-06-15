@@ -36,6 +36,10 @@ services:
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
       - FAST2SMS_API_KEY=${FAST2SMS_API_KEY}
       - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-grocereasetv@gmail.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ENV=${ENV:-development}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081,http://localhost:19006,https://api.grocereasetv.com}
     restart: unless-stopped
     depends_on:
       mongodb:

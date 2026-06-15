@@ -135,7 +135,16 @@ export default function LoginScreen() {
       await socialLogin('google');
       router.replace('/(tabs)/home');
     } catch (err: any) {
-      Alert.alert('Google Sign-In Failed', 'Could not sign in with Google. Please try again.');
+      // socialLogin already shows an Alert for known Google error codes.
+      // Only show a fallback alert for unexpected errors that didn't already surface to the user.
+      const knownCodes = ['SIGN_IN_CANCELLED', 'IN_PROGRESS', 'PLAY_SERVICES_NOT_AVAILABLE', 'SIGN_IN_REQUIRED'];
+      const isKnownGoogleError = err?.code && knownCodes.includes(err.code);
+      if (!isKnownGoogleError) {
+        Alert.alert(
+          'Google Sign-In Failed',
+          err?.response?.data?.detail || err?.message || 'Could not sign in with Google. Please try again.',
+        );
+      }
     } finally {
       setLoading(false);
     }
