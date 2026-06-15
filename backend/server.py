@@ -321,7 +321,10 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
             allowed_clients = {
                 "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
                 "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
-                "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com"
+                        "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com",
+                        "418665414188-m1mffc26v4tu1nstlsesvgg9tnjmcmnt.apps.googleusercontent.com",
+                        "418665414188-7pv8nmqhjeft1lm30op078c8qehfc0jb.apps.googleusercontent.com",
+                        "418665414188-7kpqp9m1jdgcur0eodir1f99mbqo4fq5.apps.googleusercontent.com"
             }
             if aud not in allowed_clients:
                 logging.error(f"Google ID Token audience mismatch: {aud}")
