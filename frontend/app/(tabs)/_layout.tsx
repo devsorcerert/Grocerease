@@ -1,27 +1,15 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
 
 export default function TabsLayout() {
   const { items, fetchCart } = useCartStore();
-  const { user, loading } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
-    // Redirect to welcome if not logged in
-    if (!loading && !user) {
-      router.replace('/(auth)/welcome');
-    }
-  }, [user, loading]);
-
-  useEffect(() => {
-    if (user) {
-      fetchCart();
-    }
-  }, [user, fetchCart]);
+    fetchCart();
+  }, [fetchCart]);
 
   const cartCount = (items ?? []).reduce((sum, item) => sum + (item.quantity ?? 0), 0);
 
