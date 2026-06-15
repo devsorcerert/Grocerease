@@ -14,11 +14,35 @@
       },
       "oauth_client": [
         {
-          "client_id": "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
+          "client_id": "418665414188-m1mffc26v4tu1nstlsesvgg9tnjmcmnt.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.grocereasetv.app",
             "certificate_hash": "a40da8f376768fe64e7eb84799c45d0b49630628"
+          }
+        },
+        {
+          "client_id": "418665414188-7pv8nmqhjeft1lm30op078c8qehfc0jb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d54787676baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "418665414188-7kpqp9m1jdgcur0eodir1f99mbqo4fq5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "d7bb68f76d5f78faa11f1c33bd600be6d6915fb6"
+          }
+        },
+        {
+          "client_id": "418665414188-mdmkg84jnujtmr3nvhkop74ifp78nr9k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.grocereasetv.app",
+            "certificate_hash": "f8f255382c96a6719f5ad4aec704de901a1cef2e"
           }
         },
         {
@@ -28,7 +52,7 @@
       ],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_YOUR_FIREBASE_API_KEY"
+          "current_key": "AIzaSyD8bD_rX8KoFAi0aBenABaGRuN8XxU3s1I"
         }
       ],
       "services": {
@@ -37,6 +61,13 @@
             {
               "client_id": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.grocerease.app"
+              }
             }
           ]
         }

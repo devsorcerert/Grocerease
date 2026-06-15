@@ -63,10 +63,8 @@ jobs:
     needs: [test-backend, test-admin]
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
     permissions:
       contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -161,12 +159,32 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -storepass android \
               -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-            echo "WARNING: Generated a new random keystore. Google Sign-In may fail."
-            echo "Run: base64 -i debug.keystore | pbcopy and save as DEBUG_KEYSTORE_BASE64 secret."
+            echo "WARNING: Generated new keystore - copy base64 from next step and save as DEBUG_KEYSTORE_BASE64 secret"
           else
             echo "debug.keystore already present"
           fi
-          keytool -list -keystore debug.keystore -storepass android -alias androiddebugkey 2>/dev/null | grep -i "SHA1:" || true
+
+      - name: Print SHA-1 and base64 keystore (copy base64 to DEBUG_KEYSTORE_BASE64 secret)
+        working-directory: frontend/android/app
+        run: |
+          echo "========================================"
+          echo " SHA-1 FINGERPRINT (add to Firebase + Google Cloud Console)"
+          echo "========================================"
+          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey 2>&1 | grep -i "sha1"
+          echo "========================================"
+          echo " BASE64 KEYSTORE (save this as DEBUG_KEYSTORE_BASE64 GitHub secret)"
+          echo " Go to: Settings -> Secrets -> Actions -> New repository secret"
+          echo "========================================"
+          base64 -w 0 debug.keystore
+          echo ""
+          echo "========================================"
+
+      - name: Upload debug keystore artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-keystore
+          path: frontend/android/app/debug.keystore
+          retention-days: 30
 
       - name: Make gradlew executable
         working-directory: frontend/android
@@ -178,21 +196,11 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
 
-      - name: Print SHA-1 Certificate Fingerprint
-        run: |
-          echo "========================================"
-          echo " GROCEREASE APK - SHA-1 FINGERPRINT"
-          echo " Use this in Google Cloud Console"
-          echo " Package: com.grocereasetv.app"
-          echo "========================================"
-          keytool -printcert -jarfile frontend/android/app/build/outputs/apk/release/app-release.apk 2>/dev/null | grep -E "SHA1:|SHA-1:" || true
-          echo "========================================"
-
       - name: Rename APK
         run: |
           mkdir -p /home/runner/apk-output
           cp frontend/android/app/build/outputs/apk/release/app-release.apk \
-          /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
+            /home/runner/apk-output/GrocerEase-release-${{ github.sha }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
