@@ -9,6 +9,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -18,12 +21,18 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com"
       }
     }
   },
