@@ -164,19 +164,45 @@ jobs:
             echo "debug.keystore already present"
           fi
 
-      - name: Decode release keystore for signing
+      - name: Restore release keystore from cache
+        id: cache-release-keystore
+        uses: actions/cache@v4
+        with:
+          path: frontend/android/app/release.keystore
+          key: release-keystore-grocerease-v1
+
+      - name: Decode or generate release keystore for signing
         working-directory: frontend/android/app
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
             echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > release.keystore
             echo "release.keystore decoded from RELEASE_KEYSTORE_BASE64 secret"
+          elif [ -f release.keystore ]; then
+            echo "release.keystore restored from cache"
           else
-            echo "WARNING: RELEASE_KEYSTORE_BASE64 secret not set"
-            echo "APK will be signed with debug keystore (fallback in build.gradle)"
-            echo "To fix: generate a release keystore, base64-encode it, and save as RELEASE_KEYSTORE_BASE64 secret"
+            echo "Generating consistent release keystore from secrets..."
+            KS_PASS="${RELEASE_STORE_PASSWORD:-8Kul*^x%fRYB4Wvxjpp1}"
+            KEY_ALIAS="${RELEASE_KEY_ALIAS:-grocerease}"
+            KEY_PASS="${RELEASE_KEY_PASSWORD:-$KS_PASS}"
+            keytool -genkey -v -keystore release.keystore \
+              -storepass "$KS_PASS" \
+              -alias "$KEY_ALIAS" \
+              -keypass "$KEY_PASS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=GrocerEase,OU=Mobile,O=GrocerEase,L=Bengaluru,S=Karnataka,C=IN"
+            echo "release.keystore generated and will be cached for future builds"
           fi
+          echo "======== RELEASE KEYSTORE SHA-1 (add to Firebase!) ========"
+          keytool -list -v -keystore release.keystore \
+            -storepass "${RELEASE_STORE_PASSWORD:-8Kul*^x%fRYB4Wvxjpp1}" \
+            -alias "${RELEASE_KEY_ALIAS:-grocerease}" 2>&1 | grep -E "SHA1|SHA-1"
+          echo "==========================================================="
+          echo "RELEASE_KEYSTORE_BASE64_VALUE=$(base64 -w 0 release.keystore)"
 
       - name: Print SHA-1 and base64 keystore (copy base64 to DEBUG_KEYSTORE_BASE64 secret)
         working-directory: frontend/android/app
