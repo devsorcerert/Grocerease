@@ -19,7 +19,7 @@ interface Address {
   label: string;
   name: string;
   phone: string;
-  address: string;
+  full_address: string;
   city: string;
   state: string;
   pincode: string;
@@ -36,7 +36,7 @@ export default function AddressManagementScreen() {
     label: 'Home',
     name: '',
     phone: '',
-    address: '',
+    full_address: '',
     city: '',
     state: '',
     pincode: '',
@@ -54,31 +54,7 @@ export default function AddressManagementScreen() {
       setAddresses(response.data.addresses || []);
     } catch (error) {
       console.error('Failed to fetch addresses:', error);
-      // Mock data for demo
-      setAddresses([
-        {
-          id: '1',
-          label: 'Home',
-          name: 'John Doe',
-          phone: '+91 98765 43210',
-          address: '123 Main Street, Apartment 4B',
-          city: 'Mumbai',
-          state: 'Maharashtra',
-          pincode: '400001',
-          is_default: true,
-        },
-        {
-          id: '2',
-          label: 'Office',
-          name: 'John Doe',
-          phone: '+91 98765 43210',
-          address: '456 Business Park, Tower A',
-          city: 'Mumbai',
-          state: 'Maharashtra',
-          pincode: '400002',
-          is_default: false,
-        },
-      ]);
+      setAddresses([]);
     } finally {
       setLoading(false);
     }
@@ -90,7 +66,7 @@ export default function AddressManagementScreen() {
       label: 'Home',
       name: '',
       phone: '',
-      address: '',
+      full_address: '',
       city: '',
       state: '',
       pincode: '',
@@ -105,7 +81,7 @@ export default function AddressManagementScreen() {
       label: address.label,
       name: address.name,
       phone: address.phone,
-      address: address.address,
+      full_address: address.full_address,
       city: address.city,
       state: address.state,
       pincode: address.pincode,
@@ -115,7 +91,7 @@ export default function AddressManagementScreen() {
   };
 
   const handleSaveAddress = async () => {
-    if (!formData.name || !formData.phone || !formData.address || !formData.city || !formData.pincode) {
+    if (!formData.name || !formData.phone || !formData.full_address || !formData.city || !formData.pincode) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
@@ -321,8 +297,8 @@ export default function AddressManagementScreen() {
                 <Text style={styles.label}>Address *</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
-                  value={formData.address}
-                  onChangeText={(text) => setFormData({ ...formData, address: text })}
+                  value={formData.full_address}
+                  onChangeText={(text) => setFormData({ ...formData, full_address: text })}
                   placeholder="House No., Building Name, Street"
                   multiline
                   numberOfLines={3}
