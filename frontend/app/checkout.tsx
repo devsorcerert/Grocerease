@@ -215,6 +215,10 @@ export default function CheckoutScreen() {
       const { razorpay_order_id, amount, currency } = payRes.data;
 
       // Open Razorpay WebView — order only confirmed in handleWebViewMessage after signature verified
+      if (!RAZORPAY_KEY_ID) {
+        Alert.alert('Payment Error', 'Payment configuration is missing. Please contact support.');
+        return;
+      }
       setRazorpayHtml(buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId: newOrderId }));
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.detail || 'Something went wrong. Please try again.');
@@ -249,8 +253,12 @@ export default function CheckoutScreen() {
         // Cancel the pending order on backend
         try {
           await api.post(`/orders/${pendingOrderId}/cancel`, {});
-        } catch (error: any) {
-          console.warn('Failed to cancel pending order on server:', error?.message || error);
+        } catch (cancelErr) {
+          console.warn('Failed to cancel order on dismiss:', cancelErr);
+          Alert.alert(
+            'Order Pending',
+            'Payment was cancelled, but we could not clean up your order automatically. Please check your orders and cancel manually if needed.'
+          );
         }
         setPendingOrderId(null);
         Alert.alert('Payment Cancelled', 'Your payment was cancelled. Cart is still saved.');
