@@ -189,7 +189,7 @@ async def login(user: UserLogin, _=Depends(rate_limit)):
 
 
 @api_router.post("/auth/logout")
-async def logout(payload: LogoutRequest, user_id: str = Depends(get_current_user)):
+async def logout(payload: LogoutRequest, user_id: str = Depends(get_currentUser)):
     """
     Logout endpoint - Blacklists the user's refresh token
     """
@@ -255,6 +255,8 @@ async def refresh_token(request: dict):
             
             # Verify user still exists
             user = await db.users.find_one({"id": user_id})
+            if not user:
+                user = await db.admins.find_one({"id": user_id})
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
             
@@ -717,6 +719,43 @@ async def compare_products(product_ids: List[str]):
         }
     }
 
+@api_router.get("/products/analytics")
+async def get_product_analytics(user_id: str = Depends(get_current_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Get all products for analytics
+    all_products = await db.products.find().to_list(10000)
+    
+    # Calculate KPIs
+    total_products = len(all_products)
+    total_stock_value = sum(p.get("price", 0) * p.get("stock", 0) for p in all_products)
+    low_stock_items = len([p for p in all_products if p.get("stock", 0) < p.get("min_stock_level", 10)])
+    out_of_stock = len([p for p in all_products if p.get("stock", 0) == 0])
+    active_products = len([p for p in all_products if p.get("is_active", True)])
+    
+    # Category breakdown
+    category_stats = {}
+    for product in all_products:
+        cat = product.get("category", "Uncategorized")
+        if cat not in category_stats:
+            category_stats[cat] = {"count": 0, "stock_value": 0}
+        category_stats[cat]["count"] += 1
+        category_stats[cat]["stock_value"] += product.get("price", 0) * product.get("stock", 0)
+    
+    return {
+        "total_products": total_products,
+        "active_products": active_products,
+        "total_stock_value": round(total_stock_value, 2),
+        "low_stock_items": low_stock_items,
+        "out_of_stock": out_of_stock,
+        "categories": category_stats,
+        "avg_price": round(sum(p.get("price", 0) for p in all_products) / total_products if total_products > 0 else 0, 2)
+    }
+
+@api_router.delete("/products/{product_id}")
+
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
     product = await db.products.find_one({"id": product_id})
@@ -757,41 +796,6 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
         await db.products.insert_many(products_to_insert)
     
     return {"success": True, "count": len(products_to_insert), "message": f"{len(products_to_insert)} products uploaded"}
-
-@api_router.get("/products/analytics")
-async def get_product_analytics(user_id: str = Depends(get_current_user)):
-    user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    # Get all products for analytics
-    all_products = await db.products.find().to_list(10000)
-    
-    # Calculate KPIs
-    total_products = len(all_products)
-    total_stock_value = sum(p.get("price", 0) * p.get("stock", 0) for p in all_products)
-    low_stock_items = len([p for p in all_products if p.get("stock", 0) < p.get("min_stock_level", 10)])
-    out_of_stock = len([p for p in all_products if p.get("stock", 0) == 0])
-    active_products = len([p for p in all_products if p.get("is_active", True)])
-    
-    # Category breakdown
-    category_stats = {}
-    for product in all_products:
-        cat = product.get("category", "Uncategorized")
-        if cat not in category_stats:
-            category_stats[cat] = {"count": 0, "stock_value": 0}
-        category_stats[cat]["count"] += 1
-        category_stats[cat]["stock_value"] += product.get("price", 0) * product.get("stock", 0)
-    
-    return {
-        "total_products": total_products,
-        "active_products": active_products,
-        "total_stock_value": round(total_stock_value, 2),
-        "low_stock_items": low_stock_items,
-        "out_of_stock": out_of_stock,
-        "categories": category_stats,
-        "avg_price": round(sum(p.get("price", 0) for p in all_products) / total_products if total_products > 0 else 0, 2)
-    }
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, user_id: str = Depends(get_current_user)):
@@ -1375,42 +1379,6 @@ async def get_user_orders(
         "total": total,
         "has_more": (skip + limit) < total
     }
-
-@api_router.post("/orders/{order_id}/cancel")
-async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
-    """Cancel an order"""
-    order = await db.orders.find_one({"id": order_id, "user_id": user_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.get("status") in ["delivered", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Cannot cancel this order")
-    
-    update_data = {"status": "cancelled", "cancelled_at": datetime.utcnow()}
-    if order.get("payment_status") == "paid":
-        update_data["payment_status"] = "refund_pending"
-        
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": update_data}
-    )
-    
-    # Restore stock
-    if order.get("payment_status") == "paid" or order.get("payment_method") == "cod":
-        for item in order.get("items", []):
-            await db.products.update_one(
-                {"id": item.get("product_id")},
-                {"$inc": {"stock": item.get("quantity", 1)}}
-            )
-    
-    await push_notification(
-        user_id,
-        "Order Cancelled",
-        f"Your order #{order_id[:8].upper()} has been cancelled. If you paid online, a refund will be processed in 5-7 business days.",
-        "order",
-    )
-    return {"message": "Order cancelled successfully", "success": True}
-
 
 # ── Wishlist ────────────────────────────────────────────────────────────────
 
