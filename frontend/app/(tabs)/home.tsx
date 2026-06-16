@@ -265,7 +265,7 @@ export default function HomeScreen() {
             {currentAddress ? (
               <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                 <Text style={[styles.addressText, { flexShrink: 1 }]} numberOfLines={1}>
-                  📍 {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
+                  ð {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
                 </Text>
                 {isNewAddressDetected && (
                   <TouchableOpacity 
@@ -277,9 +277,9 @@ export default function HomeScreen() {
                 )}
               </View>
             ) : user?.address ? (
-              <Text style={styles.addressText}>📍 {user.address}, {user.city} - {user.pincode}</Text>
+              <Text style={styles.addressText}>ð {user.address}, {user.city} - {user.pincode}</Text>
             ) : (
-              <Text style={styles.addressText}>📍 Detecting location...</Text>
+              <Text style={styles.addressText}>ð Detecting location...</Text>
             )}
           </View>
           <View style={styles.headerActions}>
@@ -300,7 +300,7 @@ export default function HomeScreen() {
       <View style={styles.searchContainer}>
         <TouchableOpacity 
           style={styles.searchBar}
-          onPress={() => router.push('/search-advanced')}
+          onPress={() => router.push('/search')}
         >
           <Ionicons name="search" size={20} color="#9CA3AF" />
           <Text style={styles.searchPlaceholder}>{t('searchProducts')}</Text>
@@ -354,12 +354,12 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.usageStats}>
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
+                    <Text style={styles.usageStatValue}>â¹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('monthlySpend')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{Number(user?.current_reward || 0).toFixed(2)}</Text>
+                    <Text style={styles.usageStatValue}>â¹{Number(user?.current_reward || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('rewardBalance')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
@@ -373,8 +373,8 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.nextTierText}>
                   {getMonthlyOfferUsage().used === 3 
-                    ? '🎉 Maximum tier unlocked!' 
-                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
+                    ? 'ð Maximum tier unlocked!' 
+                    : `Spend â¹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
                 </Text>
               </View>
             </View>
@@ -406,14 +406,14 @@ export default function HomeScreen() {
             </View>
             <View style={[styles.brandBanner, { backgroundColor: '#FEF3C7' }]}>
               <Text style={styles.bannerBrand}>Tata Tea</Text>
-              <Text style={styles.bannerOffer}>₹50 OFF</Text>
+              <Text style={styles.bannerOffer}>â¹50 OFF</Text>
               <Text style={styles.bannerText}>On 500g pack</Text>
               <View style={styles.bannerBadge}>
                 <Text style={styles.bannerBadgeText}>PROVISION</Text>
               </View>
             </View>
             <View style={[styles.brandBanner, { backgroundColor: '#E0E7FF' }]}>
-              <Text style={styles.bannerBrand}>Nestlé</Text>
+              <Text style={styles.bannerBrand}>NestlÃ©</Text>
               <Text style={styles.bannerOffer}>15% OFF</Text>
               <Text style={styles.bannerText}>On coffee range</Text>
               <View style={styles.bannerBadge}>
@@ -457,7 +457,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.productGrid}>
             {products.slice(0, 6).map((product, index) => (
-              <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => console.log('Product selected:', product.name)}>
+              <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: product.id } })}>
                 <View style={styles.productImageContainer}>
                   {product.image ? (
                     <Image 
@@ -479,8 +479,8 @@ export default function HomeScreen() {
                   <Text style={styles.productUnit}>{product.unit}</Text>
                   <View style={styles.productFooter}>
                     <View style={styles.priceContainer}>
-                      <Text style={styles.productPrice}>₹{product.price}</Text>
-                      <Text style={styles.originalPrice}>₹{(product.price * 1.2).toFixed(0)}</Text>
+                      <Text style={styles.productPrice}>â¹{product.price}</Text>
+                      <Text style={styles.originalPrice}>â¹{(product.price * 1.2).toFixed(0)}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.addBtn}
@@ -545,11 +545,11 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.benefitsBox}>
-              <Text style={styles.benefitsTitle}>📊 Benefits After Linking:</Text>
-              <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
-              <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
-              <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
-              <Text style={styles.benefitsText}>• 🔧 Infrastructure ready for real API integration</Text>
+              <Text style={styles.benefitsTitle}>ð Benefits After Linking:</Text>
+              <Text style={styles.benefitsText}>â¢ Track monthly & yearly spending</Text>
+              <Text style={styles.benefitsText}>â¢ View offer usage in real-time</Text>
+              <Text style={styles.benefitsText}>â¢ Unlock rewards up to â¹1000</Text>
+              <Text style={styles.benefitsText}>â¢ ð§ Infrastructure ready for real API integration</Text>
             </View>
 
             <TextInput
