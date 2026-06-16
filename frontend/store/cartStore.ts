@@ -71,7 +71,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to clear cart:', error);
     } finally {
-      set({ items: [], totalItems: 0, totalPrice: 0 });
+      set({ items: [] });
     }
   },
 }));
