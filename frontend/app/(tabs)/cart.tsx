@@ -43,7 +43,7 @@ export default function CartScreen() {
     try {
       const subtotal = calculateSubtotal();
       if (subtotal > 0) {
-        const response = await api.post('/checkout/calculate-rewards', { subtotal });
+        const response = await api.post('/orders/checkout/calculate-rewards', { subtotal });
         setRewardCalculation(response.data);
       }
     } catch (error) {
@@ -117,7 +117,7 @@ export default function CartScreen() {
               </TouchableOpacity>
               <View style={styles.productDetails}>
                 <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productPrice}>₹{product.price}</Text>
+                <Text style={styles.productPrice}>â¹{product.price}</Text>
               </View>
               <View style={styles.quantityControl}>
                 <TouchableOpacity 
@@ -142,7 +142,7 @@ export default function CartScreen() {
       <View style={styles.summary}>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>{t('subtotal')}</Text>
-          <Text style={styles.summaryValue}>₹{subtotal.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>â¹{subtotal.toFixed(2)}</Text>
         </View>
         
         {/* Auto-Rewards Display */}
@@ -151,7 +151,7 @@ export default function CartScreen() {
             <View style={styles.rewardsBanner}>
               <View style={styles.rewardsBannerHeader}>
                 <Ionicons name="gift" size={20} color="#2D8B47" />
-                <Text style={styles.rewardsBannerTitle}>Auto-Applied Rewards 🎉</Text>
+                <Text style={styles.rewardsBannerTitle}>Auto-Applied Rewards ð</Text>
               </View>
               <Text style={styles.rewardsBannerSubtitle}>
                 Infrastructure ready for advanced reward algorithms
@@ -164,14 +164,14 @@ export default function CartScreen() {
                 <Text style={styles.tierBadge}>{rewardCalculation.new_tier_info?.tier_name || 'Base'}</Text>
               </View>
               <Text style={[styles.summaryValue, styles.discountText]}>
-                -₹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
+                -â¹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
               </Text>
             </View>
             
             <View style={styles.summaryRow}>
               <Text style={styles.summaryText}>Will Earn (Cashback)</Text>
               <Text style={[styles.summaryValue, styles.earnText]}>
-                +₹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
+                +â¹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
               </Text>
             </View>
             
@@ -187,7 +187,7 @@ export default function CartScreen() {
         <View style={[styles.summaryRow, styles.totalRow]}>
           <Text style={styles.totalText}>{t('totalAmount')}</Text>
           <Text style={styles.totalValue}>
-            ₹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
+            â¹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
           </Text>
         </View>
         
