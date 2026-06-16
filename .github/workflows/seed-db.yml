@@ -1,0 +1,64 @@
+name: Seed Database (one-shot)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seed products via admin API
+        run: |
+          pip install requests -q
+          python3 << 'PYEOF'
+import requests, sys, time
+BASE = "https://api.grocereasetv.com"
+EMAIL = "grocereasetv@gmail.com"
+PASSWORD = "uR528m7CnQk2bqOWeVSmlg"
+PRODUCTS = [
+  {"name":"Amul Gold Full Cream Milk","category":"Dairy & Eggs","subcategory":"Milk","price":31,"original_price":32,"unit":"500 ml","brand":"Amul","stock":200,"image":"https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400","description":"Rich full cream milk"},
+  {"name":"Mother Dairy Paneer","category":"Dairy & Eggs","subcategory":"Paneer","price":89,"original_price":95,"unit":"200 g","brand":"Mother Dairy","stock":120,"image":"https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=400","description":"Fresh soft cottage cheese"},
+  {"name":"Farm Fresh Eggs","category":"Dairy & Eggs","subcategory":"Eggs","price":75,"original_price":80,"unit":"6 pcs","brand":"Organic Farm","stock":200,"image":"https://images.unsplash.com/photo-1506976785307-8732e854ad03?w=400","description":"Free-range organic eggs"},
+  {"name":"Shimla Apple","category":"Fruits & Vegetables","subcategory":"Fruits","price":120,"original_price":140,"unit":"1 kg","brand":"Himachal Fresh","stock":100,"image":"https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400","description":"Crisp sweet Shimla apples"},
+  {"name":"Fresh Tomatoes","category":"Fruits & Vegetables","subcategory":"Vegetables","price":30,"original_price":35,"unit":"500 g","brand":"Local Farm","stock":200,"image":"https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=400","description":"Farm-fresh tomatoes"},
+  {"name":"Onion","category":"Fruits & Vegetables","subcategory":"Vegetables","price":35,"original_price":40,"unit":"1 kg","brand":"Local Farm","stock":300,"image":"https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=400","description":"Fresh red onions"},
+  {"name":"Potato","category":"Fruits & Vegetables","subcategory":"Vegetables","price":30,"original_price":35,"unit":"1 kg","brand":"Local Farm","stock":300,"image":"https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=400","description":"Fresh farm potatoes"},
+  {"name":"Aashirvaad Atta Whole Wheat","category":"Staples & Grains","subcategory":"Atta & Flour","price":280,"original_price":300,"unit":"5 kg","brand":"Aashirvaad","stock":150,"image":"https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=400","description":"Superior MP wheat atta"},
+  {"name":"India Gate Basmati Rice","category":"Staples & Grains","subcategory":"Rice","price":210,"original_price":230,"unit":"1 kg","brand":"India Gate","stock":200,"image":"https://images.unsplash.com/photo-1536304993881-ff86e0c9f51f?w=400","description":"Aged basmati rice"},
+  {"name":"Fortune Sunflower Oil","category":"Staples & Grains","subcategory":"Cooking Oil","price":140,"original_price":155,"unit":"1 litre","brand":"Fortune","stock":180,"image":"https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=400","description":"Light healthy sunflower oil"},
+  {"name":"Masoor Dal Red Lentil","category":"Staples & Grains","subcategory":"Dal & Pulses","price":89,"original_price":98,"unit":"500 g","brand":"24 Mantra","stock":160,"image":"https://images.unsplash.com/photo-1612257416648-4bffe4a6a0f0?w=400","description":"Organic masoor dal"},
+  {"name":"Lays Classic Salted","category":"Snacks & Munchies","subcategory":"Chips","price":20,"original_price":20,"unit":"26 g","brand":"Lays","stock":300,"image":"https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=400","description":"Crispy potato chips"},
+  {"name":"Haldirams Bhujia Sev","category":"Snacks & Munchies","subcategory":"Namkeen","price":50,"original_price":55,"unit":"150 g","brand":"Haldirams","stock":200,"image":"https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=400","description":"Crunchy besan sev"},
+  {"name":"Parle-G Glucose Biscuits","category":"Snacks & Munchies","subcategory":"Biscuits","price":10,"original_price":10,"unit":"100 g","brand":"Parle","stock":400,"image":"https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=400","description":"India favourite biscuit"},
+  {"name":"Dairy Milk Silk","category":"Snacks & Munchies","subcategory":"Chocolates","price":99,"original_price":105,"unit":"58 g","brand":"Cadbury","stock":150,"image":"https://images.unsplash.com/photo-1511381939415-e44015466834?w=400","description":"Ultra smooth milk chocolate"},
+  {"name":"Coca-Cola","category":"Beverages","subcategory":"Soft Drinks","price":45,"original_price":48,"unit":"750 ml","brand":"Coca-Cola","stock":250,"image":"https://images.unsplash.com/photo-1554866585-cd94860890b7?w=400","description":"Classic cola"},
+  {"name":"Nescafe Classic Coffee","category":"Beverages","subcategory":"Coffee","price":299,"original_price":330,"unit":"200 g","brand":"Nescafe","stock":100,"image":"https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400","description":"Rich smooth instant coffee"},
+  {"name":"Tata Tea Premium","category":"Beverages","subcategory":"Tea","price":155,"original_price":165,"unit":"250 g","brand":"Tata Tea","stock":200,"image":"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400","description":"Premium Assam Darjeeling blend"},
+  {"name":"Real Fruit Mango Juice","category":"Beverages","subcategory":"Juices","price":90,"original_price":99,"unit":"1 litre","brand":"Real","stock":120,"image":"https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400","description":"100 percent real mango juice"},
+  {"name":"Bisleri Mineral Water","category":"Beverages","subcategory":"Water","price":20,"original_price":20,"unit":"1 litre","brand":"Bisleri","stock":500,"image":"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400","description":"Pure packaged drinking water"},
+  {"name":"Britannia Whole Wheat Bread","category":"Bakery & Bread","subcategory":"Bread","price":38,"original_price":42,"unit":"400 g","brand":"Britannia","stock":150,"image":"https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400","description":"Whole wheat sandwich bread"},
+  {"name":"MDH Garam Masala","category":"Spices & Masalas","subcategory":"Blended Masalas","price":55,"original_price":60,"unit":"100 g","brand":"MDH","stock":200,"image":"https://images.unsplash.com/photo-1532336414038-cf19250c5757?w=400","description":"Authentic blend of whole spices"},
+  {"name":"Everest Red Chilli Powder","category":"Spices & Masalas","subcategory":"Single Spices","price":45,"original_price":50,"unit":"100 g","brand":"Everest","stock":220,"image":"https://images.unsplash.com/photo-1611575619399-6fa7b79cb3f3?w=400","description":"Vibrant red chilli powder"},
+  {"name":"Everest Turmeric Powder","category":"Spices & Masalas","subcategory":"Single Spices","price":38,"original_price":42,"unit":"100 g","brand":"Everest","stock":250,"image":"https://images.unsplash.com/photo-1611575619399-6fa7b79cb3f3?w=400","description":"Pure haldi deep colour"},
+  {"name":"Dove Moisturising Soap","category":"Personal Care","subcategory":"Soap","price":45,"original_price":50,"unit":"75 g","brand":"Dove","stock":300,"image":"https://images.unsplash.com/photo-1607006344380-b6775a0824a7?w=400","description":"1/4 moisturising cream formula"},
+  {"name":"Colgate Max Fresh Toothpaste","category":"Personal Care","subcategory":"Oral Care","price":89,"original_price":99,"unit":"150 g","brand":"Colgate","stock":200,"image":"https://images.unsplash.com/photo-1621610440892-a2827eb6f1d1?w=400","description":"Spearmint fresh formula"},
+  {"name":"Surf Excel Easy Wash","category":"Household & Cleaning","subcategory":"Laundry","price":199,"original_price":220,"unit":"1 kg","brand":"Surf Excel","stock":200,"image":"https://images.unsplash.com/photo-1585076641399-5c06d1b3365f?w=400","description":"Removes tough stains"},
+  {"name":"Vim Dishwash Liquid","category":"Household & Cleaning","subcategory":"Dishwashing","price":79,"original_price":89,"unit":"500 ml","brand":"Vim","stock":180,"image":"https://images.unsplash.com/photo-1585076641399-5c06d1b3365f?w=400","description":"Lemon formula cuts grease"},
+  {"name":"Amul Vanilla Ice Cream","category":"Frozen Foods","subcategory":"Ice Cream","price":125,"original_price":140,"unit":"500 ml","brand":"Amul","stock":90,"image":"https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=400","description":"Creamy real vanilla ice cream"},
+  {"name":"Kelloggs Corn Flakes","category":"Breakfast & Cereals","subcategory":"Cereals","price":175,"original_price":195,"unit":"250 g","brand":"Kelloggs","stock":150,"image":"https://images.unsplash.com/photo-1522184216316-3c25379f8760?w=400","description":"Crispy golden corn flakes"},
+  {"name":"Saffola Oats","category":"Breakfast & Cereals","subcategory":"Oats","price":155,"original_price":170,"unit":"500 g","brand":"Saffola","stock":140,"image":"https://images.unsplash.com/photo-1574189264-69d040e7c128?w=400","description":"Natural rolled oats for heart health"},
+]
+r = requests.post(f"{BASE}/api/admin/login", json={"email":EMAIL,"password":PASSWORD}, timeout=30)
+if r.status_code != 200:
+    print(f"Login failed {r.status_code}: {r.text}"); sys.exit(1)
+token = r.json().get("token")
+print(f"Logged in OK. Seeding {len(PRODUCTS)} products...")
+headers = {"Authorization":f"Bearer {token}","Content-Type":"application/json"}
+ok = fail = 0
+for p in PRODUCTS:
+    res = requests.post(f"{BASE}/api/admin/products", headers=headers, json=p, timeout=30)
+    if res.status_code in (200,201): ok+=1; print(f"  OK  {p['name']}")
+    else: fail+=1; print(f"  ERR {p['name']} => {res.status_code}: {res.text[:60]}")
+    time.sleep(0.1)
+print(f"Done: {ok} inserted, {fail} failed.")
+PYEOF
