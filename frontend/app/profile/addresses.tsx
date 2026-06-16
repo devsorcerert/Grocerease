@@ -194,7 +194,7 @@ export default function AddressManagementScreen() {
                 <Text style={styles.addressName}>{address.name}</Text>
                 <Text style={styles.addressPhone}>{address.phone}</Text>
                 <Text style={styles.addressText}>
-                  {address.address}, {address.city}, {address.state} - {address.pincode}
+                  {address.full_address}, {address.city}, {address.state} - {address.pincode}
                 </Text>
 
                 <View style={styles.addressActions}>
