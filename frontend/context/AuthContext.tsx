@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GOOGLE_CLIENT_ID_WEB, ADMIN_EMAIL } from '../constants/api';
+// @ts-ignore - expo-notifications types resolved after prebuild
 import * as Notifications from 'expo-notifications';
 
 // Fallback in case env var not baked into APK
