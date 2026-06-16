@@ -189,7 +189,7 @@ async def login(user: UserLogin, _=Depends(rate_limit)):
 
 
 @api_router.post("/auth/logout")
-async def logout(payload: LogoutRequest, user_id: str = Depends(get_currentUser)):
+async def logout(payload: LogoutRequest, user_id: str = Depends(get_current_user)):
     """
     Logout endpoint - Blacklists the user's refresh token
     """
