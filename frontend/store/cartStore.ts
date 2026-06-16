@@ -68,9 +68,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
   clearCart: async () => {
     try {
       await api.delete('/cart/clear');
-      set({ items: [] });
     } catch (error) {
       console.error('Failed to clear cart:', error);
+    } finally {
+      set({ items: [], totalItems: 0, totalPrice: 0 });
     }
   },
 }));
