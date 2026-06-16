@@ -5,6 +5,9 @@ export const login = async (email, password) => {
   if (response.data.token) {
     localStorage.setItem('admin_token', response.data.token);
   }
+  if (response.data.refresh_token) {
+    localStorage.setItem('admin_refresh_token', response.data.refresh_token);
+  }
   return response.data;
 };
 
