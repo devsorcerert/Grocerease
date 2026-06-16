@@ -21,6 +21,7 @@ class RiderOrderStatus(BaseModel):
 
 VALID_RIDER_STATUSES = ["reached_store", "picked_up", "out_for_delivery", "delivered"]
 STATUS_TO_ORDER_STATUS = {
+    "reached_store": "reached_store",
     "picked_up": "picked_up",
     "out_for_delivery": "out_for_delivery",
     "delivered": "delivered"
@@ -77,16 +78,16 @@ async def update_order_status(data: RiderOrderStatus, rider_id: str = Depends(ge
         from routers.orders import transition_order_status
         await transition_order_status(order["id"], order_status, rider_id, f"Rider updated to {data.status}")
     if data.status == "delivered":
-        await db.riders.update_one({"id": rider_id}, {"$set": {"current_order_id": None, "status": "online"}})
+        await db.riders.update_one({"id": rider_id}, {"$set": {"current_order_id": null, "status": "online"}})
     return {"success": True}
 
 @router.get("/current-order")
 async def get_current_order(rider_id: str = Depends(get_current_rider)):
     rider = await db.riders.find_one({"id": rider_id})
     if not rider or not rider.get("current_order_id"):
-        return {"order": None}
+        return {"order": null}
     order = await db.orders.find_one({"id": rider["current_order_id"]})
-    return {"order": clean_mongo_doc(order) if order else None}
+    return {"order": clean_mongo_doc(order) if order else null}
 
 @router.post("/push-token")
 async def save_rider_push_token(payload: dict, rider_id: str = Depends(get_current_rider)):
