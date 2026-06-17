@@ -271,4 +271,5 @@ const styles = StyleSheet.create({
   rowInputs: { flexDirection: 'row' },
   button: { backgroundColor: '#2D8B47', paddingVertical: 16, borderRadius: 12, marginTop: 8, minHeight: 52, justifyContent: 'center' },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { c
+  buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+});
