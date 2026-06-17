@@ -159,7 +159,7 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.logoContainer}>
           <Logo size="large" />
-          <Text style={styles.tagline}>India's First Media-Subsidised Grocery App</Text>
+          <Text style={styles.tagline}>India&apos;s First Media-Subsidised Grocery App</Text>
         </View>
 
         {step === 'phone' && (
