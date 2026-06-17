@@ -438,3 +438,4 @@ const styles = StyleSheet.create({
   resendText: { textAlign: 'center', color: BRAND, fontWeight: '600', marginBottom: 12, fontSize: 14 },
   resendDisabled: { color: '#9CA3AF' },
   changePhone: { textAlign: 'center', color: '#6B7280', fontSize: 13, fontWeight: '500' },
+  });
