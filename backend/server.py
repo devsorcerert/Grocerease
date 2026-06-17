@@ -311,7 +311,7 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
         import asyncio
 
         loop = asyncio.get_event_loop()
-        # verify_oauth2_token is synchronous — offload to thread pool
+        # verify_oauth2_token is synchronous â offload to thread pool
         token_info = await loop.run_in_executor(
             None,
             lambda: google_id_token.verify_oauth2_token(
@@ -909,7 +909,7 @@ async def get_brand_banners():
         {
             "id": "3",
             "brand": "Tata Tea",
-            "offer_text": "₹50 OFF",
+            "offer_text": "â¹50 OFF",
             "description": "On 500g pack",
             "banner_image": "",
             "background_color": "#FEF3C7",
@@ -919,7 +919,7 @@ async def get_brand_banners():
         },
         {
             "id": "4",
-            "brand": "Nestlé",
+            "brand": "NestlÃ©",
             "offer_text": "15% OFF",
             "description": "On coffee range",
             "banner_image": "",
@@ -990,6 +990,16 @@ async def admin_login(login_data: UserLogin):
         admin_role = db_admin.get("role", "admin")
         if db_admin.get("password"):
             password_ok = verify_password(login_data.password, db_admin["password"])
+        # Also check env-var credentials — always authoritative
+        # (DB hash may be stale if ADMIN_PASSWORD changed after initial seeding)
+        if not password_ok and email == ADMIN_EMAIL.lower().strip():
+            if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
+                password_ok = True
+            elif ADMIN_PASSWORD_HASH:
+                try:
+                    password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
+                except Exception:
+                    password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
     else:
         # Fallback to environment credentials if needed (e.g. dev bootstrap)
         if email == ADMIN_EMAIL.lower().strip():
@@ -1380,7 +1390,7 @@ async def get_user_orders(
         "has_more": (skip + limit) < total
     }
 
-# ── Wishlist ────────────────────────────────────────────────────────────────
+# ââ Wishlist ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @api_router.get("/wishlist/ids")
 async def get_wishlist_ids(user_id: str = Depends(get_current_user)):
@@ -1414,7 +1424,7 @@ async def remove_from_wishlist(product_id: str, user_id: str = Depends(get_curre
     return {"status": "removed"}
 
 
-# ── Notifications ────────────────────────────────────────────────────────────
+# ââ Notifications ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @api_router.get("/notifications")
 async def get_notifications(user_id: str = Depends(get_current_user)):
@@ -1637,7 +1647,7 @@ async def validate_coupon(payload: CouponValidate, user_id: str = Depends(get_cu
         raise HTTPException(status_code=400, detail="Coupon has expired")
         
     if payload.subtotal < coupon.get("min_order_value", 0):
-        raise HTTPException(status_code=400, detail=f"Minimum order value for this coupon is ₹{coupon['min_order_value']}")
+        raise HTTPException(status_code=400, detail=f"Minimum order value for this coupon is â¹{coupon['min_order_value']}")
         
     discount = 0.0
     if coupon.get("discount_percentage", 0) > 0:

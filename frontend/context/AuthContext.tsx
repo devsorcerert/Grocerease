@@ -414,6 +414,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Native Direct Google Sign-In Flow
+      // Wake up backend first — Render free tier sleeps after inactivity
+      try { await api.get('/health', { timeout: 15000 }); } catch { /* ignore */ }
       ensureGoogleSigninConfigured();
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       const signInResult: any = await GoogleSignin.signIn();

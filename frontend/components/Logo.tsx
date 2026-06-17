@@ -12,7 +12,7 @@ export default function Logo({ size = 'medium' }: LogoProps) {
   return (
     <View style={styles.container}>
       <Image
-        source={require('../assets/images/logo.png')}
+        source={require('../assets/images/adaptive-icon.png')}
         style={{ width: dim, height: dim }}
         resizeMode="contain"
       />
