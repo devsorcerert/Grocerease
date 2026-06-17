@@ -32,7 +32,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
-  const otpRefs = useRef<Array<TextInput | null>>([]);
+  const otpRefs = useRef<(TextInput | null)[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -345,7 +345,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             
             <TouchableOpacity onPress={() => { setStep('phone'); setOtp(['', '', '', '', '', '']); }}>
-              <Text style={styles.changePhone}>← Change number</Text>
+              <Text style={styles.changePhone}>â Change number</Text>
             </TouchableOpacity>
           </View>
         )}

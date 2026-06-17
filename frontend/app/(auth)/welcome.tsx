@@ -34,7 +34,7 @@ export default function WelcomeScreen() {
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
 
-  const otpRefs = useRef<Array<TextInput | null>>([]);
+  const otpRefs = useRef<(TextInput | null)[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -150,13 +150,13 @@ export default function WelcomeScreen() {
             style={[styles.langPill, language === 'hi' && styles.activeLangPill]}
             onPress={() => changeLanguage('hi')}
           >
-            <Text style={[styles.langText, language === 'hi' && styles.activeLangText]}>हिंदी</Text>
+            <Text style={[styles.langText, language === 'hi' && styles.activeLangText]}>à¤¹à¤¿à¤à¤¦à¥</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.langPill, language === 'te' && styles.activeLangPill]}
             onPress={() => changeLanguage('te')}
           >
-            <Text style={[styles.langText, language === 'te' && styles.activeLangText]}>తెలుగు</Text>
+            <Text style={[styles.langText, language === 'te' && styles.activeLangText]}>à°¤à±à°²à±à°à±</Text>
           </TouchableOpacity>
         </View>
 
@@ -178,15 +178,15 @@ export default function WelcomeScreen() {
               {/* Features List */}
               <View style={styles.features}>
                 <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>📺</Text>
+                  <Text style={styles.featureIcon}>ðº</Text>
                   <Text style={styles.featureText}>{t('featureLinkCable')}</Text>
                 </View>
                 <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>🎬</Text>
+                  <Text style={styles.featureIcon}>ð¬</Text>
                   <Text style={styles.featureText}>{t('featureWatchShows')}</Text>
                 </View>
                 <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>🛒</Text>
+                  <Text style={styles.featureIcon}>ð</Text>
                   <Text style={styles.featureText}>{t('featureShopRewards')}</Text>
                 </View>
               </View>
