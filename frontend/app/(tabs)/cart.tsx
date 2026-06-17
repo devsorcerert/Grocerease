@@ -10,15 +10,16 @@ import { useTranslation } from '../../context/LanguageContext';
 
 export default function CartScreen() {
   const { items, fetchCart, updateQuantity, clearCart } = useCartStore();
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
   const [products, setProducts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [rewardCalculation, setRewardCalculation] = useState<any>(null);
 
   useEffect(() => {
     fetchCart();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function CartScreen() {
     if (items.length > 0) {
       calculateRewards();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   const fetchProductDetails = async () => {
@@ -54,7 +56,7 @@ export default function CartScreen() {
   const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
     try {
       await updateQuantity(productId, newQuantity);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to update quantity');
     }
   };
@@ -64,14 +66,6 @@ export default function CartScreen() {
       const product = products.find(p => p.id === item.product_id);
       return sum + (product?.price || 0) * item.quantity;
     }, 0);
-  };
-
-  const calculateReward = () => {
-    const spend = user?.monthly_spend || 0;
-    if (spend >= 25000) return 1000;
-    if (spend >= 13000) return 500;
-    if (spend >= 7000) return 250;
-    return 0;
   };
 
   const handleCheckout = () => {
@@ -117,7 +111,7 @@ export default function CartScreen() {
               </TouchableOpacity>
               <View style={styles.productDetails}>
                 <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productPrice}>₹{product.price}</Text>
+                <Text style={styles.productPrice}>â¹{product.price}</Text>
               </View>
               <View style={styles.quantityControl}>
                 <TouchableOpacity 
@@ -142,7 +136,7 @@ export default function CartScreen() {
       <View style={styles.summary}>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>{t('subtotal')}</Text>
-          <Text style={styles.summaryValue}>₹{subtotal.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>â¹{subtotal.toFixed(2)}</Text>
         </View>
         
         {/* Auto-Rewards Display */}
@@ -151,7 +145,7 @@ export default function CartScreen() {
             <View style={styles.rewardsBanner}>
               <View style={styles.rewardsBannerHeader}>
                 <Ionicons name="gift" size={20} color="#2D8B47" />
-                <Text style={styles.rewardsBannerTitle}>Auto-Applied Rewards 🎉</Text>
+                <Text style={styles.rewardsBannerTitle}>Auto-Applied Rewards ð</Text>
               </View>
               <Text style={styles.rewardsBannerSubtitle}>
                 Infrastructure ready for advanced reward algorithms
@@ -164,14 +158,14 @@ export default function CartScreen() {
                 <Text style={styles.tierBadge}>{rewardCalculation.new_tier_info?.tier_name || 'Base'}</Text>
               </View>
               <Text style={[styles.summaryValue, styles.discountText]}>
-                -₹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
+                -â¹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
               </Text>
             </View>
             
             <View style={styles.summaryRow}>
               <Text style={styles.summaryText}>Will Earn (Cashback)</Text>
               <Text style={[styles.summaryValue, styles.earnText]}>
-                +₹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
+                +â¹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
               </Text>
             </View>
             
@@ -187,7 +181,7 @@ export default function CartScreen() {
         <View style={[styles.summaryRow, styles.totalRow]}>
           <Text style={styles.totalText}>{t('totalAmount')}</Text>
           <Text style={styles.totalValue}>
-            ₹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
+            â¹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
           </Text>
         </View>
         
