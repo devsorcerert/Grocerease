@@ -6,10 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import api from '../utils/api';
 import { useCartStore } from '../store/cartStore';
 import SearchBar from '../components/SearchBar';
+import { useTranslation } from '../context/LanguageContext';
 
 export default function SearchResultsPage() {
   const router = useRouter();
   const { q } = useLocalSearchParams();
+  const { t } = useTranslation();
   const searchQuery = Array.isArray(q) ? q[0] : q || '';
   
   const { addToCart } = useCartStore();
@@ -50,7 +52,7 @@ export default function SearchResultsPage() {
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
         <View style={styles.searchContainer}>
-          <SearchBar placeholder="Search products..." />
+          <SearchBar placeholder={t('searchProducts')} />
         </View>
       </View>
 

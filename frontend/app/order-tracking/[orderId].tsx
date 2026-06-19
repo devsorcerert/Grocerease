@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
+import { useTranslation } from '../../context/LanguageContext';
 
 interface TrackingUpdate {
   timestamp: string;
@@ -31,6 +32,7 @@ const STATUS_INDEX: Record<string, number> = {
 export default function OrderTrackingPage() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams();
+  const { t } = useTranslation();
   const [tracking, setTracking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -146,7 +148,7 @@ export default function OrderTrackingPage() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Track Order</Text>
+        <Text style={styles.headerTitle}>{t('trackOrder')}</Text>
         <TouchableOpacity onPress={() => fetchTracking(true)}>
           <Ionicons name="refresh" size={24} color="#2D8B47" />
         </TouchableOpacity>
@@ -330,7 +332,7 @@ export default function OrderTrackingPage() {
             ) : (
               <>
                 <Ionicons name="close-circle-outline" size={20} color="#DC2626" />
-                <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                <Text style={styles.cancelButtonText}>{t('cancelOrder')}</Text>
               </>
             )}
           </TouchableOpacity>

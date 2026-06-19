@@ -1,11 +1,13 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
+import { useTranslation } from '../../context/LanguageContext';
 import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 export default function TabsLayout() {
   const { items, fetchCart } = useCartStore();
+  const { t } = useTranslation();
 
   useEffect(() => {
     fetchCart();
@@ -37,28 +39,28 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
+          title: t('tabHome'),
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="categories"
         options={{
-          title: 'Categories',
+          title: t('tabCategories'),
           tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="videos"
         options={{
-          title: 'GrocerEase TV',
+          title: t('tabTV'),
           tabBarIcon: ({ color, size }) => <Ionicons name="tv" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="cart"
         options={{
-          title: 'Cart',
+          title: t('tabCart'),
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="cart" size={size} color={color} />
@@ -74,7 +76,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('tabProfile'),
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />

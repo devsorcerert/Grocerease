@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
+import { useTranslation } from '../../context/LanguageContext';
 import { useCartStore } from '../../store/cartStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -33,6 +34,7 @@ export default function ProductDetailPage() {
   const { productId } = useLocalSearchParams();
   const { addToCart } = useCartStore();
   
+  const { t } = useTranslation();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -90,7 +92,7 @@ export default function ProductDetailPage() {
   const handleAddToCart = async () => {
     try {
       if (product.stock === 0) {
-        Alert.alert('Out of Stock', 'This product is currently unavailable');
+        Alert.alert(t('outOfStock'), 'This product is currently unavailable');
         return;
       }
       
@@ -152,7 +154,7 @@ export default function ProductDetailPage() {
           <Ionicons name="alert-circle-outline" size={64} color="#DC2626" />
           <Text style={styles.errorTitle}>Product Not Found</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={styles.backButtonText}>{t('back')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -227,7 +229,7 @@ export default function ProductDetailPage() {
           
           {product.stock === 0 && (
             <View style={styles.outOfStockBanner}>
-              <Text style={styles.outOfStockText}>OUT OF STOCK</Text>
+              <Text style={styles.outOfStockText}>{t('outOfStock').toUpperCase()}</Text>
             </View>
           )}
           
@@ -274,7 +276,7 @@ export default function ProductDetailPage() {
           {/* Description */}
           {product.description && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Description</Text>
+              <Text style={styles.sectionTitle}>{t('description')}</Text>
               <Text style={styles.descriptionText}>{product.description}</Text>
             </View>
           )}
@@ -327,7 +329,7 @@ export default function ProductDetailPage() {
           {reviews.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Customer Reviews</Text>
+                <Text style={styles.sectionTitle}>{t('customerReviews')}</Text>
                 <TouchableOpacity>
                   <Text style={styles.seeAllText}>See All</Text>
                 </TouchableOpacity>
@@ -447,7 +449,7 @@ export default function ProductDetailPage() {
         >
           <Ionicons name="cart-outline" size={20} color="#fff" />
           <Text style={styles.addToCartButtonText}>
-            {product.stock === 0 ? 'Out of Stock' : `Add to Cart • ₹${product.price * quantity}`}
+            {product.stock === 0 ? t('outOfStock') : `${t('addToCart')} • ₹${product.price * quantity}`}
           </Text>
         </TouchableOpacity>
       </View>

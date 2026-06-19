@@ -150,13 +150,13 @@ export default function WelcomeScreen() {
             style={[styles.langPill, language === 'hi' && styles.activeLangPill]}
             onPress={() => changeLanguage('hi')}
           >
-            <Text style={[styles.langText, language === 'hi' && styles.activeLangText]}>à¤¹à¤¿à¤à¤¦à¥</Text>
+            <Text style={[styles.langText, language === 'hi' && styles.activeLangText]}>हिंदी</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.langPill, language === 'te' && styles.activeLangPill]}
             onPress={() => changeLanguage('te')}
           >
-            <Text style={[styles.langText, language === 'te' && styles.activeLangText]}>à°¤à±à°²à±à°à±</Text>
+            <Text style={[styles.langText, language === 'te' && styles.activeLangText]}>తెలుగు</Text>
           </TouchableOpacity>
         </View>
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from '../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function OrderSuccessPage() {
@@ -13,6 +14,7 @@ export default function OrderSuccessPage() {
   const cashbackEarned = params.cashbackEarned as string;
   const tier = params.tier as string;
 
+  const { t } = useTranslation();
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -42,36 +44,36 @@ export default function OrderSuccessPage() {
         </Animated.View>
 
         <Animated.View style={[styles.details, { opacity: fadeAnim }]}>
-          <Text style={styles.title}>Order Placed!</Text>
-          <Text style={styles.subtitle}>Your order has been placed successfully</Text>
+          <Text style={styles.title}>{t('orderPlaced')}</Text>
+          <Text style={styles.subtitle}>{t('orderPlacedSubtitle')}</Text>
 
           {orderId && (
             <View style={styles.orderIdContainer}>
-              <Text style={styles.orderIdLabel}>Order ID</Text>
+              <Text style={styles.orderIdLabel}>{t('orderIdLabel')}</Text>
               <Text style={styles.orderIdValue}>#{orderId.slice(0, 8).toUpperCase()}</Text>
             </View>
           )}
 
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Amount Paid</Text>
+              <Text style={styles.infoLabel}>{t('amountPaid')}</Text>
               <Text style={styles.infoValue}>₹{total || '0'}</Text>
             </View>
             {rewardUsed && Number(rewardUsed) > 0 && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Rewards Used</Text>
+                <Text style={styles.infoLabel}>{t('rewardsUsed')}</Text>
                 <Text style={[styles.infoValue, styles.rewardText]}>-₹{rewardUsed}</Text>
               </View>
             )}
             {cashbackEarned && Number(cashbackEarned) > 0 && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Cashback Earned</Text>
+                <Text style={styles.infoLabel}>{t('cashbackEarned')}</Text>
                 <Text style={[styles.infoValue, styles.cashbackText]}>+₹{cashbackEarned}</Text>
               </View>
             )}
             {tier && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Reward Tier</Text>
+                <Text style={styles.infoLabel}>{t('rewardTier')}</Text>
                 <View style={styles.tierBadge}>
                   <Text style={styles.tierText}>{tier}</Text>
                 </View>
@@ -81,7 +83,7 @@ export default function OrderSuccessPage() {
 
           <View style={styles.deliveryInfo}>
             <Ionicons name="time-outline" size={20} color="#2D8B47" />
-            <Text style={styles.deliveryText}>Estimated delivery in 30-45 minutes</Text>
+            <Text style={styles.deliveryText}>{t('estimatedDeliveryText')}</Text>
           </View>
 
           <View style={styles.actions}>
@@ -90,7 +92,7 @@ export default function OrderSuccessPage() {
               onPress={() => router.push(`/order-tracking/${orderId}`)}
             >
               <Ionicons name="location-outline" size={20} color="#fff" />
-              <Text style={styles.trackButtonText}>Track Order</Text>
+              <Text style={styles.trackButtonText}>{t('trackOrder')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -98,14 +100,14 @@ export default function OrderSuccessPage() {
               onPress={() => router.replace('/(tabs)/home')}
             >
               <Ionicons name="home-outline" size={20} color="#2D8B47" />
-              <Text style={styles.homeButtonText}>Continue Shopping</Text>
+              <Text style={styles.homeButtonText}>{t('continueShopping')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.ordersButton}
               onPress={() => router.push('/orders')}
             >
-              <Text style={styles.ordersButtonText}>View All Orders</Text>
+              <Text style={styles.ordersButtonText}>{t('viewAllOrders')}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../utils/api';
+import { useTranslation } from '../context/LanguageContext';
 
 interface Order {
   _id: string;
@@ -26,6 +27,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function OrdersPage() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2D8B47" />
-          <Text style={styles.loadingText}>Loading orders...</Text>
+          <Text style={styles.loadingText}>{t('loadingOrders')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -93,19 +95,19 @@ export default function OrdersPage() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#111" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>My Orders</Text>
+          <Text style={styles.headerTitle}>{t('ordersTitle')}</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <View style={styles.emptyContainer}>
           <Ionicons name="receipt-outline" size={80} color="#D1D5DB" />
-          <Text style={styles.emptyTitle}>No orders yet</Text>
-          <Text style={styles.emptyText}>Start shopping to see your orders here</Text>
+          <Text style={styles.emptyTitle}>{t('noOrdersYet')}</Text>
+          <Text style={styles.emptyText}>{t('startShoppingOrders')}</Text>
           <TouchableOpacity 
             style={styles.shopButton}
             onPress={() => router.push('/(tabs)/home')}
           >
-            <Text style={styles.shopButtonText}>Start Shopping</Text>
+            <Text style={styles.shopButtonText}>{t('startShopping')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -118,7 +120,7 @@ export default function OrdersPage() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Orders ({orders.length})</Text>
+        <Text style={styles.headerTitle}>{t('ordersTitle')} ({orders.length})</Text>
         <TouchableOpacity onPress={fetchOrders}>
           <Ionicons name="refresh" size={24} color="#2D8B47" />
         </TouchableOpacity>
@@ -153,7 +155,7 @@ export default function OrdersPage() {
               <View style={styles.orderDetails}>
                 <View style={styles.divider} />
                 
-                <Text style={styles.sectionTitle}>Items:</Text>
+                <Text style={styles.sectionTitle}>{t('items')}:</Text>
                 {order.items.map((item, index) => (
                   <View key={index} style={styles.itemRow}>
                     <Text style={styles.itemName}>{item.name} x{item.quantity}</Text>
@@ -164,12 +166,12 @@ export default function OrdersPage() {
                 <View style={styles.divider} />
 
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Delivery Address:</Text>
+                  <Text style={styles.detailLabel}>{t('deliveryAddressLabel')}:</Text>
                   <Text style={styles.detailValue}>{order.delivery_address || 'N/A'}</Text>
                 </View>
 
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Payment Method:</Text>
+                  <Text style={styles.detailLabel}>{t('paymentMethodLabel')}:</Text>
                   <Text style={styles.detailValue}>{order.payment_method || 'COD'}</Text>
                 </View>
 
@@ -179,12 +181,12 @@ export default function OrdersPage() {
                     onPress={() => router.push(`/order-tracking/${order.id}`)}
                   >
                     <Ionicons name="location-outline" size={18} color="#fff" />
-                    <Text style={styles.trackButtonText}>Track Order</Text>
+                    <Text style={styles.trackButtonText}>{t('trackOrder')}</Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity style={styles.reorderButton}>
                     <Ionicons name="refresh-outline" size={18} color="#2D8B47" />
-                    <Text style={styles.reorderText}>Reorder</Text>
+                    <Text style={styles.reorderText}>{t('reorder')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
