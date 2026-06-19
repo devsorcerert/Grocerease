@@ -1,6 +1,6 @@
 // constants/api.ts
 
-const DEFAULT_BACKEND_URL = 'https://grocerease-backend.onrender.com';
+const DEFAULT_BACKEND_URL = 'https://grocerease-backend-0uip.onrender.com';
 
 const rawBackendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL;
 
