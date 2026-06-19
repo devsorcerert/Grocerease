@@ -1711,6 +1711,14 @@ async def admin_order_status_wrapper(order_id: str, payload: dict, admin=Depends
     return await admin_update_order_status(order_id=order_id, payload=payload, admin=admin)
 
 
+
+@api_router.patch("/admin/users/update-name")
+async def admin_update_user_name(email: str, name: str, admin=Depends(verify_admin)):
+    """Admin endpoint: update any user's display name by email."""
+    result = await db.users.update_one({"email": email}, {"$set": {"name": name}})
+    return {"matched": result.matched_count, "modified": result.modified_count}
+
+
 app.include_router(api_router)
 app.include_router(riders_router, prefix="/api")
 
