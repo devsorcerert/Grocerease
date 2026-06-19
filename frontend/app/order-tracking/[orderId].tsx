@@ -52,6 +52,12 @@ export default function OrderTrackingPage() {
   }, [orderId, tracking?.status]);
 
   const fetchTracking = async (showLoader = false) => {
+    // BUG-03 fix: bail early if orderId is undefined — avoids "/orders/undefined/tracking" 404
+    if (!orderId) {
+      setLoading(false);
+      if (showLoader) Alert.alert('Error', 'Invalid order ID. Please try again from the Orders page.');
+      return;
+    }
     try {
       if (showLoader || !tracking) {
         setLoading(true);
@@ -162,7 +168,7 @@ export default function OrderTrackingPage() {
         <View style={styles.orderIdCard}>
           <View style={styles.orderIdLeft}>
             <Text style={styles.orderIdLabel}>Order ID</Text>
-            <Text style={styles.orderIdValue}>#{String(orderId).slice(0, 8).toUpperCase()}</Text>
+            <Text style={styles.orderIdValue}>{orderId ? `#${String(orderId).slice(0, 8).toUpperCase()}` : "---"}</Text>
           </View>
           {tracking?.estimated_delivery && !isCancelled && !isDelivered && (
             <View style={styles.etaContainer}>

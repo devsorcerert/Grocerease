@@ -187,6 +187,12 @@ export default function CheckoutScreen() {
       Alert.alert('No Address Selected', 'Please select or add a delivery address before placing your order.');
       return;
     }
+    // BUG-01 fix: validate Razorpay key BEFORE starting spinner or any API call.
+    // Prevents BUG-02 (spinner stuck) because setPlacing(true) is never reached.
+    if (paymentMethod === 'razorpay' && !RAZORPAY_KEY_ID) {
+      Alert.alert('Payment Error', 'Payment configuration is missing. Please contact support.');
+      return;
+    }
     setPlacing(true);
     try {
       if (paymentMethod === 'cod') {
@@ -215,10 +221,7 @@ export default function CheckoutScreen() {
       const { razorpay_order_id, amount, currency } = payRes.data;
 
       // Open Razorpay WebView — order only confirmed in handleWebViewMessage after signature verified
-      if (!RAZORPAY_KEY_ID) {
-        Alert.alert('Payment Error', 'Payment configuration is missing. Please contact support.');
-        return;
-      }
+      // (Key already validated before setPlacing — see BUG-01/02 fix above)
       setRazorpayHtml(buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId: newOrderId }));
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.detail || 'Something went wrong. Please try again.');

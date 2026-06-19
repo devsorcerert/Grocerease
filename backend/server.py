@@ -42,6 +42,16 @@ from models import (
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# BUG-05 fix: ensure all JSON responses include charset=utf-8 so ₹, •, emojis
+# render correctly on Android clients that default to Latin-1 decoding.
+@app.middleware("http")
+async def add_utf8_charset(request: Request, call_next):
+    response = await call_next(request)
+    ct = response.headers.get("content-type", "")
+    if "application/json" in ct and "charset" not in ct:
+        response.headers["content-type"] = "application/json; charset=utf-8"
+    return response
+
 @app.on_event("startup")
 async def startup_db_client():
     try:
