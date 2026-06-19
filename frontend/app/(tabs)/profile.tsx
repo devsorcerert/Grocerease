@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -193,16 +193,7 @@ export default function ProfileScreen() {
 
         {/* Actions Menu */}
         <View style={styles.section}>
-          {user?.is_admin && Platform.OS === 'web' && (
-            <TouchableOpacity
-              style={[styles.menuItem, styles.adminMenuItem]}
-              onPress={() => router.push('/admin')}
-            >
-              <Ionicons name="shield-checkmark" size={24} color="#2D8B47" />
-              <Text style={[styles.menuText, styles.adminMenuText]}>Admin Dashboard (Web)</Text>
-              <Ionicons name="chevron-forward" size={20} color="#2D8B47" />
-            </TouchableOpacity>
-          )}
+
 
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/profile/edit')}>
             <Ionicons name="person-outline" size={24} color="#374151" />
@@ -246,14 +237,14 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          {/* Admin Panel Link */}
-          {user?.email === 'admin@grocereasetv.com' && (
+          {/* Admin Panel — visible to any user with is_admin: true (all platforms) */}
+          {user?.is_admin === true && (
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: '#ECFDF5', paddingHorizontal: 12, borderRadius: 8, marginTop: 8 }]}
-              onPress={() => router.push('/admin/')}
+              style={[styles.menuItem, styles.adminMenuItem]}
+              onPress={() => router.push('/admin')}
             >
               <Ionicons name="shield-checkmark" size={24} color="#2D8B47" />
-              <Text style={[styles.menuText, { color: '#2D8B47', fontWeight: '600' }]}>{t('adminPanel')}</Text>
+              <Text style={[styles.menuText, styles.adminMenuText]}>Admin Panel</Text>
               <Ionicons name="chevron-forward" size={20} color="#2D8B47" />
             </TouchableOpacity>
           )}

@@ -470,24 +470,48 @@ async def social_auth(auth_data: SocialAuthRequest, _=Depends(rate_limit)):
 
 @api_router.get("/auth/me")
 async def get_me(user_id: str = Depends(get_current_user)):
+    # BUG-12 fix: check db.users first, then fall through to db.admins.
+    # Admin tokens carry user_id = "default-admin-id" which only exists in
+    # db.admins, not db.users — so the old code 404-ed and auto-logged admins out.
     user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {
-        "id": user["id"],
-        "name": user["name"],
-        "email": user["email"],
-        "phone": user.get("phone"),
-        "address": user.get("address"),
-        "city": user.get("city"),
-        "pincode": user.get("pincode"),
-        "cable_tv_linked": user.get("cable_tv_linked", False),
-        "cable_tv_details": user.get("cable_tv_details"),
-        "monthly_spend": user.get("monthly_spend", 0.0),
-        "current_reward": user.get("current_reward", 0.0),
-        "is_admin": user.get("is_admin", False)
-    }
+    if user:
+        return {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "phone": user.get("phone"),
+            "address": user.get("address"),
+            "city": user.get("city"),
+            "pincode": user.get("pincode"),
+            "cable_tv_linked": user.get("cable_tv_linked", False),
+            "cable_tv_details": user.get("cable_tv_details"),
+            "monthly_spend": user.get("monthly_spend", 0.0),
+            "current_reward": user.get("current_reward", 0.0),
+            "is_admin": user.get("is_admin", False),
+            "total_spend": user.get("total_spend", 0.0),
+        }
+
+    # Not in db.users — check db.admins (admin JWT path)
+    admin = await db.admins.find_one({"id": user_id})
+    if admin:
+        return {
+            "id": admin["id"],
+            "name": admin.get("name", "Admin"),
+            "email": admin.get("email", ""),
+            "phone": None,
+            "address": None,
+            "city": None,
+            "pincode": None,
+            "cable_tv_linked": False,
+            "cable_tv_details": None,
+            "monthly_spend": 0.0,
+            "current_reward": 0.0,
+            "is_admin": True,
+            "role": admin.get("role", "admin"),
+            "total_spend": 0.0,
+        }
+
+    raise HTTPException(status_code=404, detail="User not found")
 
 @api_router.post("/user/push-token")
 async def save_push_token(payload: dict, user_id: str = Depends(get_current_user)):
