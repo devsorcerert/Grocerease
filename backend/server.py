@@ -1714,9 +1714,29 @@ async def admin_order_status_wrapper(order_id: str, payload: dict, admin=Depends
 
 @api_router.patch("/admin/users/update-name")
 async def admin_update_user_name(email: str, name: str, admin=Depends(verify_admin)):
-    """Admin endpoint: update any user's display name by email."""
-    result = await db.users.update_one({"email": email}, {"$set": {"name": name}})
-    return {"matched": result.matched_count, "modified": result.modified_count}
+    """Admin endpoint: update any user's display name by email (tries multiple field names)."""
+    # Try multiple possible email field names used by different auth flows
+    for field in ["email", "google_email", "user_email"]:
+        result = await db.users.update_one({field: email}, {"$set": {"name": name}})
+        if result.matched_count > 0:
+            return {"matched": result.matched_count, "modified": result.modified_count, "field": field}
+    # Also try case-insensitive regex
+    import re as _re
+    result = await db.users.update_one(
+        {"$or": [{"email": {"$regex": f"^{_re.escape(email)}$", "$options": "i"}},
+                 {"google_email": {"$regex": f"^{_re.escape(email)}$", "$options": "i"}}]},
+        {"$set": {"name": name}}
+    )
+    return {"matched": result.matched_count, "modified": result.modified_count, "field": "regex"}
+
+@api_router.get("/admin/users/find")
+async def admin_find_user(q: str, admin=Depends(verify_admin)):
+    """Admin endpoint: find users matching a string (for debugging)."""
+    users = await db.users.find(
+        {"$or": [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]},
+        {"_id": 0, "email": 1, "name": 1, "google_email": 1, "created_at": 1}
+    ).limit(5).to_list(5)
+    return users
 
 
 app.include_router(api_router)
