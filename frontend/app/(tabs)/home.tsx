@@ -355,12 +355,12 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.usageStats}>
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>Ã¢ÂÂ¹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
+                    <Text style={styles.usageStatValue}>₹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('monthlySpend')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>Ã¢ÂÂ¹{Number(user?.current_reward || 0).toFixed(2)}</Text>
+                    <Text style={styles.usageStatValue}>₹{Number(user?.current_reward || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('rewardBalance')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
@@ -375,7 +375,7 @@ export default function HomeScreen() {
                 <Text style={styles.nextTierText}>
                   {getMonthlyOfferUsage().used === 3 
                     ? 'Ã°ÂÂÂ Maximum tier unlocked!' 
-                    : `Spend Ã¢ÂÂ¹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
+                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
                 </Text>
               </View>
             </View>
@@ -407,14 +407,14 @@ export default function HomeScreen() {
             </View>
             <View style={[styles.brandBanner, { backgroundColor: '#FEF3C7' }]}>
               <Text style={styles.bannerBrand}>Tata Tea</Text>
-              <Text style={styles.bannerOffer}>Ã¢ÂÂ¹50 OFF</Text>
+              <Text style={styles.bannerOffer}>₹50 OFF</Text>
               <Text style={styles.bannerText}>On 500g pack</Text>
               <View style={styles.bannerBadge}>
                 <Text style={styles.bannerBadgeText}>PROVISION</Text>
               </View>
             </View>
             <View style={[styles.brandBanner, { backgroundColor: '#E0E7FF' }]}>
-              <Text style={styles.bannerBrand}>NestlÃÂ©</Text>
+              <Text style={styles.bannerBrand}>Nestlé</Text>
               <Text style={styles.bannerOffer}>15% OFF</Text>
               <Text style={styles.bannerText}>On coffee range</Text>
               <View style={styles.bannerBadge}>
@@ -480,8 +480,8 @@ export default function HomeScreen() {
                   <Text style={styles.productUnit}>{product.unit}</Text>
                   <View style={styles.productFooter}>
                     <View style={styles.priceContainer}>
-                      <Text style={styles.productPrice}>Ã¢ÂÂ¹{product.price}</Text>
-                      <Text style={styles.originalPrice}>Ã¢ÂÂ¹{(product.price * 1.2).toFixed(0)}</Text>
+                      <Text style={styles.productPrice}>₹{product.price}</Text>
+                      <Text style={styles.originalPrice}>₹{(product.price * 1.2).toFixed(0)}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.addBtn}
@@ -547,10 +547,10 @@ export default function HomeScreen() {
 
             <View style={styles.benefitsBox}>
               <Text style={styles.benefitsTitle}>Ã°ÂÂÂ Benefits After Linking:</Text>
-              <Text style={styles.benefitsText}>Ã¢ÂÂ¢ Track monthly & yearly spending</Text>
-              <Text style={styles.benefitsText}>Ã¢ÂÂ¢ View offer usage in real-time</Text>
-              <Text style={styles.benefitsText}>Ã¢ÂÂ¢ Unlock rewards up to Ã¢ÂÂ¹1000</Text>
-              <Text style={styles.benefitsText}>Ã¢ÂÂ¢ Ã°ÂÂÂ§ Infrastructure ready for real API integration</Text>
+              <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
+              <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
+              <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
+              <Text style={styles.benefitsText}>• Ã°ÂÂÂ§ Infrastructure ready for real API integration</Text>
             </View>
 
             <TextInput
@@ -834,9 +834,9 @@ const styles = StyleSheet.create({
 
   // Categories
   categoriesScroll: { marginTop: 8 },
-  categoryItem: { alignItems: 'center', marginRight: 16, width: 80 },
+  categoryItem: { alignItems: 'center', marginRight: 16, width: 88 },
   categoryIcon: { width: 70, height: 70, backgroundColor: '#ECFDF5', borderRadius: 35, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  categoryName: { fontSize: 11, color: '#111', textAlign: 'center', minHeight: 32, lineHeight: 14, flexWrap: 'wrap' },
+  categoryName: { fontSize: 11, color: '#111', textAlign: 'center', minHeight: 30, lineHeight: 15 },
 
   // Products
   productGrid: { 
