@@ -5,7 +5,8 @@ const DEFAULT_BACKEND_URL = 'https://grocerease-backend.onrender.com';
 const rawBackendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL;
 
 const isValidUrl = (url: string | undefined): boolean =>
-  !!url && url.trim() !== '' && !url.includes('REPLACE_') && url !== 'undefined' && url !== 'null';
+  !!url && url.trim() !== '' && !url.includes('REPLACE_') && url !== 'undefined' && url !== 'null'
+  && url.trim() !== 'https://api.grocereasetv.com'; // dead domain — real backend is on Render
 
 const DEV_BACKEND_URL = process.env.EXPO_PUBLIC_DEV_BACKEND_URL || 'http://localhost:8001';
 
