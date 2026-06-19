@@ -437,13 +437,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       log('Obtained Google ID Token, exchanging with backend...');
 
-      // Call our backend /auth/google endpoint to exchange ID token
-      const response = await api.post('/auth/google', {
-        id_token: idToken,
-        name: userProfile?.name || 'Google User',
-        email: userProfile?.email || '',
-        photo: userProfile?.photo || null,
-      });
+      // Call our backend /auth/google — retry up to 3x with 5s delay on Network Error
+      // (Render free tier may still be waking up after Google Sign-In interaction)
+      let response: any;
+      let lastErr: any;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          response = await api.post('/auth/google', {
+            id_token: idToken,
+            name: userProfile?.name || 'Google User',
+            email: userProfile?.email || '',
+            photo: userProfile?.photo || null,
+          });
+          break;
+        } catch (backendErr: any) {
+          lastErr = backendErr;
+          if (backendErr.message === 'Network Error' && attempt < 2) {
+            log(`Backend attempt ${attempt + 1} failed (Network Error), retrying in 5s...`);
+            await new Promise(r => setTimeout(r, 5000));
+          } else {
+            throw backendErr;
+          }
+        }
+      }
+      if (!response) throw lastErr;
 
       if (!response.data || !response.data.token) {
         throw new Error('Backend failed to return authentication tokens');
