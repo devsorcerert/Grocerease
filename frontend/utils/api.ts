@@ -4,8 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../constants/api';
 
-// Use environment variable or fallback to API_BASE_URL constant
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || API_BASE_URL;
+// API_BASE_URL from constants/api.ts already reads + validates env vars
+// Don't re-read EXPO_PUBLIC_BACKEND_URL here — workflow may bake in a dead domain fallback
+const API_URL = API_BASE_URL;
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
