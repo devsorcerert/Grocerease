@@ -201,7 +201,7 @@ export default function CheckoutScreen() {
           '/orders/create',
           { address_id: selectedAddress.id, payment_method: 'cod', coupon_code: appliedCoupon }
         );
-        router.replace({ pathname: '/order-success', params: { order_id: res.data.order_id, payment: 'cod' } });
+        router.replace({ pathname: '/order-success', params: { orderId: res.data.order_id, payment: 'cod' } });
         return;
       }
 
@@ -249,7 +249,7 @@ export default function CheckoutScreen() {
         // Only here — after server confirms — do we navigate to success
         setRazorpayHtml(null);
         setPaymentVerified(true);
-        router.replace({ pathname: '/order-success', params: { order_id: pendingOrderId!, payment: 'razorpay' } });
+        router.replace({ pathname: '/order-success', params: { orderId: pendingOrderId!, payment: 'razorpay' } });
 
       } else if (data.status === 'dismissed') {
         setRazorpayHtml(null);

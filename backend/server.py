@@ -609,9 +609,11 @@ async def get_products(
 ):
     query = {}
     
-    # Category filter
+    # Category filter — BUG-08 fix: case-insensitive match so "Cleaning Essentials"
+    # matches products stored as "cleaning_essentials", "Cleaning & Essentials", etc.
     if category:
-        query["category"] = category
+        import re as _re_cat
+        query["category"] = {"$regex": f"^{_re_cat.escape(category)}$", "$options": "i"}
     
     # Search filter (searches in name, description, brand)
     if search:
