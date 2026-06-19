@@ -660,10 +660,11 @@ async def get_products(
     # Fetch products with pagination
     products = await db.products.find(query).sort(sort_field, sort_order).skip(skip).limit(limit).to_list(limit)
     
-    # Remove MongoDB _id field
+    # Remove MongoDB _id field; normalize image field name (BUG-06 fix)
     for product in products:
-        if "_id" in product:
-            del product["_id"]
+        product.pop("_id", None)
+        # BUG-06: initial seed stored image as 'image_url'; frontend expects 'product.image'
+        product["image"] = product.pop("image_url", product.get("image", ""))
     
     return {
         "products": products,
