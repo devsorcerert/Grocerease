@@ -852,10 +852,65 @@ from routers.orders import calculate_spending_tiers_and_rewards
 # Redundant local rewards and order routes removed (handled by routers/orders.py)
 
 # Video Routes
+YOUTUBE_CHANNEL_ID = "UCOjJni2DDwFZ6-Zji0Kjphw"
+YOUTUBE_RSS_URL = f"https://www.youtube.com/feeds/videos.xml?channel_id={YOUTUBE_CHANNEL_ID}"
+
+async def fetch_youtube_videos() -> list:
+    """Fetch latest videos from GrocerEase YouTube channel via RSS (no API key needed)."""
+    import xml.etree.ElementTree as ET
+    ns = {
+        "atom":  "http://www.w3.org/2005/Atom",
+        "yt":    "http://www.youtube.com/xml/schemas/2015",
+        "media": "http://search.yahoo.com/mrss/",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(YOUTUBE_RSS_URL)
+            r.raise_for_status()
+        root = ET.fromstring(r.text)
+        videos = []
+        for entry in root.findall("atom:entry", ns):
+            vid_id = entry.findtext("yt:videoId", namespaces=ns) or ""
+            title  = entry.findtext("atom:title", namespaces=ns) or ""
+            desc   = ""
+            media  = entry.find("media:group", ns)
+            if media is not None:
+                desc = media.findtext("media:description", namespaces=ns) or ""
+                thumb_el = media.find("media:thumbnail", ns)
+                thumb = thumb_el.get("url", "") if thumb_el is not None else ""
+            else:
+                thumb = f"https://img.youtube.com/vi/{vid_id}/hqdefault.jpg"
+            published = entry.findtext("atom:published", namespaces=ns) or ""
+            videos.append({
+                "id": f"yt-{vid_id}",
+                "title": title,
+                "description": desc[:200] if desc else "",
+                "thumbnail": thumb,
+                "stream_url": f"https://www.youtube.com/watch?v={vid_id}",
+                "duration": "",
+                "ingredients": [],
+                "is_live": False,
+                "source": "youtube",
+                "created_at": published,
+            })
+        return videos
+    except Exception as e:
+        logging.warning(f"YouTube RSS fetch failed: {e}")
+        return []
+
 @api_router.get("/videos")
 async def get_videos():
-    videos = await db.videos.find().sort("created_at", -1).to_list(100)
-    return clean_mongo_docs(videos)
+    # Manual/curated videos from DB
+    db_videos = await db.videos.find().sort("created_at", -1).to_list(100)
+    db_videos = clean_mongo_docs(db_videos)
+    db_yt_ids = {v.get("stream_url", "") for v in db_videos}
+
+    # Auto-fetched from YouTube channel RSS
+    yt_videos = await fetch_youtube_videos()
+    # Deduplicate: skip YT videos already manually added in DB
+    new_yt = [v for v in yt_videos if v["stream_url"] not in db_yt_ids]
+
+    return db_videos + new_yt
 
 @api_router.get("/videos/{video_id}")
 async def get_video(video_id: str):
