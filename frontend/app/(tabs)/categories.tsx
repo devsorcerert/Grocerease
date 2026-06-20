@@ -6,6 +6,7 @@ import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCartStore } from '../../store/cartStore';
+import QuantitySelector from '../../components/QuantitySelector';
 import { useTranslation } from '../../context/LanguageContext';
 
 // Category icon mapping
@@ -196,15 +197,7 @@ export default function CategoriesScreen() {
                     )}
                   </View>
                 </View>
-                <TouchableOpacity 
-                  style={styles.addButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleAddToCart(product.id, product.name);
-                  }}
-                >
-                  <Ionicons name="add" size={20} color="#fff" />
-                </TouchableOpacity>
+                <QuantitySelector productId={product.id} size="medium" color="#2D8B47" />
               </TouchableOpacity>
             ))
           )}

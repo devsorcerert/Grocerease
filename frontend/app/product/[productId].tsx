@@ -32,12 +32,13 @@ interface Review {
 export default function ProductDetailPage() {
   const router = useRouter();
   const { productId } = useLocalSearchParams();
-  const { addToCart } = useCartStore();
+  const { addToCart, items: cartItems } = useCartStore();
   
   const { t } = useTranslation();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [quantity, setQuantity] = useState(1);
+  const cartItem = cartItems.find(i => i.product_id === (productId as string));
+  const [quantity, setQuantity] = useState(cartItem?.quantity || 1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);

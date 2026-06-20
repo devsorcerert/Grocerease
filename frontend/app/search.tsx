@@ -5,6 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../utils/api';
 import { useCartStore } from '../store/cartStore';
+import QuantitySelector from '../components/QuantitySelector';
 import SearchBar from '../components/SearchBar';
 import { useTranslation } from '../context/LanguageContext';
 
@@ -104,12 +105,7 @@ export default function SearchResultsPage() {
                       )}
                     </View>
                     
-                    <TouchableOpacity
-                      style={styles.addButton}
-                      onPress={() => handleAddToCart(product.id)}
-                    >
-                      <Ionicons name="add" size={20} color="#fff" />
-                    </TouchableOpacity>
+                    <QuantitySelector productId={product.id} size="medium" color="#2D8B47" />
                   </View>
                 </View>
               </View>

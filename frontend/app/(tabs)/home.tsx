@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useCartStore } from '../../store/cartStore';
 import Toast from 'react-native-toast-message';
 import * as Location from 'expo-location';
+import QuantitySelector from '../../components/QuantitySelector';
 
 const { width } = Dimensions.get('window');
 
@@ -483,12 +484,7 @@ export default function HomeScreen() {
                       <Text style={styles.productPrice}>₹{product.price}</Text>
                       <Text style={styles.originalPrice}>₹{(product.price * 1.2).toFixed(0)}</Text>
                     </View>
-                    <TouchableOpacity 
-                      style={styles.addBtn}
-                      onPress={() => handleAddToCart(product.id)}
-                    >
-                      <Ionicons name="add" size={16} color="#fff" />
-                    </TouchableOpacity>
+                    <QuantitySelector productId={product.id} size="small" color="#FF8C42" />
                   </View>
                 </View>
               </TouchableOpacity>
