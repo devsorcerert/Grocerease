@@ -10,6 +10,7 @@ const API_URL = API_BASE_URL;
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
+  timeout: 45000, // 45s — covers Render.com free-tier 30s cold start
   headers: {
     'Content-Type': 'application/json',
   },

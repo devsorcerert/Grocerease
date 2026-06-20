@@ -266,7 +266,7 @@ export default function HomeScreen() {
             {currentAddress ? (
               <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                 <Text style={[styles.addressText, { flexShrink: 1 }]} numberOfLines={1}>
-                  Ã°ÂÂÂ {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
+                  📍 {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
                 </Text>
                 {isNewAddressDetected && (
                   <TouchableOpacity 
@@ -278,9 +278,9 @@ export default function HomeScreen() {
                 )}
               </View>
             ) : user?.address ? (
-              <Text style={styles.addressText}>Ã°ÂÂÂ {user.address}, {user.city} - {user.pincode}</Text>
+              <Text style={styles.addressText}>📍 {user.address}, {user.city} - {user.pincode}</Text>
             ) : (
-              <Text style={styles.addressText}>Ã°ÂÂÂ Detecting location...</Text>
+              <Text style={styles.addressText}>📍 Detecting location...</Text>
             )}
           </View>
           <View style={styles.headerActions}>
@@ -374,7 +374,7 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.nextTierText}>
                   {getMonthlyOfferUsage().used === 3 
-                    ? 'Ã°ÂÂÂ Maximum tier unlocked!' 
+                    ? '🎉 Maximum tier unlocked!' 
                     : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
                 </Text>
               </View>
@@ -546,11 +546,11 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.benefitsBox}>
-              <Text style={styles.benefitsTitle}>Ã°ÂÂÂ Benefits After Linking:</Text>
+              <Text style={styles.benefitsTitle}>📊 Benefits After Linking:</Text>
               <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
               <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
               <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
-              <Text style={styles.benefitsText}>• Ã°ÂÂÂ§ Infrastructure ready for real API integration</Text>
+              <Text style={styles.benefitsText}>• 🔧 Infrastructure ready for real API integration</Text>
             </View>
 
             <TextInput

@@ -67,7 +67,10 @@ export default function CheckoutScreen() {
   const [savingAddress, setSavingAddress] = useState(false);
 
   // ── Load summary ────────────────────────────────────────────────────────
-  const fetchSummary = useCallback(async (code?: string) => {
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const fetchSummary = useCallback(async (code?: string, attempt = 1) => {
+    setSummaryError(null);
     try {
       const url = code ? `/checkout/summary?coupon_code=${code}` : '/checkout/summary';
       const res = await api.get(url);
@@ -77,14 +80,22 @@ export default function CheckoutScreen() {
         setCouponError(null);
       }
     } catch (err: any) {
+      const detail = err?.response?.data?.detail || '';
       if (code) {
-        setCouponError(err?.response?.data?.detail || 'Invalid coupon');
+        setCouponError(detail || 'Invalid coupon');
         setAppliedCoupon(null);
-        // fallback
-        const fallbackRes = await api.get('/checkout/summary');
-        setSummary(fallbackRes.data);
+        try {
+          const fallbackRes = await api.get('/checkout/summary');
+          setSummary(fallbackRes.data);
+        } catch { /* leave summary as-is */ }
+      } else if (detail === 'Cart is empty') {
+        setSummaryError('Your cart is empty. Please add items before checkout.');
+      } else if (err?.code === 'ECONNABORTED' && attempt < 2) {
+        // Render cold-start — retry once automatically
+        await fetchSummary(code, attempt + 1);
+        return;
       } else {
-        Alert.alert('Error', 'Could not load order summary.');
+        setSummaryError('Could not load order summary. Please check your connection and try again.');
       }
     } finally {
       setLoading(false);
@@ -183,6 +194,10 @@ export default function CheckoutScreen() {
 
   // ── FIX [1]: Place order — for Razorpay, only create order (not confirm) ─
   const handlePlaceOrder = async () => {
+    if (summaryError) {
+      Alert.alert('Cart Error', summaryError);
+      return;
+    }
     if (!selectedAddress) {
       Alert.alert('No Address Selected', 'Please select or add a delivery address before placing your order.');
       return;
@@ -432,6 +447,14 @@ export default function CheckoutScreen() {
       </View>
 
       {/* ── Order Summary ─────────────────────────────────────────── */}
+      {summaryError && (
+        <View style={styles.summaryErrorBanner}>
+          <Text style={styles.summaryErrorText}>{summaryError}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); fetchSummary(); }}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {summary && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🧾 {t('orderSummary')}</Text>

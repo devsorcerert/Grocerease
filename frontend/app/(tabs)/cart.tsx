@@ -90,7 +90,16 @@ export default function CartScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('myCart')}</Text>
-        <TouchableOpacity onPress={clearCart}>
+        <TouchableOpacity onPress={() => {
+          Alert.alert(
+            'Clear Cart',
+            'Remove all items from cart?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Clear', style: 'destructive', onPress: clearCart },
+            ]
+          );
+        }}>
           <Text style={styles.clearText}>Clear All</Text>
         </TouchableOpacity>
       </View>
