@@ -816,23 +816,61 @@ async def create_product(product: ProductCreate, user_id: str = Depends(get_curr
 
 @api_router.post("/products/bulk")
 async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends(get_current_user)):
+    # Check admin — falls back to db.admins for admin users not in db.users
     user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
+    if not user:
+        admin = await db.admins.find_one({"id": user_id})
+        if not admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    elif not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    products_to_insert = []
+
+    from motor.motor_asyncio import AsyncIOMotorCollection
+    upserted = 0
+    inserted = 0
     for product_data in upload.products:
+        name = product_data.get("name") or product_data.get("Name") or ""
+        # Normalize keys to lowercase
+        normalized = {k.lower(): v for k, v in product_data.items()}
+        product_name = normalized.get("name", "").strip()
+        if not product_name:
+            continue
         product_dict = {
             "id": str(uuid.uuid4()),
-            **product_data,
+            "name": normalized.get("name", "").strip(),
+            "category": normalized.get("category", "General"),
+            "price": float(normalized.get("price", 0) or 0),
+            "offer_price": float(normalized.get("offerprice", 0) or normalized.get("offer_price", 0) or 0) or None,
+            "brand": normalized.get("brand", ""),
+            "stock": int(normalized.get("stock", 100) or 100),
+            "description": normalized.get("description", ""),
+            "image": normalized.get("image", ""),
+            "unit": normalized.get("unit", ""),
             "created_at": datetime.utcnow()
         }
-        products_to_insert.append(product_dict)
-    
-    if products_to_insert:
-        await db.products.insert_many(products_to_insert)
-    
-    return {"success": True, "count": len(products_to_insert), "message": f"{len(products_to_insert)} products uploaded"}
+        # Upsert on name — avoids duplicates when re-uploading
+        result = await db.products.update_one(
+            {"name": product_dict["name"]},
+            {"$set": {k: v for k, v in product_dict.items() if k != "id" and k != "created_at"}},
+            upsert=True
+        )
+        # On true insert, also set the id and created_at
+        if result.upserted_id:
+            await db.products.update_one(
+                {"_id": result.upserted_id},
+                {"$set": {"id": product_dict["id"], "created_at": product_dict["created_at"]}}
+            )
+            inserted += 1
+        else:
+            upserted += 1
+
+    return {
+        "success": True,
+        "count": inserted + upserted,
+        "inserted": inserted,
+        "updated": upserted,
+        "message": f"{inserted} products added, {upserted} updated"
+    }
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, user_id: str = Depends(get_current_user)):
