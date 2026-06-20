@@ -345,7 +345,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             
             <TouchableOpacity onPress={() => { setStep('phone'); setOtp(['', '', '', '', '', '']); }}>
-              <Text style={styles.changePhone}>â Change number</Text>
+              <Text style={styles.changePhone}>← Change number</Text>
             </TouchableOpacity>
           </View>
         )}

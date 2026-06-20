@@ -214,6 +214,9 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         total = 0.0
         
     user = await db.users.find_one({"id": user_id})
+    if user is None:
+        # Admin users are not in db.users — fall back gracefully with zero spend
+        user = await db.admins.find_one({"id": user_id}) or {}
     rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
     rewards_will_earn = rewards_info["order_cashback"]
     
@@ -448,6 +451,9 @@ async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str =
         total = 0.0
         
     user = await db.users.find_one({"id": user_id})
+    if user is None:
+        # Admin users are not in db.users — fall back gracefully with zero spend
+        user = await db.admins.find_one({"id": user_id}) or {}
     rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
     rewards_will_earn = rewards_info["order_cashback"]
     
@@ -464,7 +470,7 @@ async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str =
 async def calculate_checkout_rewards(checkout_data: dict, user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        user = await db.admins.find_one({"id": user_id}) or {}
         
     subtotal = checkout_data.get("subtotal", 0.0)
     current_monthly_spend = user.get("monthly_spend", 0.0)

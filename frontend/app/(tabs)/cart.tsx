@@ -120,7 +120,7 @@ export default function CartScreen() {
               </TouchableOpacity>
               <View style={styles.productDetails}>
                 <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productPrice}>â¹{product.price}</Text>
+                <Text style={styles.productPrice}>₹{product.price}</Text>
               </View>
               <View style={styles.quantityControl}>
                 <TouchableOpacity 
@@ -145,7 +145,7 @@ export default function CartScreen() {
       <View style={styles.summary}>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>{t('subtotal')}</Text>
-          <Text style={styles.summaryValue}>â¹{subtotal.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>₹{subtotal.toFixed(2)}</Text>
         </View>
         
         {/* Auto-Rewards Display */}
@@ -167,14 +167,14 @@ export default function CartScreen() {
                 <Text style={styles.tierBadge}>{rewardCalculation.new_tier_info?.tier_name || 'Base'}</Text>
               </View>
               <Text style={[styles.summaryValue, styles.discountText]}>
-                -â¹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
+                -₹{rewardCalculation.rewards_auto_applied?.toFixed(2) || '0.00'}
               </Text>
             </View>
             
             <View style={styles.summaryRow}>
               <Text style={styles.summaryText}>Will Earn (Cashback)</Text>
               <Text style={[styles.summaryValue, styles.earnText]}>
-                +â¹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
+                +₹{rewardCalculation.order_cashback_earned?.toFixed(2) || '0.00'}
               </Text>
             </View>
             
@@ -190,7 +190,7 @@ export default function CartScreen() {
         <View style={[styles.summaryRow, styles.totalRow]}>
           <Text style={styles.totalText}>{t('totalAmount')}</Text>
           <Text style={styles.totalValue}>
-            â¹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
+            ₹{rewardCalculation ? rewardCalculation.final_total?.toFixed(2) : subtotal.toFixed(2)}
           </Text>
         </View>
         

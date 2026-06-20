@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, ScrollView, RefreshControl } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -139,6 +140,41 @@ export default function OrderTrackingPage() {
       const date = new Date(dateStr);
       return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     } catch { return ''; }
+  };
+
+
+  // Build Leaflet/OSM map HTML — no API key needed
+  const buildMapHtml = (address: string, riderLat?: number, riderLng?: number) => {
+    const encodedAddr = encodeURIComponent(address || 'Tirupati, Andhra Pradesh, India');
+    const riderMarker = (riderLat && riderLng)
+      ? `var riderIcon = L.divIcon({className:'', html:'<div style="background:#2563EB;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>'});
+         var riderMarker = L.marker([${riderLat ? riderLat.toFixed(6) : 'null'}, ${riderLng ? riderLng.toFixed(6) : 'null'}], {icon:riderIcon}).addTo(map);
+         riderMarker.bindPopup('<b>Delivery Partner</b>');`
+      : '';
+    return `<!DOCTYPE html><html><head>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;}</style>
+    </head><body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map',{zoomControl:true,attributionControl:false});
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+        map.setView([13.6288,79.4192],13);
+        var delivIcon = L.divIcon({className:'',html:'<div style="background:#2D8B47;width:20px;height:20px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>'});
+        ${riderMarker}
+        fetch('https://nominatim.openstreetmap.org/search?q=${encodedAddr}&format=json&limit=1')
+          .then(r=>r.json()).then(data=>{
+            if(data && data[0]){
+              var lat=parseFloat(data[0].lat), lng=parseFloat(data[0].lon);
+              var m=L.marker([lat,lng],{icon:delivIcon}).addTo(map);
+              m.bindPopup('<b>Delivery Address</b><br>${address.replace(/'/g, "\'")}').openPopup();
+              map.setView([lat,lng],15);
+            }
+          }).catch(()=>{});
+      </script>
+    </body></html>`;
   };
 
   return (
@@ -288,6 +324,25 @@ export default function OrderTrackingPage() {
                 <Ionicons name="call" size={20} color="#2D8B47" />
               </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {/* Live Map */}
+        {tracking?.delivery_address && (
+          <View style={styles.mapCard}>
+            <Text style={styles.sectionTitle}>Live Tracking Map</Text>
+            <WebView
+              source={{ html: buildMapHtml(
+                tracking.delivery_address,
+                tracking.delivery_partner?.current_location?.latitude,
+                tracking.delivery_partner?.current_location?.longitude
+              )}}
+              style={styles.mapWebView}
+              javaScriptEnabled
+              domStorageEnabled
+              originWhitelist={['*']}
+              scrollEnabled={false}
+            />
           </View>
         )}
 
@@ -567,5 +622,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: -4,
     marginBottom: 16,
+  },
+  mapCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  mapWebView: {
+    height: 220,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 10,
   },
 });

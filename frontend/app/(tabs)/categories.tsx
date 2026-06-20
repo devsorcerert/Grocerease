@@ -190,9 +190,9 @@ export default function CategoriesScreen() {
                   <Text style={styles.productName}>{product.name}</Text>
                   <Text style={styles.productUnit}>{product.unit}</Text>
                   <View style={styles.priceRow}>
-                    <Text style={styles.productPrice}>â¹{product.price}</Text>
+                    <Text style={styles.productPrice}>₹{product.price}</Text>
                     {product.original_price && (
-                      <Text style={styles.originalPrice}>â¹{product.original_price}</Text>
+                      <Text style={styles.originalPrice}>₹{product.original_price}</Text>
                     )}
                   </View>
                 </View>
