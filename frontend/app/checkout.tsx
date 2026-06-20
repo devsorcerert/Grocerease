@@ -793,4 +793,31 @@ const styles = StyleSheet.create({
   removeCouponText: { color: '#fff', fontWeight: '700' },
   couponErrorText: { color: '#EF4444', fontSize: 13, marginTop: 6 },
   couponSuccessText: { color: '#10B981', fontSize: 13, marginTop: 6, fontWeight: '500' },
+  summaryErrorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    gap: 10,
+  },
+  summaryErrorText: {
+    fontSize: 14,
+    color: '#DC2626',
+    textAlign: 'center',
+  },
+  retryBtn: {
+    backgroundColor: '#2D8B47',
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
