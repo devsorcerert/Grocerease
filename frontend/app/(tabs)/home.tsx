@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import ProductImage from '../../components/ProductImage';
 import { useCartStore } from '../../store/cartStore';
 import Toast from 'react-native-toast-message';
 import * as Location from 'expo-location';
@@ -461,17 +462,7 @@ export default function HomeScreen() {
             {products.slice(0, 6).map((product, index) => (
               <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: product.id } })}>
                 <View style={styles.productImageContainer}>
-                  {product.image ? (
-                    <Image 
-                      source={{ uri: product.image }} 
-                      style={styles.productImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.productImagePlaceholder}>
-                      <Ionicons name="bag-outline" size={28} color="#2D8B47" />
-                    </View>
-                  )}
+                  <ProductImage uri={product.image} style={styles.productImage} />
                   <View style={styles.productBadge}>
                     <Text style={styles.badgeText}>Fresh</Text>
                   </View>

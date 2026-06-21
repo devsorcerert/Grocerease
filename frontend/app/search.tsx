@@ -84,14 +84,7 @@ export default function SearchResultsPage() {
           <View style={styles.productsGrid}>
             {products.map((product) => (
               <View key={product.id} style={styles.productCard}>
-                {product.image && (
-                  <Image source={{ uri: product.image }} style={styles.productImage} />
-                )}
-                {!product.image && (
-                  <View style={styles.productImagePlaceholder}>
-                    <Ionicons name="cube-outline" size={40} color="#D1D5DB" />
-                  </View>
-                )}
+                <ProductImage uri={product.image} style={styles.productImage} iconSize={32} />
                 
                 <View style={styles.productInfo}>
                   <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>

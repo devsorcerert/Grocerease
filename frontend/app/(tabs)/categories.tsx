@@ -184,9 +184,7 @@ export default function CategoriesScreen() {
                 onPress={() => router.push(`/product/${product.id}`)}
                 activeOpacity={0.7}
               >
-                <View style={styles.productImage}>
-                  <Ionicons name="bag-outline" size={40} color="#2D8B47" />
-                </View>
+                <ProductImage uri={product.image} style={styles.productImage} iconSize={40} />
                 <View style={styles.productInfo}>
                   <Text style={styles.productName}>{product.name}</Text>
                   <Text style={styles.productUnit}>{product.unit}</Text>

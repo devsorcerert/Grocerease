@@ -772,16 +772,25 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
         product_name = normalized.get("name", "").strip()
         if not product_name:
             continue
+        # Resolve image: accept 'image' or 'image_url' column
+        image_val = normalized.get("image") or normalized.get("image_url") or ""
+        # Resolve stock: accept 'stock', 'in_stock' (TRUE/FALSE), or default 100
+        raw_stock = normalized.get("stock") or normalized.get("in_stock") or 100
+        if isinstance(raw_stock, str):
+            raw_stock = 0 if raw_stock.strip().upper() == "FALSE" else 100
+        # Resolve offer price: accept 'offerprice', 'offer_price', or 'mrp'
+        raw_offer = (normalized.get("offerprice") or normalized.get("offer_price")
+                     or normalized.get("mrp") or 0)
         product_dict = {
             "id": str(uuid.uuid4()),
             "name": normalized.get("name", "").strip(),
             "category": normalized.get("category", "General"),
             "price": float(normalized.get("price", 0) or 0),
-            "offer_price": float(normalized.get("offerprice", 0) or normalized.get("offer_price", 0) or 0) or None,
+            "offer_price": float(raw_offer or 0) or None,
             "brand": normalized.get("brand", ""),
-            "stock": int(normalized.get("stock", 100) or 100),
+            "stock": int(raw_stock or 100),
             "description": normalized.get("description", ""),
-            "image": normalized.get("image", ""),
+            "image": image_val.strip() if image_val else "",
             "unit": normalized.get("unit", ""),
             "created_at": datetime.utcnow()
         }

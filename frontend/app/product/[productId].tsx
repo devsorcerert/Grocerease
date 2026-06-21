@@ -203,10 +203,11 @@ export default function ProductDetailPage() {
                 }}
               >
                 {productImages.map((img: string, index: number) => (
-                  <Image
+                  <ProductImage
                     key={index}
-                    source={{ uri: img }}
+                    uri={img}
                     style={styles.productImage}
+                    iconSize={80}
                   />
                 ))}
               </ScrollView>
