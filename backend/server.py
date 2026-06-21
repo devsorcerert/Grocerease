@@ -1741,11 +1741,13 @@ from routers.orders import router as orders_router
 from routers.payments import router as payments_router
 from routers.kpis import router as kpis_router
 from routers.riders import router as riders_router
+from routers.admin_riders import router as admin_riders_router
 
 api_router.include_router(cart_router)
 api_router.include_router(orders_router)
 api_router.include_router(payments_router)
 api_router.include_router(kpis_router)
+api_router.include_router(admin_riders_router)
 
 from routers.orders import get_checkout_summary, admin_get_orders, admin_update_order_status
 
