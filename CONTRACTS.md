@@ -8,7 +8,7 @@
 > 3. Client apps copy these shapes exactly. They never invent their own field names.
 > 4. Prefer adding a new field (keeping the old one working) over renaming, then flip clients, then remove the old field.
 >
-> _Status: STARTER — drafted from the audit. Confirm each value against the live code in Task 45, then treat as frozen._
+> _Status: FROZEN — verified against live code 2026-06-21 (Task 45). Do not edit without updating the backend and all consumers in the same commit._
 
 ---
 
@@ -29,7 +29,10 @@
 
 **Token transport:** `Authorization: Bearer <access_token>` header on every authenticated request.
 
-**Access token lifetime:** 30 minutes. **Refresh token lifetime:** 30 days. The client refreshes ~14 min in (timer) and via `/api/auth/refresh` (rotates: old refresh token is blacklisted, new pair issued).
+**Token lifetimes:**
+- Customer/admin access token: **30 minutes**. Refresh token: **30 days**.
+- Rider access token: **12 hours** (no refresh — rider re-logs each shift). No refresh token issued.
+- The customer app refreshes ~14 min in (timer) and via `/api/auth/refresh` (rotates: old refresh token is blacklisted, new pair issued).
 
 **JWT claims (canonical):**
 | Claim | Type | Meaning |
@@ -37,7 +40,7 @@
 | `user_id` | string | Customer id (also `"default-admin-id"`/`"admin"` for admins) |
 | `is_admin` | bool | Present on admin tokens |
 | `role` | string | One of `super-admin`, `ops`, `support`, `admin` (admin tokens) |
-| `rider_id` | string | Present **only** on rider tokens (riders use `rider_id`, NOT `user_id`) |
+| `rider_id` | string | Present **only** on rider tokens (riders use `rider_id`, NOT `user_id`); `user_id` absent on rider tokens |
 | `type` | string | `"refresh"` on refresh tokens; absent on access tokens |
 | `exp` | int | Expiry (unix) |
 
@@ -77,7 +80,7 @@ delivered         → completed
 cancelled         → cancelled (stock restored)
 refunded          → money returned
 ```
-> **Fix (Task 46):** `routers/orders.py transition_order_status` must accept and map **`reached_store`** (today the rider app sends it but the state machine ignores it). Every app uses exactly these strings — no synonyms.
+> **Task 46 — FIXED 2026-06-21:** `routers/orders.py transition_order_status` now maps **`reached_store`** → `delivery_status: reached_store`. Every app uses exactly these strings — no synonyms.
 
 ### 3b. `payment_status`
 ```
@@ -117,9 +120,9 @@ pending | preparing | packed | reached_store | picked_up | out_for_delivery | de
 ```
 
 - **Rider app writes it** (Task 12): `POST /api/rider/location` with body `{ "lat": <float>, "lng": <float> }`. The backend stores it on the rider document as `current_location` (with server-set `updated_at`).
-- **Backend stores it** under `riders.current_location` — **stop writing `last_lat`/`last_lng`** (Task 6 / Task 12).
-- **Customer app reads it** (Task 6): `GET /api/orders/{id}/tracking` returns `delivery_partner.current_location` = the canonical object above. **Remove the hash-derived fake-GPS fallback** in `routers/orders.py:368-371`.
-- `gps_tracking_enabled` is `true` **only** when a real `current_location` exists (not hardcoded `true`).
+- **Backend stores it** under `riders.current_location` — **stop writing `last_lat`/`last_lng`** (Task 6 / Block 3 in phase0).
+- **Customer app reads it** (Task 6 / Block 3): `GET /api/orders/{id}/tracking` returns `delivery_partner.current_location` = the canonical object above. **Remove the hash-derived fake-GPS fallback** in `routers/orders.py:370-373`.
+- `gps_tracking_enabled` must be `true` **only** when a real `current_location` exists — not hardcoded (currently hardcoded; fixed in Block 3).
 
 ### Tracking response shape (canonical)
 ```json
@@ -201,4 +204,5 @@ image (string URL), is_active (bool), store_id (added in Task 20)
 ## 8. Change log
 | Date | Who | Change |
 |---|---|---|
-| _draft_ | — | Starter created from audit. Confirm against live code, then freeze. |
+| 2026-06-21 (draft) | — | Starter created from audit. |
+| 2026-06-21 | phase0 | Task 45: verified all claims, lifetimes, enums, and field names against live code. Corrected rider token lifetime (12 h). Task 46: `reached_store` added to `transition_order_status`. Status → FROZEN. |

@@ -82,8 +82,7 @@ async def transition_order_status(order_id: str, to_status: str, changed_by: str
             )
     elif to_status == "refunded":
         update_doc["payment_status"] = "refunded"
-    elif to_status in ["preparing", "packed", "picked_up", "out_for_delivery", "delivered"]:
-        # Map frontend status (like preparing) to status machine
+    elif to_status in ["preparing", "packed", "reached_store", "picked_up", "out_for_delivery", "delivered"]:
         update_doc["delivery_status"] = to_status
         if to_status == "delivered" and order.get("payment_method", "").lower() == "cod":
             update_doc["payment_status"] = "paid"
