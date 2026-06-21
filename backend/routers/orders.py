@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import uuid
 import logging
 from typing import Optional, List
+from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from models import CreateOrderRequest, OrderCreate
 
@@ -388,9 +389,12 @@ async def get_order_tracking(order_id: str, user_id: str = Depends(get_current_u
     return clean_mongo_doc(tracking_data)
 
 # Admin endpoints
+class AssignRiderRequest(BaseModel):
+    rider_id: str
+
 @router.post("/admin/{order_id}/assign-rider")
-async def assign_rider_to_order(order_id: str, payload: dict, admin=Depends(verify_admin)):
-    rider_id = (payload.get("rider_id") or "").strip()
+async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admin=Depends(verify_admin)):
+    rider_id = payload.rider_id.strip()
     if not rider_id:
         raise HTTPException(status_code=422, detail="rider_id is required")
 

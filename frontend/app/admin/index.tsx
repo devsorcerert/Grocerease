@@ -75,13 +75,31 @@ export default function AdminDashboard() {
               <Text style={styles.actionSubtitle}>Manage inventory</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionCard}
               onPress={() => router.push('/admin/excel-import')}
             >
               <Ionicons name="cloud-upload-outline" size={32} color="#FF8C42" />
               <Text style={styles.actionTitle}>Excel Import</Text>
               <Text style={styles.actionSubtitle}>Bulk upload</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/admin/orders')}
+            >
+              <Ionicons name="receipt-outline" size={32} color="#6366F1" />
+              <Text style={styles.actionTitle}>Orders</Text>
+              <Text style={styles.actionSubtitle}>Assign riders</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => router.push('/admin/riders')}
+            >
+              <Ionicons name="bicycle-outline" size={32} color="#0EA5E9" />
+              <Text style={styles.actionTitle}>Riders</Text>
+              <Text style={styles.actionSubtitle}>Manage fleet</Text>
             </TouchableOpacity>
           </View>
         </View>
