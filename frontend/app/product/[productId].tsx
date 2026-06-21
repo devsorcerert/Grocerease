@@ -13,6 +13,7 @@ import {
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import ProductImage from '../../components/ProductImage';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { useTranslation } from '../../context/LanguageContext';

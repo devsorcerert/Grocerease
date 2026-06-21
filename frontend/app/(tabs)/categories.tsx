@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import ProductImage from '../../components/ProductImage';
 import { useCartStore } from '../../store/cartStore';
 import QuantitySelector from '../../components/QuantitySelector';
 import { useTranslation } from '../../context/LanguageContext';

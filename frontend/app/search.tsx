@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import ProductImage from '../components/ProductImage';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../utils/api';
 import { useCartStore } from '../store/cartStore';
