@@ -457,8 +457,8 @@ def test_rider_endpoints(client_fixture):
     async def get_rider_from_db():
         return await db.riders.find_one({"id": "rider-1"})
     rider_db = asyncio.run(get_rider_from_db())
-    assert rider_db["last_lat"] == 13.0827
-    assert rider_db["last_lng"] == 80.2707
+    assert rider_db["current_location"]["lat"] == 13.0827
+    assert rider_db["current_location"]["lng"] == 80.2707
 
     # 6. Test push token registration
     push_data = {"token": "exponent-push-token-rider"}
