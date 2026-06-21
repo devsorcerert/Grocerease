@@ -62,7 +62,10 @@ async def rider_login(data: RiderLogin):
 async def update_rider_location(data: RiderLocation, rider_id: str = Depends(get_current_rider)):
     await db.riders.update_one(
         {"id": rider_id},
-        {"$set": {"last_lat": data.lat, "last_lng": data.lng, "last_seen": datetime.utcnow()}}
+        {"$set": {
+            "current_location": {"lat": data.lat, "lng": data.lng, "updated_at": datetime.utcnow()},
+            "last_seen": datetime.utcnow()
+        }}
     )
     return {"success": True}
 

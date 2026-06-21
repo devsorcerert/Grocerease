@@ -360,19 +360,21 @@ async def get_order_tracking(order_id: str, user_id: str = Depends(get_current_u
             est_mins = rider.get("estimated_delivery_minutes")
             est_arrival = f"{est_mins} minutes" if est_mins is not None else "15 minutes"
             
+            current_location = rider.get("current_location")
             delivery_partner_data = {
                 "id": rider.get("id"),
                 "name": rider.get("name", "Unknown Rider"),
                 "phone": rider.get("phone", ""),
                 "vehicle": rider.get("vehicle", "Bike"),
                 "rating": rider.get("rating", 4.8),
-                "current_location": rider.get("current_location") or {
-                    "latitude": 13.6284 + (hash(order_id) % 100) * 0.0001,
-                    "longitude": 79.4192 + (hash(order_id) % 100) * 0.0001
-                },
+                "current_location": current_location,
                 "estimated_arrival": est_arrival
             }
-    
+
+    gps_on = (
+        delivery_partner_data is not None
+        and delivery_partner_data.get("current_location") is not None
+    )
     tracking_data = {
         "order_id": order_id,
         "status": order.get("status", "confirmed"),
@@ -380,12 +382,45 @@ async def get_order_tracking(order_id: str, user_id: str = Depends(get_current_u
         "delivery_address": order.get("delivery_address", ""),
         "estimated_delivery": order.get("estimated_delivery", datetime.utcnow() + timedelta(hours=1)),
         "tracking_updates": order.get("tracking_updates", []),
-        "gps_tracking_enabled": True
+        "gps_tracking_enabled": gps_on
     }
     
     return clean_mongo_doc(tracking_data)
 
 # Admin endpoints
+@router.post("/admin/{order_id}/assign-rider")
+async def assign_rider_to_order(order_id: str, payload: dict, admin=Depends(verify_admin)):
+    rider_id = (payload.get("rider_id") or "").strip()
+    if not rider_id:
+        raise HTTPException(status_code=422, detail="rider_id is required")
+
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    rider = await db.riders.find_one({"id": rider_id})
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"assigned_rider_id": rider_id, "updated_at": datetime.utcnow()}}
+    )
+    await db.riders.update_one(
+        {"id": rider_id},
+        {"$set": {"current_order_id": order_id, "updated_at": datetime.utcnow()}}
+    )
+
+    title = "New Order Assigned 📦"
+    message = f"You have been assigned order #{order_id[:8]}. Check the app for details."
+    push_token = rider.get("push_token")
+    if push_token:
+        await send_push_notification(push_token, title, message, {"order_id": order_id})
+    await insert_notification(rider_id, title, message, "order", f"/order/{order_id}")
+
+    return {"success": True, "order_id": order_id, "rider_id": rider_id}
+
+
 @router.get("/admin/list")
 async def admin_get_orders(
     status: Optional[str] = None,
