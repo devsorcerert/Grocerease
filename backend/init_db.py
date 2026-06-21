@@ -78,8 +78,14 @@ async def init_database():
         admin_count = await db.admins.count_documents({})
         if admin_count == 0:
             admin_email = os.environ.get("ADMIN_EMAIL", "grocereasetv@gmail.com")
-            admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
-            
+            admin_password = os.environ.get("ADMIN_PASSWORD")
+            if not admin_password:
+                logging.warning(
+                    "ADMIN_PASSWORD env var not set — skipping admin seed. "
+                    "Set it before first deploy."
+                )
+                return
+
             await db.admins.insert_one({
                 "id": "default-admin-id",
                 "email": admin_email.lower().strip(),

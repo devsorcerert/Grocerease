@@ -185,46 +185,10 @@ jobs:
           elif [ -f release.keystore ]; then
             echo "release.keystore restored from cache"
           else
-            echo "Generating consistent release keystore from secrets..."
-            KS_PASS="${RELEASE_STORE_PASSWORD:-8Kul*^x%fRYB4Wvxjpp1}"
-            KEY_ALIAS="${RELEASE_KEY_ALIAS:-grocerease}"
-            KEY_PASS="${RELEASE_KEY_PASSWORD:-$KS_PASS}"
-            keytool -genkey -v -keystore release.keystore \
-              -storepass "$KS_PASS" \
-              -alias "$KEY_ALIAS" \
-              -keypass "$KEY_PASS" \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=GrocerEase,OU=Mobile,O=GrocerEase,L=Bengaluru,S=Karnataka,C=IN"
-            echo "release.keystore generated and will be cached for future builds"
+            echo "ERROR: RELEASE_KEYSTORE_BASE64 secret is not set. Cannot generate a release keystore without a password." >&2
+            echo "Set RELEASE_KEYSTORE_BASE64, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD in repo secrets." >&2
+            exit 1
           fi
-          echo "======== RELEASE KEYSTORE SHA-1 (add to Firebase!) ========"
-          keytool -list -v -keystore release.keystore \
-            -storepass "${RELEASE_STORE_PASSWORD:-8Kul*^x%fRYB4Wvxjpp1}" \
-            -alias "${RELEASE_KEY_ALIAS:-grocerease}" 2>&1 | grep -E "SHA1|SHA-1"
-          echo "==========================================================="
-          echo "RELEASE_KEYSTORE_BASE64_VALUE=$(base64 -w 0 release.keystore)"
-
-      - name: Print SHA-1 and base64 keystore (copy base64 to DEBUG_KEYSTORE_BASE64 secret)
-        working-directory: frontend/android/app
-        run: |
-          echo "========================================"
-          echo " SHA-1 FINGERPRINT (add to Firebase + Google Cloud Console)"
-          echo "========================================"
-          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey 2>&1 | grep -i "sha1"
-          echo "========================================"
-          echo " BASE64 KEYSTORE (save this as DEBUG_KEYSTORE_BASE64 GitHub secret)"
-          echo " Go to: Settings -> Secrets -> Actions -> New repository secret"
-          echo "========================================"
-          base64 -w 0 debug.keystore
-          echo ""
-          echo "========================================"
-
-      - name: Upload debug keystore artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-keystore
-          path: frontend/android/app/debug.keystore
-          retention-days: 30
 
       - name: Make gradlew executable
         working-directory: frontend/android

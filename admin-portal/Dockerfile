@@ -23,9 +23,14 @@ FROM nginx:alpine
 # Copy built files from builder stage
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# Copy custom nginx config for SPA routing
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Ship config as a template; envsubst materialises BACKEND_URL at container start.
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+
+# Default backend URL matches the docker-compose service name.
+ENV BACKEND_URL=http://backend:8001
 
 EXPOSE 3001
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/sh", "-c", \
+  "envsubst '${BACKEND_URL}' < /etc/nginx/conf.d/default.conf.template \
+   > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
