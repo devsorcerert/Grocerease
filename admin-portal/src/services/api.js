@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.grocereasetv.com';
+// REACT_APP_BACKEND_URL is baked in at build time (set the build ARG on Render/CI).
+// When absent (local Docker), baseURL is '/api' — nginx proxies to the backend container.
+const API_BASE_URL = (process.env.REACT_APP_BACKEND_URL || '') + '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
