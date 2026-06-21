@@ -34,7 +34,8 @@ jobs:
           MONGO_URL: mongodb://localhost:27017/grocerease_test
           JWT_SECRET_KEY: testsecretkeyformonitoringandtesting12345
         run: |
-          pytest tests/
+          python tests/smoke_test.py
+          pytest tests/test_backend.py
 
   test-admin:
     runs-on: ubuntu-latest
