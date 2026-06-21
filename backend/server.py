@@ -402,71 +402,6 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
     return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
 
-@api_router.post("/auth/social")
-async def social_auth(auth_data: SocialAuthRequest, _=Depends(rate_limit)):
-    """Unified social auth endpoint for Google, Apple, and other providers"""
-    if not auth_data.email:
-        raise HTTPException(status_code=400, detail="Email is required")
-    
-    db_user = await db.users.find_one({"email": auth_data.email})
-    
-    if not db_user:
-        # Create new user
-        user_dict = {
-            "id": str(uuid.uuid4()),
-            "name": auth_data.name or auth_data.email.split("@")[0],
-            "email": auth_data.email,
-            "password": None,
-            "phone": None,
-            "photo": auth_data.photo,
-            "auth_provider": auth_data.provider,
-            "cable_tv_linked": False,
-            "cable_tv_details": None,
-            "monthly_spend": 0.0,
-            "total_spend": 0.0,
-            "current_reward": 0.0,
-            "is_admin": False,
-            "created_at": datetime.utcnow()
-        }
-        await db.users.insert_one(user_dict)
-        db_user = user_dict
-    else:
-        if "id" not in db_user:
-            db_user["id"] = str(uuid.uuid4())
-            await db.users.update_one(
-                {"_id": db_user["_id"]},
-                {"$set": {"id": db_user["id"]}}
-            )
-    
-    # Store session if provided
-    if auth_data.session_token:
-        await db.user_sessions.update_one(
-            {"user_id": db_user["id"]},
-            {"$set": {
-                "session_token": auth_data.session_token,
-                "user_id": db_user["id"],
-                "expires_at": datetime.utcnow() + timedelta(days=7),
-                "created_at": datetime.utcnow()
-            }},
-            upsert=True
-        )
-    
-    token = create_access_token({"user_id": db_user["id"]})
-    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
-    
-    return {
-        "token": token,
-        "refresh_token": refresh_token,
-        "user": {
-            "id": db_user["id"],
-            "name": db_user.get("name", ""),
-            "email": db_user["email"],
-            "photo": db_user.get("photo"),
-            "auth_provider": db_user.get("auth_provider", auth_data.provider),
-            "is_admin": db_user.get("is_admin", False)
-        }
-    }
-
 
 @api_router.get("/auth/me")
 async def get_me(user_id: str = Depends(get_current_user)):
@@ -759,8 +694,10 @@ async def compare_products(product_ids: List[str]):
 @api_router.get("/products/analytics")
 async def get_product_analytics(user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not user or not user.get("is_admin"):
+        admin = await db.admins.find_one({"id": user_id})
+        if not admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
     
     # Get all products for analytics
     all_products = await db.products.find().to_list(10000)
@@ -791,8 +728,6 @@ async def get_product_analytics(user_id: str = Depends(get_current_user)):
         "avg_price": round(sum(p.get("price", 0) for p in all_products) / total_products if total_products > 0 else 0, 2)
     }
 
-@api_router.delete("/products/{product_id}")
-
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
     product = await db.products.find_one({"id": product_id})
@@ -803,8 +738,10 @@ async def get_product(product_id: str):
 @api_router.post("/products")
 async def create_product(product: ProductCreate, user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not user or not user.get("is_admin"):
+        admin = await db.admins.find_one({"id": user_id})
+        if not admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
     
     product_dict = {
         "id": str(uuid.uuid4()),
@@ -875,8 +812,10 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not user or not user.get("is_admin"):
+        admin = await db.admins.find_one({"id": user_id})
+        if not admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
     
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
@@ -960,8 +899,10 @@ async def get_video(video_id: str):
 @api_router.post("/videos")
 async def create_video(video: VideoCreate, user_id: str = Depends(get_current_user)):
     user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not user or not user.get("is_admin"):
+        admin = await db.admins.find_one({"id": user_id})
+        if not admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
     
     video_dict = {
         "id": str(uuid.uuid4()),
@@ -1068,8 +1009,10 @@ async def get_brand_banners():
 async def create_brand_banner(banner: dict, user_id: str = Depends(get_current_user)):
     """Admin endpoint to create brand promotional banners"""
     user = await db.users.find_one({"id": user_id})
-    if not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not user or not user.get("is_admin"):
+        admin = await db.admins.find_one({"id": user_id})
+        if not admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
     
     banner_dict = {
         "id": str(uuid.uuid4()),
@@ -1622,6 +1565,8 @@ async def send_support_message(msg: SupportMessage, user_id: str = Depends(get_c
 
 
 # SMS OTP Utilities & Routes
+FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
+
 async def send_sms_fast2sms(phone: str, otp: str):
     if not FAST2SMS_API_KEY:
         if DEBUG_MODE:
@@ -1662,8 +1607,8 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
         raise HTTPException(status_code=422, detail="Invalid Indian phone number. Format: +91XXXXXXXXXX")
         
     otp = str(random.randint(100000, 999999))
-    _otp_store[phone] = {"otp": otp, "expires": time.time() + 300}
-    
+    await set_otp(phone, otp)
+
     await send_sms_fast2sms(phone, otp)
     
     existing_user = await db.users.find_one({"phone": phone})
@@ -1673,8 +1618,8 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
 async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
     email = payload.email.strip().lower()
     otp = str(random.randint(100000, 999999))
-    _otp_store[email] = {"otp": otp, "expires": time.time() + 300}
-    
+    await set_otp(email, otp)
+
     if DEBUG_MODE:
         print(f"\n========================================\n[DEV MODE] Email OTP for {email}: {otp}\n========================================\n")
     else:
@@ -1685,17 +1630,9 @@ async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
 @api_router.post("/auth/verify-otp")
 async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
-    stored = _otp_store.get(phone)
-    
-    if not stored:
-        raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new OTP.")
-    if time.time() > stored["expires"]:
-        del _otp_store[phone]
-        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
-    if stored["otp"] != payload.otp:
-        raise HTTPException(status_code=400, detail="Incorrect OTP. Please check and try again.")
-            
-    del _otp_store[phone]
+
+    if not await verify_and_clear_otp(phone, payload.otp):
+        raise HTTPException(status_code=400, detail="Incorrect or expired OTP. Please request a new one.")
         
     user = await db.users.find_one({"phone": phone})
     

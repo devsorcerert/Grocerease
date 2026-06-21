@@ -11,10 +11,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://api.grocereasetv.com",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T2HA664PypJoEz",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD8bD_rX8KoFAi0aBenABaGRuN8XxU3s1I"
+        "EXPO_PUBLIC_BACKEND_URL": "http://localhost:8001"
       }
     },
     "preview": {
@@ -25,24 +22,14 @@
       "ios": {
         "simulator": false
       },
-      "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://api.grocereasetv.com",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T2HA664PypJoEz",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD8bD_rX8KoFAi0aBenABaGRuN8XxU3s1I"
-      }
+      "env": {}
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       },
-      "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://api.grocereasetv.com",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T2HA664PypJoEz",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "418665414188-rl2jg740eersokldgp9ojnr6ue7uvc0r.apps.googleusercontent.com",
-        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD8bD_rX8KoFAi0aBenABaGRuN8XxU3s1I"
-      }
+      "env": {}
     }
   },
   "submit": {
