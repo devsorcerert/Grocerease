@@ -32,7 +32,7 @@ export default function AdminOrders() {
         api.get('/orders/admin/list'),
         api.get('/admin/riders'),
       ]);
-      setOrders(oRes.data);
+      setOrders(oRes.data.orders ?? []);
       setRiders(rRes.data);
     } catch (e: any) {
       Alert.alert('Error', e.response?.data?.detail || 'Failed to load');
