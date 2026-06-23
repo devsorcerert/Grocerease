@@ -1719,12 +1719,14 @@ from routers.kpis import router as kpis_router
 from routers.riders import router as riders_router
 from routers.admin_riders import router as admin_riders_router
 from routers.stores import router as stores_router
+from routers.loop_ledger import router as loop_ledger_router
 
 api_router.include_router(cart_router)
 api_router.include_router(orders_router)
 api_router.include_router(payments_router)
 api_router.include_router(kpis_router)
 api_router.include_router(admin_riders_router)
+api_router.include_router(loop_ledger_router)
 
 from routers.orders import get_checkout_summary, admin_get_orders, admin_update_order_status
 

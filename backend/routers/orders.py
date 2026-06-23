@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from routers.stores import find_serving_store
 from models import CreateOrderRequest, OrderCreate
+from routers.loop_ledger import credit_loop_balance, debit_loop_balance, MAX_REDEEM_FRACTION
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -227,7 +228,19 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     total = subtotal + delivery_fee - discount
     if total < 0:
         total = 0.0
-        
+
+    # Task 15: LOOP credit redemption
+    loop_credits_requested = getattr(payload, "loop_credits_to_redeem", 0.0) or 0.0
+    loop_credits_used = 0.0
+    if loop_credits_requested > 0:
+        user_for_loop = await db.users.find_one({"id": user_id}) or {}
+        available_loop = round(user_for_loop.get("loop_balance", 0.0), 2)
+        max_redeemable = round(total * MAX_REDEEM_FRACTION, 2)   # 50% cap
+        loop_credits_used = round(min(loop_credits_requested, available_loop, max_redeemable), 2)
+        total = round(total - loop_credits_used, 2)
+        if total < 0:
+            total = 0.0
+
     user = await db.users.find_one({"id": user_id})
     if user is None:
         # Admin users are not in db.users — fall back gracefully with zero spend
@@ -249,6 +262,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         "discount": round(discount, 2),
         "coupon_code": payload.coupon_code.upper() if payload.coupon_code else None,
         "total": round(total, 2),
+        "loop_credits_used": round(loop_credits_used, 2),
         "rewards_will_earn": round(rewards_will_earn, 2),
         "delivery_address": address["full_address"],
         "address_id": payload.address_id,
@@ -269,7 +283,16 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     }
     
     await db.orders.insert_one(order_dict)
-    
+
+    # Task 15: Debit LOOP balance now that order is committed
+    if loop_credits_used > 0:
+        await debit_loop_balance(
+            user_id, loop_credits_used,
+            reference_type="order_redeem",
+            reference_id=order_dict["id"],
+            description=f"Redeemed at checkout for order #{order_dict['id'][:8].upper()}",
+        )
+
     # Initial state machine transitions
     if is_pending:
         await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
@@ -288,6 +311,14 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
                 "current_reward": new_reward
             }}
         )
+        # Task 15: Credit LOOP cashback earned on this COD order
+        if rewards_will_earn > 0:
+            await credit_loop_balance(
+                user_id, rewards_will_earn,
+                reference_type="order_earn",
+                reference_id=order_dict["id"],
+                description=f"Cashback earned on order #{order_dict['id'][:8].upper()}",
+            )
         await db.cart_items.delete_many({"user_id": user_id})
         await insert_notification(
             user_id,
@@ -503,7 +534,19 @@ async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str =
     total = subtotal + delivery_fee - discount
     if total < 0:
         total = 0.0
-        
+
+    # Task 15: LOOP credit redemption
+    loop_credits_requested = getattr(payload, "loop_credits_to_redeem", 0.0) or 0.0
+    loop_credits_used = 0.0
+    if loop_credits_requested > 0:
+        user_for_loop = await db.users.find_one({"id": user_id}) or {}
+        available_loop = round(user_for_loop.get("loop_balance", 0.0), 2)
+        max_redeemable = round(total * MAX_REDEEM_FRACTION, 2)   # 50% cap
+        loop_credits_used = round(min(loop_credits_requested, available_loop, max_redeemable), 2)
+        total = round(total - loop_credits_used, 2)
+        if total < 0:
+            total = 0.0
+
     user = await db.users.find_one({"id": user_id})
     if user is None:
         # Admin users are not in db.users — fall back gracefully with zero spend

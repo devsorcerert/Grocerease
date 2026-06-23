@@ -118,6 +118,8 @@ class CreateOrderRequest(BaseModel):
     address_id: str
     payment_method: str
     coupon_code: Optional[str] = None
+    # Task 15: LOOP credits to redeem at checkout (₹). 0 = none. Capped server-side.
+    loop_credits_to_redeem: Optional[float] = 0.0
 
 class LogoutRequest(BaseModel):
     refresh_token: Optional[str] = None

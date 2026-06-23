@@ -735,3 +735,189 @@ def test_checkout_succeeds_inside_serviceability(client_fixture):
     assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
     order = resp.json()
     assert order["store_id"] == "store-tirupati-pilot"
+# ═══════════════════════════════════════════════════════════════════════════════
+# Task 15 + 25 — LOOP credit ledger & checkout redemption
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_loop_balance_starts_zero(client, auth_headers):
+    """New user has zero LOOP balance."""
+    r = client.get("/api/user/loop-balance", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["loop_balance"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_admin_credit_loop_and_ledger(client, admin_headers):
+    """Admin credits LOOP to a user; ledger row appears."""
+    # Create a target user
+    reg = client.post("/api/auth/register", json={
+        "name": "Loop Tester", "email": "looptest@test.com",
+        "phone": "+910000000099", "password": "pass123"
+    })
+    assert reg.status_code == 200
+    uid = reg.json()["user"]["id"]
+
+    # Admin credits 200 LOOP
+    r = client.post("/api/admin/loop/credit",
+                    json={"user_id": uid, "amount": 200.0,
+                          "description": "Goodwill credit"},
+                    headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["new_balance"] == 200.0
+
+    # Balance endpoint reflects it
+    login = client.post("/api/auth/login",
+                        json={"phone": "+910000000099", "password": "pass123"})
+    token = login.json()["token"]
+    bal = client.get("/api/user/loop-balance",
+                     headers={"Authorization": f"Bearer {token}"})
+    assert bal.json()["loop_balance"] == 200.0
+
+    # Ledger has one credit row
+    hist = client.get("/api/user/loop-ledger",
+                      headers={"Authorization": f"Bearer {token}"})
+    rows = hist.json()["rows"]
+    assert len(rows) == 1
+    assert rows[0]["type"] == "credit"
+    assert rows[0]["amount"] == 200.0
+    assert rows[0]["reference_type"] == "admin_credit"
+
+
+@pytest.mark.asyncio
+async def test_loop_redemption_at_checkout(client, auth_headers, user_id):
+    """LOOP credits reduce order total; debit row created."""
+    # Give the test user 100 LOOP via admin
+    from routers.loop_ledger import credit_loop_balance
+    await credit_loop_balance(
+        user_id, 100.0,
+        reference_type="admin_credit",
+        reference_id="test-setup",
+        description="Test setup credit",
+    )
+
+    # Seed a product and address
+    r = client.post("/api/user/addresses", json={
+        "full_address": "12 Test St, Tirupati",
+        "lat": 13.63, "lng": 79.42, "is_default": True
+    }, headers=auth_headers)
+    addr_id = r.json()["id"]
+
+    # Add to cart
+    prod = client.get("/api/products").json()["products"][0]
+    client.post("/api/cart/add",
+                json={"product_id": prod["id"], "quantity": 2},
+                headers=auth_headers)
+
+    # Checkout with 50 LOOP credits
+    order_r = client.post("/api/orders/create", json={
+        "address_id": addr_id,
+        "payment_method": "COD",
+        "loop_credits_to_redeem": 50.0,
+    }, headers=auth_headers)
+    assert order_r.status_code == 200
+    order = order_r.json()
+    assert order["loop_credits_used"] == 50.0
+
+    # Balance dropped by 50
+    bal = client.get("/api/user/loop-balance", headers=auth_headers)
+    assert bal.json()["loop_balance"] == pytest.approx(50.0, abs=1.0)
+
+    # Ledger has a debit row
+    hist = client.get("/api/user/loop-ledger", headers=auth_headers)
+    debit_rows = [r for r in hist.json()["rows"] if r["type"] == "debit"]
+    assert len(debit_rows) >= 1
+    assert debit_rows[0]["reference_type"] == "order_redeem"
+
+
+@pytest.mark.asyncio
+async def test_loop_redemption_capped_at_50_percent(client, auth_headers, user_id):
+    """Cannot redeem more than 50% of order total."""
+    from routers.loop_ledger import credit_loop_balance
+    await credit_loop_balance(
+        user_id, 10000.0,
+        reference_type="admin_credit",
+        reference_id="test-bigcredit",
+        description="Large test credit",
+    )
+    r = client.post("/api/user/addresses", json={
+        "full_address": "13 Test St, Tirupati",
+        "lat": 13.63, "lng": 79.42, "is_default": True
+    }, headers=auth_headers)
+    addr_id = r.json()["id"]
+    prod = client.get("/api/products").json()["products"][0]
+    client.post("/api/cart/add",
+                json={"product_id": prod["id"], "quantity": 1},
+                headers=auth_headers)
+    order_r = client.post("/api/orders/create", json={
+        "address_id": addr_id,
+        "payment_method": "COD",
+        "loop_credits_to_redeem": 9999.0,   # Request far more than allowed
+    }, headers=auth_headers)
+    assert order_r.status_code == 200
+    order = order_r.json()
+    # loop_credits_used must be ≤ 50% of total
+    assert order["loop_credits_used"] <= order["total"] * 0.50 + 0.01
+
+
+@pytest.mark.asyncio
+async def test_mso_spend_signal_issues_credits(client):
+    """MSO webhook issues 2% LOOP credits; duplicate call is idempotent."""
+    # Register a user to receive credits
+    reg = client.post("/api/auth/register", json={
+        "name": "Cable User", "email": "cable@test.com",
+        "phone": "+910000000088", "password": "pass123"
+    })
+    uid = reg.json()["user"]["id"]
+
+    payload = {
+        "user_id": uid,
+        "mso_id": "tataplay",
+        "amount_spent": 500.0,
+        "billing_month": "2024-06",
+    }
+    headers = {"X-Mso-Secret": "grocerease-mso-pilot-2024"}
+
+    r = client.post("/api/mso/spend-signal", json=payload, headers=headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["success"] is True
+    assert data["loop_credits_issued"] == pytest.approx(10.0)   # 2% of 500
+
+    # Second call with same month → idempotent
+    r2 = client.post("/api/mso/spend-signal", json=payload, headers=headers)
+    assert r2.status_code == 200
+    assert r2.json()["message"] == "Already processed"
+
+    # Balance reflects 10 LOOP
+    login = client.post("/api/auth/login",
+                        json={"phone": "+910000000088", "password": "pass123"})
+    token = login.json()["token"]
+    bal = client.get("/api/user/loop-balance",
+                     headers={"Authorization": f"Bearer {token}"})
+    assert bal.json()["loop_balance"] == pytest.approx(10.0)
+
+
+@pytest.mark.asyncio
+async def test_mso_spend_signal_rejects_bad_secret(client):
+    """MSO webhook returns 401 on wrong secret."""
+    r = client.post("/api/mso/spend-signal",
+                    json={"user_id": "x", "mso_id": "y",
+                          "amount_spent": 100.0, "billing_month": "2024-06"},
+                    headers={"X-Mso-Secret": "wrong-secret"})
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_loop_recalc_admin(client, admin_headers, user_id):
+    """Admin recalc reconciles balance from ledger rows."""
+    from routers.loop_ledger import credit_loop_balance, debit_loop_balance
+    await credit_loop_balance(user_id, 300.0, "admin_credit", "r1", "test credit")
+    await debit_loop_balance(user_id, 100.0, "order_redeem", "r2", "test debit")
+    # Force balance to wrong value
+    from database import db
+    await db.users.update_one({"id": user_id}, {"$set": {"loop_balance": 999.0}})
+    # Recalc
+    r = client.post(f"/api/admin/loop/recalc/{user_id}", headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["recalculated_balance"] == pytest.approx(200.0, abs=1.0)
