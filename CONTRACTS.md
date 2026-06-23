@@ -164,7 +164,7 @@ pending | preparing | packed | reached_store | picked_up | out_for_delivery | de
 | `POST /api/rider/location` | push location (§4) |
 | `POST /api/rider/order-status` | advance order status (§3a words only) |
 | `GET /api/rider/current-order` | fetch active order |
-| `POST /api/rider/push-token` | save Expo push token |
+| `POST /api/rider/push-token` | save Expo push token — body: `{ "token": "ExponentPushToken[...]" }` |
 
 ---
 
