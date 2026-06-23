@@ -1080,3 +1080,187 @@ async def test_admin_trigger_recon_job(client, admin_headers):
     r = client.post("/api/admin/jobs/reconcile-refunds", headers=admin_headers)
     assert r.status_code == 200
     assert "refunds_confirmed" in r.json()
+# Task 27 — Rider availability toggle
+# ---------------------------------------------------------------------------
+
+def test_rider_availability_toggle(client_fixture):
+    """POST /rider/availability must toggle online/offline; blocks offline when order active."""
+    import asyncio
+
+    # Seed a rider
+    async def seed():
+        await db.riders.insert_one({
+            "id": "rider-avail-test",
+            "name": "Avail Rider", "phone": "0000000001",
+            "password": __import__('database').hash_password("pass"),
+            "status": "offline", "current_order_id": None,
+            "order_queue": [], "current_location": None, "push_token": None,
+            "rating": 5.0, "created_at": __import__('datetime').datetime.utcnow(),
+        })
+    asyncio.run(seed())
+
+    token = client_fixture.post("/api/rider/login",
+        json={"phone": "0000000001", "password": "pass"}).json()["token"]
+    h = {"Authorization": f"Bearer {token}"}
+
+    # Go offline
+    resp = client_fixture.post("/api/rider/availability", headers=h, json={"available": False})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "offline"
+
+    # Go online
+    resp = client_fixture.post("/api/rider/availability", headers=h, json={"available": True})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "online"
+
+    # Can't go offline while an order is active
+    async def set_active():
+        await db.riders.update_one({"id": "rider-avail-test"},
+                                   {"$set": {"current_order_id": "fake-order-id"}})
+    asyncio.run(set_active())
+
+    resp = client_fixture.post("/api/rider/availability", headers=h, json={"available": False})
+    assert resp.status_code == 400
+    assert "offline" in resp.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Task 30 — Rider self-registration + admin approval
+# ---------------------------------------------------------------------------
+
+def test_rider_self_register_and_approve(client_fixture):
+    """Rider self-registers as pending; blocked from login until admin approves."""
+    # Self-register
+    resp = client_fixture.post("/api/rider/register", json={
+        "name": "New Rider", "phone": "9998887770",
+        "password": "riderpass", "vehicle": "Scooter"
+    })
+    assert resp.status_code == 200, resp.text
+    rider_id = resp.json()["rider_id"]
+
+    # Login blocked — pending_approval
+    resp = client_fixture.post("/api/rider/login",
+        json={"phone": "9998887770", "password": "riderpass"})
+    assert resp.status_code == 403
+    assert "pending" in resp.json()["detail"].lower()
+
+    # Admin approves
+    admin_token = client_fixture.post("/api/admin/login",
+        json={"email": "grocereasetv@gmail.com", "password": "admin123"}).json()["token"]
+    h_admin = {"Authorization": f"Bearer {admin_token}"}
+
+    resp = client_fixture.get("/api/admin/riders/pending", headers=h_admin)
+    assert resp.status_code == 200
+    pending = resp.json()
+    assert any(r["id"] == rider_id for r in pending)
+
+    resp = client_fixture.post(f"/api/admin/riders/{rider_id}/approve", headers=h_admin)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "offline"
+
+    # Now login succeeds
+    resp = client_fixture.post("/api/rider/login",
+        json={"phone": "9998887770", "password": "riderpass"})
+    assert resp.status_code == 200
+    assert "token" in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Task 31 — Multi-order queue
+# ---------------------------------------------------------------------------
+
+def test_multi_order_queue(client_fixture):
+    """Assigning a second order to a busy rider enqueues it; delivered promotes next."""
+    import asyncio
+
+    admin_token = client_fixture.post("/api/admin/login",
+        json={"email": "grocereasetv@gmail.com", "password": "admin123"}).json()["token"]
+    h_admin = {"Authorization": f"Bearer {admin_token}"}
+
+    # Seed a rider with an active order
+    async def seed():
+        await db.riders.insert_one({
+            "id": "rider-queue-test",
+            "name": "Queue Rider", "phone": "0000000002",
+            "password": __import__('database').hash_password("pass"),
+            "status": "online", "current_order_id": "order-q-1",
+            "order_queue": [], "current_location": None, "push_token": None,
+            "rating": 5.0, "created_at": __import__('datetime').datetime.utcnow(),
+        })
+        # Create two orders for assignment
+        for oid in ["order-q-1", "order-q-2"]:
+            await db.orders.insert_one({
+                "id": oid, "user_id": "u1", "items": [],
+                "status": "paid", "delivery_status": "preparing",
+                "assigned_rider_id": "rider-queue-test" if oid == "order-q-1" else None,
+                "created_at": __import__('datetime').datetime.utcnow(),
+            })
+    asyncio.run(seed())
+
+    # Assign second order — should be queued
+    resp = client_fixture.post("/api/admin/orders/order-q-2/assign-rider",
+        headers=h_admin, json={"rider_id": "rider-queue-test"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["queued"] is True
+
+    # Rider's order_queue should contain order-q-2
+    async def check_queue():
+        r = await db.riders.find_one({"id": "rider-queue-test"})
+        return r
+    rider = asyncio.run(check_queue())
+    assert "order-q-2" in rider["order_queue"]
+    assert rider["current_order_id"] == "order-q-1"
+
+    # Rider delivers order-q-1 → queue should promote order-q-2
+    rider_token = client_fixture.post("/api/rider/login",
+        json={"phone": "0000000002", "password": "pass"}).json()["token"]
+    h_rider = {"Authorization": f"Bearer {rider_token}"}
+
+    resp = client_fixture.post("/api/rider/order-status", headers=h_rider,
+        json={"order_id": "order-q-1", "status": "delivered"})
+    assert resp.status_code == 200
+
+    rider_after = asyncio.run(check_queue())
+    assert rider_after["current_order_id"] == "order-q-2"
+    assert rider_after["order_queue"] == []
+
+
+# ---------------------------------------------------------------------------
+# Task 21 — Auto-assign nearest available rider
+# ---------------------------------------------------------------------------
+
+def test_auto_assign_rider(client_fixture):
+    """POST /admin/orders/{id}/auto-assign-rider picks the online available rider."""
+    import asyncio
+
+    admin_token = client_fixture.post("/api/admin/login",
+        json={"email": "grocereasetv@gmail.com", "password": "admin123"}).json()["token"]
+    h_admin = {"Authorization": f"Bearer {admin_token}"}
+
+    async def seed():
+        await db.riders.insert_one({
+            "id": "rider-auto-test",
+            "name": "Auto Rider", "phone": "0000000003",
+            "password": __import__('database').hash_password("pass"),
+            "status": "online", "current_order_id": None,
+            "order_queue": [],
+            "current_location": {"lat": 13.629, "lng": 79.420, "updated_at": __import__('datetime').datetime.utcnow()},
+            "push_token": None, "rating": 5.0,
+            "created_at": __import__('datetime').datetime.utcnow(),
+        })
+        await db.orders.insert_one({
+            "id": "order-auto-1", "user_id": "u1", "items": [],
+            "status": "paid", "delivery_status": "preparing",
+            "assigned_rider_id": None,
+            "store_id": "store-tirupati-pilot",
+            "created_at": __import__('datetime').datetime.utcnow(),
+        })
+    asyncio.run(seed())
+
+    resp = client_fixture.post("/api/admin/orders/order-auto-1/auto-assign-rider",
+                               headers=h_admin)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["success"] is True
+    assert data["rider_id"] == "rider-auto-test"
+>>>>>>> 35235c3 (feat(task-21/27/30/31): rider foundations — allocation, availability, self-register, multi-order queue)

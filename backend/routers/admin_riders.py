@@ -54,3 +54,53 @@ async def list_riders(admin=Depends(verify_admin)):
         }
         for r in riders
     ]
+
+
+# ---------------------------------------------------------------------------
+# Task 30 (admin half) — Rider onboarding review
+# ---------------------------------------------------------------------------
+
+@router.get("/pending")
+async def list_pending_riders(admin=Depends(verify_admin)):
+    """List riders awaiting approval (status = pending_approval)."""
+    riders = await db.riders.find({"status": "pending_approval"}).to_list(200)
+    return [
+        {
+            "id": r["id"],
+            "name": r.get("name", ""),
+            "phone": r.get("phone", ""),
+            "vehicle": r.get("vehicle", "Bike"),
+            "created_at": r.get("created_at"),
+        }
+        for r in riders
+    ]
+
+
+@router.post("/{rider_id}/approve")
+async def approve_rider(rider_id: str, admin=Depends(verify_admin)):
+    """Approve a pending rider — sets status to offline (ready to log in)."""
+    rider = await db.riders.find_one({"id": rider_id})
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    if rider.get("status") != "pending_approval":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rider is not pending approval (current status: {rider.get('status')})"
+        )
+    await db.riders.update_one(
+        {"id": rider_id},
+        {"$set": {"status": "offline", "approved_at": datetime.utcnow()}}
+    )
+    return {"success": True, "rider_id": rider_id, "status": "offline"}
+
+
+@router.post("/{rider_id}/suspend")
+async def suspend_rider(rider_id: str, admin=Depends(verify_admin)):
+    """Suspend a rider (blocks login)."""
+    result = await db.riders.update_one(
+        {"id": rider_id},
+        {"$set": {"status": "suspended"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    return {"success": True, "rider_id": rider_id, "status": "suspended"}

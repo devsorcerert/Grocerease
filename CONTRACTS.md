@@ -158,13 +158,48 @@ pending | preparing | packed | reached_store | picked_up | out_for_delivery | de
 4. Rider advances status via `POST /api/rider/order-status` `{ "order_id": "…", "status": "<canonical status>" }`.
 
 ### Rider endpoints (canonical)
+| Endpoint | Auth | Use |
+|---|---|---|
+| `POST /api/rider/register` | public | self-onboarding (Task 30) — creates `pending_approval` rider |
+| `POST /api/rider/login` | public | login — blocked if `pending_approval` or `suspended` |
+| `POST /api/rider/availability` | rider | `{ "available": bool }` toggle online/offline (Task 27) — cannot go offline with active order |
+| `POST /api/rider/location` | rider | push location `{ lat, lng }` (§4) |
+| `POST /api/rider/order-status` | rider | advance order status (§3a words only) |
+| `GET /api/rider/current-order` | rider | fetch active order — returns `{ "order": <order\|null> }` |
+| `GET /api/rider/order-queue` | rider | fetch queued orders (Task 31) — returns `{ "order_queue": [...] }` |
+| `POST /api/rider/push-token` | rider | save Expo push token |
+
+### Admin rider endpoints (canonical)
 | Endpoint | Use |
 |---|---|
-| `POST /api/rider/login` | login |
-| `POST /api/rider/location` | push location (§4) |
-| `POST /api/rider/order-status` | advance order status (§3a words only) |
-| `GET /api/rider/current-order` | fetch active order |
-| `POST /api/rider/push-token` | save Expo push token |
+| `POST /api/admin/riders` | create rider (admin-seeded) |
+| `GET /api/admin/riders` | list all riders with availability |
+| `GET /api/admin/riders/pending` | list pending-approval riders (Task 30) |
+| `POST /api/admin/riders/{id}/approve` | approve pending rider → `offline` (Task 30) |
+| `POST /api/admin/riders/{id}/suspend` | suspend rider |
+| `POST /api/admin/orders/{id}/assign-rider` | manual assignment — `{ rider_id }` — respects queue (Task 31) |
+| `POST /api/admin/orders/{id}/auto-assign-rider` | nearest-available auto-assign (Task 21) |
+
+### Rider status values
+| Value | Meaning |
+|---|---|
+| `pending_approval` | self-registered, awaiting admin approval |
+| `offline` | approved, not on shift |
+| `online` | on shift, available for orders |
+| `suspended` | blocked |
+
+### Multi-order queue (Task 31)
+- `riders.current_order_id` — the order actively being delivered (unchanged from §5 canonical).
+- `riders.order_queue` — ordered list of upcoming assigned order IDs.
+- `MAX_QUEUE_SIZE = 3` (1 active + 2 queued) for pilot.
+- On `delivered`: head of `order_queue` is promoted to `current_order_id` automatically.
+- Assign-rider returns HTTP 400 if `total_load ≥ MAX_QUEUE_SIZE`.
+
+### Auto-assign algorithm (Task 21)
+1. Filter candidates: `status == "online"` AND `total_load < MAX_QUEUE_SIZE`.
+2. Rank by Haversine distance to `order.store_id`'s lat/lng (pure Python — no Mongo geo).
+3. Fallback if no GPS data: lowest total load wins.
+4. Manual `assign-rider` always overrides auto-assign.
 
 ---
 
@@ -244,7 +279,7 @@ image (string URL), is_active (bool), store_id (added in Task 20)
 - On success → `orders.store_id` is set to the serving store's `id`.
 
 ### Product `store_id` field
-- `products.store_id` (string | null) — which dark store stocks this product.  
+- `products.store_id` (string | null) — which dark store stocks this product.
 - `null` = legacy / available at all stores. New products should set this.
 - Pilot seed store id: `"store-tirupati-pilot"`.
 
@@ -257,6 +292,7 @@ image (string URL), is_active (bool), store_id (added in Task 20)
 | 2026-06-21 (draft) | — | Starter created from audit. |
 | 2026-06-21 | phase0 | Task 45: verified all claims, lifetimes, enums, and field names against live code. Corrected rider token lifetime (12 h). Task 46: `reached_store` added to `transition_order_status`. Status → FROZEN. |
 | 2026-06-23 | task-20 | §9 added: `stores` collection, serviceability check (Haversine), `store_id` on products and orders, pilot store seeded. §7 `store_id` confirmed. |
+| 2026-06-23 | task-21/27/30/31 | §5 rider section expanded: availability toggle, self-register + admin approval flow, multi-order queue (order_queue), nearest-available auto-assign. |
 
 ---
 
@@ -306,4 +342,3 @@ Issues 2% of `amount_spent` as LOOP credits. Idempotent per `(user_id, mso_id, b
 | Date | Change |
 |---|---|
 | 2024-06-23 | §10 added: LOOP ledger, Task 15 (checkout redemption), Task 25 (MSO stub) |
-
