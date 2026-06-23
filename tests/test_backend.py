@@ -586,3 +586,152 @@ def test_image_url_normalization(client_fixture):
         "image_url must be normalized to image on read"
     )
     assert "image_url" not in data, "legacy image_url must not appear in response"
+
+
+# ---------------------------------------------------------------------------
+# Task 20 — Stores & Serviceability
+# ---------------------------------------------------------------------------
+
+def test_stores_list(client_fixture):
+    """GET /stores returns active stores (at least the seeded pilot store)."""
+    resp = client_fixture.get("/api/stores")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "stores" in data
+    # init_db seeds the pilot store
+    assert any(s["id"] == "store-tirupati-pilot" for s in data["stores"]), (
+        "Pilot store must appear in /stores"
+    )
+
+
+def test_serviceability_inside_radius(client_fixture):
+    """Coordinates inside the pilot store's 7 km radius → serviceable."""
+    # Tirupati city centre — well within 7 km of the pilot store at (13.6288, 79.4192)
+    resp = client_fixture.get("/api/stores/serviceability?lat=13.6300&lng=79.4200")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["serviceable"] is True
+    assert data["store"]["id"] == "store-tirupati-pilot"
+
+
+def test_serviceability_outside_radius(client_fixture):
+    """Coordinates far outside any store radius → not serviceable."""
+    # Chennai — ~150 km from Tirupati
+    resp = client_fixture.get("/api/stores/serviceability?lat=13.0827&lng=80.2707")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["serviceable"] is False
+    assert data["store"] is None
+
+
+def test_admin_create_and_update_store(client_fixture):
+    """Admin can create a store and update its radius."""
+    admin_token = client_fixture.post(
+        "/api/admin/login",
+        json={"email": "grocereasetv@gmail.com", "password": "admin123"}
+    ).json()["token"]
+    headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # Create
+    resp = client_fixture.post("/api/admin/stores", headers=headers, json={
+        "name": "Test Store",
+        "address": "Test Address",
+        "lat": 13.6288,
+        "lng": 79.4192,
+        "radius_km": 3.0,
+        "is_active": True
+    })
+    assert resp.status_code == 200, resp.text
+    store = resp.json()
+    assert store["name"] == "Test Store"
+    store_id = store["id"]
+
+    # Update radius
+    resp = client_fixture.put(f"/api/admin/stores/{store_id}", headers=headers, json={
+        "radius_km": 4.0
+    })
+    assert resp.status_code == 200
+    assert resp.json()["radius_km"] == 4.0
+
+    # Deactivate
+    resp = client_fixture.put(f"/api/admin/stores/{store_id}", headers=headers, json={
+        "is_active": False
+    })
+    assert resp.status_code == 200
+    assert resp.json()["is_active"] is False
+
+
+def test_checkout_blocked_outside_serviceability(client_fixture):
+    """Checkout must fail 400 when delivery address is outside every store's radius."""
+    import asyncio
+
+    # Register + login
+    client_fixture.post("/api/auth/register", json={
+        "name": "Out Of Zone User", "email": "ooz@example.com",
+        "password": "Password123", "phone": "+910000000002"
+    })
+    token = client_fixture.post("/api/auth/login", json={
+        "email": "ooz@example.com", "password": "Password123"
+    }).json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Add a cart item
+    client_fixture.post("/api/cart/add", headers=headers,
+                        json={"product_id": "prod-apple", "quantity": 1})
+
+    # Save an address outside Tirupati (Chennai coords)
+    addr_resp = client_fixture.post("/api/user/addresses", headers=headers, json={
+        "full_address": "Chennai, Tamil Nadu",
+        "lat": 13.0827,
+        "lng": 80.2707,
+        "is_default": True,
+        "label": "Home"
+    })
+    assert addr_resp.status_code == 200, addr_resp.text
+    address_id = addr_resp.json()["id"]
+
+    # Attempt checkout — should be blocked
+    resp = client_fixture.post("/api/orders/create", headers=headers, json={
+        "address_id": address_id,
+        "payment_method": "COD"
+    })
+    assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+    assert "don't deliver" in resp.json()["detail"].lower()
+
+
+def test_checkout_succeeds_inside_serviceability(client_fixture):
+    """Checkout must succeed when delivery address is inside a store's radius."""
+    import asyncio
+
+    # Register + login
+    client_fixture.post("/api/auth/register", json={
+        "name": "In Zone User", "email": "inzone@example.com",
+        "password": "Password123", "phone": "+910000000003"
+    })
+    token = client_fixture.post("/api/auth/login", json={
+        "email": "inzone@example.com", "password": "Password123"
+    }).json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Add a cart item
+    client_fixture.post("/api/cart/add", headers=headers,
+                        json={"product_id": "prod-milk", "quantity": 1})
+
+    # Save an address inside Tirupati
+    addr_resp = client_fixture.post("/api/user/addresses", headers=headers, json={
+        "full_address": "Tirupati, Andhra Pradesh",
+        "lat": 13.6300,
+        "lng": 79.4200,
+        "is_default": True,
+        "label": "Home"
+    })
+    assert addr_resp.status_code == 200, addr_resp.text
+    address_id = addr_resp.json()["id"]
+
+    resp = client_fixture.post("/api/orders/create", headers=headers, json={
+        "address_id": address_id,
+        "payment_method": "COD"
+    })
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+    order = resp.json()
+    assert order["store_id"] == "store-tirupati-pilot"

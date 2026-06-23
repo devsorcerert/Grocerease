@@ -57,6 +57,7 @@ class ProductCreate(BaseModel):
     weight: Optional[float] = None
     dimensions: Optional[str] = None
     shelf_life_days: Optional[int] = None
+    store_id: Optional[str] = None  # Task 20: which dark store stocks this product
 
 class BulkProductUpload(BaseModel):
     products: List[dict]

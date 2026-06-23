@@ -201,8 +201,59 @@ image (string URL), is_active (bool), store_id (added in Task 20)
 
 ---
 
+## 9. Stores & Serviceability (Task 20)
+
+### Store document shape
+```json
+{
+  "id": "uuid",
+  "name": "GrocerEase Tirupati",
+  "address": "Dark Store, Tirupati, Andhra Pradesh",
+  "lat": 13.6288,
+  "lng": 79.4192,
+  "radius_km": 7.0,
+  "is_active": true,
+  "created_at": "2026-06-23T..."
+}
+```
+
+### Store endpoints
+| Endpoint | Auth | Use |
+|---|---|---|
+| `GET /api/stores` | public | list active stores |
+| `GET /api/stores/serviceability?lat=<f>&lng=<f>` | public | check if coordinate is serviceable |
+| `POST /api/admin/stores` | admin | create a store |
+| `PUT /api/admin/stores/{store_id}` | admin | update / toggle active |
+| `GET /api/admin/stores` | admin | list all stores incl. inactive |
+
+### Serviceability response
+```json
+{ "serviceable": true,  "store": { ...store doc... } }
+{ "serviceable": false, "store": null }
+```
+
+### How serviceability is computed
+- Pure-Python **Haversine** distance — no Mongo `$near`/`$geoNear` (avoids mongomock CI limitation).
+- An address is serviceable if **any active store** has `distance(store, delivery) ≤ store.radius_km`.
+- Nearest qualifying store is selected and its `id` written to `orders.store_id`.
+
+### Checkout integration
+- `create_order_core` checks serviceability using the delivery address's `lat`/`lng`.
+- If the address has no lat/lng (legacy/manual entry) the check is **skipped** (fail-open — pilot only; address-capture UX always saves coordinates).
+- On serviceability failure → HTTP 400 "Sorry, we don't deliver to your address yet."
+- On success → `orders.store_id` is set to the serving store's `id`.
+
+### Product `store_id` field
+- `products.store_id` (string | null) — which dark store stocks this product.  
+- `null` = legacy / available at all stores. New products should set this.
+- Pilot seed store id: `"store-tirupati-pilot"`.
+
+
+---
+
 ## 8. Change log
 | Date | Who | Change |
 |---|---|---|
 | 2026-06-21 (draft) | — | Starter created from audit. |
 | 2026-06-21 | phase0 | Task 45: verified all claims, lifetimes, enums, and field names against live code. Corrected rider token lifetime (12 h). Task 46: `reached_store` added to `transition_order_status`. Status → FROZEN. |
+| 2026-06-23 | task-20 | §9 added: `stores` collection, serviceability check (Haversine), `store_id` on products and orders, pilot store seeded. §7 `store_id` confirmed. |
