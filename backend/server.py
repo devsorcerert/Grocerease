@@ -101,6 +101,8 @@ async def startup_db_client():
             logging.info(f"Startup seeded default admin: {admin_email}")
             
         logging.info("MongoDB indexes verified/created successfully!")
+        # Start periodic background jobs (Task 17: stock expiry, Task 24: refund recon)
+        start_background_jobs()
     except Exception as e:
         logging.error(f"Failed to connect to MongoDB or initialize indexes on startup: {e}")
 
@@ -1720,6 +1722,7 @@ from routers.riders import router as riders_router
 from routers.admin_riders import router as admin_riders_router
 from routers.stores import router as stores_router
 from routers.loop_ledger import router as loop_ledger_router
+from routers.background_jobs import router as background_jobs_router, start_background_jobs
 
 api_router.include_router(cart_router)
 api_router.include_router(orders_router)
@@ -1727,6 +1730,7 @@ api_router.include_router(payments_router)
 api_router.include_router(kpis_router)
 api_router.include_router(admin_riders_router)
 api_router.include_router(loop_ledger_router)
+api_router.include_router(background_jobs_router)
 
 from routers.orders import get_checkout_summary, admin_get_orders, admin_update_order_status
 

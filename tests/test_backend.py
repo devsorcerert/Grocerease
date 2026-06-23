@@ -921,3 +921,162 @@ async def test_loop_recalc_admin(client, admin_headers, user_id):
     r = client.post(f"/api/admin/loop/recalc/{user_id}", headers=admin_headers)
     assert r.status_code == 200
     assert r.json()["recalculated_balance"] == pytest.approx(200.0, abs=1.0)
+# Task 17 + 24 — Stock expiry job & payments reconciliation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_stock_expiry_rolls_back_and_cancels(client, auth_headers, user_id):
+    """
+    An order stuck in pending_payment past TTL is expired:
+    stock is restored and status transitions to cancelled.
+    """
+    from database import db
+    from routers.background_jobs import expire_stale_pending_orders
+    from datetime import datetime, timedelta
+
+    # Seed a product with known stock
+    prod_id = f"prod-expiry-{uuid.uuid4().hex[:6]}"
+    await db.products.insert_one({
+        "id": prod_id, "name": "Expiry Test", "price": 50.0,
+        "stock": 10, "category": "test", "is_active": True,
+    })
+
+    # Manually insert a stale pending_payment order (created 40 min ago)
+    order_id = f"ord-{uuid.uuid4().hex[:8]}"
+    await db.orders.insert_one({
+        "id": order_id, "user_id": user_id,
+        "items": [{"product_id": prod_id, "quantity": 3, "price": 50.0, "name": "Expiry Test", "brand": "Test"}],
+        "status": "pending_payment", "payment_status": "pending",
+        "subtotal": 150.0, "delivery_fee": 0.0, "discount": 0.0,
+        "total": 150.0, "loop_credits_used": 0.0,
+        "delivery_address": "12 Test St", "address_id": "addr-1",
+        "payment_method": "prepaid",
+        "created_at": datetime.utcnow() - timedelta(minutes=40),
+        "tracking_updates": [],
+    })
+
+    # Deduct stock as if it was reserved
+    await db.products.update_one({"id": prod_id}, {"$inc": {"stock": -3}})
+    prod_before = await db.products.find_one({"id": prod_id})
+    assert prod_before["stock"] == 7
+
+    # Run expiry job
+    expired = await expire_stale_pending_orders()
+    assert expired >= 1
+
+    # Stock restored to 10
+    prod_after = await db.products.find_one({"id": prod_id})
+    assert prod_after["stock"] == 10
+
+    # Order is cancelled
+    order = await db.orders.find_one({"id": order_id})
+    assert order["status"] == "cancelled"
+    assert order["payment_status"] == "expired"
+
+
+@pytest.mark.asyncio
+async def test_fresh_pending_order_not_expired(client, auth_headers, user_id):
+    """A brand-new pending_payment order must NOT be expired by the job."""
+    from database import db
+    from routers.background_jobs import expire_stale_pending_orders
+    from datetime import datetime
+
+    order_id = f"ord-fresh-{uuid.uuid4().hex[:8]}"
+    await db.orders.insert_one({
+        "id": order_id, "user_id": user_id,
+        "items": [], "status": "pending_payment",
+        "payment_status": "pending",
+        "subtotal": 0.0, "delivery_fee": 0.0, "discount": 0.0, "total": 0.0,
+        "delivery_address": "test", "address_id": "a1",
+        "payment_method": "prepaid",
+        "created_at": datetime.utcnow(),   # just created
+        "tracking_updates": [],
+    })
+    await expire_stale_pending_orders()
+    order = await db.orders.find_one({"id": order_id})
+    assert order["status"] == "pending_payment"   # untouched
+
+
+@pytest.mark.asyncio
+async def test_refund_status_endpoint_non_refund(client, auth_headers, user_id):
+    """Refund-status for a paid (non-refund) order returns refund_eligible=False."""
+    from database import db
+
+    order_id = f"ord-paid-{uuid.uuid4().hex[:8]}"
+    await db.orders.insert_one({
+        "id": order_id, "user_id": user_id,
+        "status": "delivered", "payment_status": "paid",
+        "total": 200.0, "items": [], "tracking_updates": [],
+        "delivery_address": "X", "address_id": "a1",
+        "payment_method": "prepaid",
+        "created_at": __import__("datetime").datetime.utcnow(),
+    })
+    r = client.get(f"/api/user/orders/{order_id}/refund-status", headers=auth_headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["refund_eligible"] is False
+    assert data["payment_status"] == "paid"
+
+
+@pytest.mark.asyncio
+async def test_refund_status_endpoint_pending_refund(client, auth_headers, user_id):
+    """Refund-status for refund_pending order returns correct message."""
+    from database import db
+
+    order_id = f"ord-refpend-{uuid.uuid4().hex[:8]}"
+    await db.orders.insert_one({
+        "id": order_id, "user_id": user_id,
+        "status": "cancelled", "payment_status": "refund_pending",
+        "total": 300.0, "items": [], "tracking_updates": [],
+        "delivery_address": "Y", "address_id": "a2",
+        "payment_method": "prepaid",
+        "created_at": __import__("datetime").datetime.utcnow(),
+    })
+    r = client.get(f"/api/user/orders/{order_id}/refund-status", headers=auth_headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["refund_eligible"] is True
+    assert data["payment_status"] == "refund_pending"
+    assert "5–7 business days" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_refund_status_wrong_user(client, user_id):
+    """Another user cannot see a different user's refund status (404)."""
+    from database import db
+
+    order_id = f"ord-other-{uuid.uuid4().hex[:8]}"
+    await db.orders.insert_one({
+        "id": order_id, "user_id": "someone-else",
+        "status": "cancelled", "payment_status": "refund_pending",
+        "total": 100.0, "items": [], "tracking_updates": [],
+        "delivery_address": "Z", "address_id": "a3",
+        "payment_method": "prepaid",
+        "created_at": __import__("datetime").datetime.utcnow(),
+    })
+    # Login as a different user
+    client.post("/api/auth/register", json={
+        "name": "Other", "email": "other@test.com",
+        "phone": "+910000000077", "password": "pass123",
+    })
+    login = client.post("/api/auth/login",
+                        json={"phone": "+910000000077", "password": "pass123"})
+    other_headers = {"Authorization": f"Bearer {login.json()['token']}"}
+    r = client.get(f"/api/user/orders/{order_id}/refund-status", headers=other_headers)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_trigger_expiry_job(client, admin_headers):
+    """Admin can trigger the expiry job via API."""
+    r = client.post("/api/admin/jobs/expire-pending-orders", headers=admin_headers)
+    assert r.status_code == 200
+    assert "expired_orders" in r.json()
+
+
+@pytest.mark.asyncio
+async def test_admin_trigger_recon_job(client, admin_headers):
+    """Admin can trigger the reconciliation job via API."""
+    r = client.post("/api/admin/jobs/reconcile-refunds", headers=admin_headers)
+    assert r.status_code == 200
+    assert "refunds_confirmed" in r.json()
