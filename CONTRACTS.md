@@ -201,8 +201,47 @@ image (string URL), is_active (bool), store_id (added in Task 20)
 
 ---
 
-## 8. Change log
+## 8. Dark-store inventory model (Task 20)
+
+### Stores collection
+```json
+{
+  "id": "store-tirupati-001",
+  "name": "GrocerEase Tirupati Dark Store",
+  "location": { "lat": 13.6288, "lng": 79.4192 },
+  "service_radius_km": 10.0,
+  "is_active": true
+}
+```
+- `service_radius_km` is the Haversine radius within which the store delivers.
+- `is_active: false` removes a store from serviceability checks without deleting it.
+
+### `store_id` on products
+- Every product document carries `store_id` (string). Legacy products without it are backfilled to `"store-tirupati-001"` on `init_database()`.
+
+### `store_id` on orders
+- Stamped at order-create time from the serving store. May be `null` if the address had no coordinates (backward compat — see below).
+
+### Serviceability endpoints
+| Endpoint | Auth | Use |
+|---|---|---|
+| `GET /api/orders/serviceability?lat=&lng=` | none | pre-checkout coverage check |
+
+Response shape:
+```json
+{ "serviceable": true, "store_id": "store-tirupati-001", "store_name": "GrocerEase Tirupati Dark Store" }
+```
+
+### Checkout serviceability gate
+- `POST /api/orders/create` and `/create-pending` enforce the check **only when the delivery address has `lat`/`lng` stored**.
+- Addresses without coordinates bypass the check (backward compat for existing addresses). The customer app should populate `lat`/`lng` when saving a new address.
+- Error on out-of-area: `HTTP 400 "Delivery not available at your address — outside our service area."`
+
+---
+
+## 9. Change log
 | Date | Who | Change |
 |---|---|---|
 | 2026-06-21 (draft) | — | Starter created from audit. |
 | 2026-06-21 | phase0 | Task 45: verified all claims, lifetimes, enums, and field names against live code. Corrected rider token lifetime (12 h). Task 46: `reached_store` added to `transition_order_status`. Status → FROZEN. |
+| 2026-06-23 | epic-archimedes | Task 18: canonical product fields (`offer_price`, `image`). Task 20: dark-store model — `stores` collection, `store_id` on products/orders, serviceability check + endpoint. |

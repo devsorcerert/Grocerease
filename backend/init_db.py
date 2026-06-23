@@ -73,7 +73,31 @@ async def init_database():
         await db.riders.create_index("id", unique=True)
         await db.riders.create_index("phone", unique=True)
         await db.riders.create_index("status")
-        
+
+        # 10. Create Store Indexes
+        logging.info("Creating stores indexes...")
+        await db.stores.create_index("id", unique=True)
+        await db.stores.create_index("is_active")
+
+        # Seed default store if none exist
+        store_count = await db.stores.count_documents({})
+        if store_count == 0:
+            await db.stores.insert_one({
+                "id": "store-tirupati-001",
+                "name": "GrocerEase Tirupati Dark Store",
+                "location": {"lat": 13.6288, "lng": 79.4192},
+                "service_radius_km": 10.0,
+                "is_active": True,
+                "created_at": datetime.utcnow(),
+            })
+            logging.info("Seeded default dark store: store-tirupati-001")
+
+        # Seed default store_id on products that don't have one
+        await db.products.update_many(
+            {"store_id": {"$exists": False}},
+            {"$set": {"store_id": "store-tirupati-001"}}
+        )
+
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})
         if admin_count == 0:

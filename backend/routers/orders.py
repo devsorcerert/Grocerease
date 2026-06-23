@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timedelta
+import math
 import uuid
 import logging
 from typing import Optional, List
@@ -8,6 +9,30 @@ from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_
 from models import CreateOrderRequest, OrderCreate
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+async def find_serving_store(lat: float, lng: float) -> Optional[dict]:
+    """Return the nearest active store that covers (lat, lng), or None."""
+    stores = await db.stores.find({"is_active": True}).to_list(100)
+    best, best_dist = None, float("inf")
+    for store in stores:
+        loc = store.get("location", {})
+        slat, slng = loc.get("lat"), loc.get("lng")
+        if slat is None or slng is None:
+            continue
+        dist = _haversine_km(lat, lng, float(slat), float(slng))
+        if dist <= store.get("service_radius_km", 10.0) and dist < best_dist:
+            best, best_dist = store, dist
+    return best
+
 
 # Spending tiers & rewards
 def calculate_spending_tiers_and_rewards(current_monthly_spend: float, order_total: float) -> dict:
@@ -174,7 +199,19 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     address = await db.addresses.find_one({"id": payload.address_id, "user_id": user_id})
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
-        
+
+    # 2a. Serviceability check — only when the address has coordinates
+    addr_lat = address.get("lat")
+    addr_lng = address.get("lng")
+    serving_store = None
+    if addr_lat is not None and addr_lng is not None:
+        serving_store = await find_serving_store(float(addr_lat), float(addr_lng))
+        if serving_store is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Delivery not available at your address — outside our service area."
+            )
+
     subtotal = 0.0
     items_to_save = []
     
@@ -228,6 +265,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
+        "store_id": serving_store["id"] if serving_store else None,
         "items": items_to_save,
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
@@ -457,6 +495,21 @@ async def admin_update_order_status(order_id: str, payload: dict, admin=Depends(
     # Make sure transition_order_status is called
     await transition_order_status(order_id, new_status, admin.get("user_id", "admin"), "Status updated by admin")
     return {"message": "Order status updated successfully"}
+
+@router.get("/serviceability")
+async def check_serviceability(lat: float, lng: float):
+    """
+    Check whether a lat/lng falls within any active store's service radius.
+    No auth required — called before checkout to show coverage to the user.
+    Returns: { serviceable: bool, store_id: str|null, store_name: str|null }
+    """
+    store = await find_serving_store(lat, lng)
+    return {
+        "serviceable": store is not None,
+        "store_id": store["id"] if store else None,
+        "store_name": store["name"] if store else None,
+    }
+
 
 @router.get("/checkout/summary")
 async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str = Depends(get_current_user)):
