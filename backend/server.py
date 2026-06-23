@@ -619,16 +619,8 @@ async def get_products(
     # Fetch products with pagination
     products = await db.products.find(query).sort(sort_field, sort_order).skip(skip).limit(limit).to_list(limit)
     
-    # Remove MongoDB _id field; normalize image field name (BUG-06 fix)
-    for product in products:
-        product.pop("_id", None)
-        # Normalize legacy field names from old documents
-        product["image"] = product.pop("image_url", product.get("image", ""))
-        if "offerPrice" in product or "original_price" in product:
-            product["offer_price"] = product.pop("offerPrice", product.pop("original_price", product.get("offer_price")))
-    
     return {
-        "products": products,
+        "products": clean_mongo_docs(products),
         "total": total_count,
         "limit": limit,
         "skip": skip,

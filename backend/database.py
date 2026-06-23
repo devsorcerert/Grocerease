@@ -116,9 +116,22 @@ async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(secur
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 def clean_mongo_doc(doc):
-    """Remove MongoDB _id field from document"""
-    if isinstance(doc, dict) and "_id" in doc:
-        del doc["_id"]
+    """Remove MongoDB _id and normalise legacy product field names."""
+    if not isinstance(doc, dict):
+        return doc
+    doc.pop("_id", None)
+    # Normalise image: legacy docs stored 'image_url' instead of 'image'
+    if "image_url" in doc and "image" not in doc:
+        doc["image"] = doc.pop("image_url")
+    elif "image_url" in doc:
+        doc.pop("image_url")
+    # Normalise offer price: legacy docs stored 'offerPrice' or 'original_price'
+    for legacy in ("offerPrice", "original_price"):
+        if legacy in doc:
+            if "offer_price" not in doc:
+                doc["offer_price"] = doc.pop(legacy)
+            else:
+                doc.pop(legacy)
     return doc
 
 def clean_mongo_docs(docs):
