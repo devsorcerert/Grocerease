@@ -400,6 +400,176 @@ def test_order_tracking_with_rider(client_fixture):
     assert data["delivery_partner"]["current_location"]["longitude"] == 79.4192
     assert data["delivery_partner"]["estimated_arrival"] == "12 minutes"
 
+def test_otp_flow(client_fixture):
+    """Contract test: OTP send/verify seam (CONTRACTS.md §2)"""
+    phone = "+919876543210"
+
+    # --- send-otp: invalid format rejected ---
+    resp = client_fixture.post("/api/auth/send-otp", json={"phone": "9876543210"})
+    assert resp.status_code == 422
+
+    resp = client_fixture.post("/api/auth/send-otp", json={"phone": "+919876543210"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "is_new_user" in body
+    assert body["is_new_user"] is True  # not registered yet
+
+    # Read the OTP directly from the DB to avoid needing SMS
+    async def get_otp():
+        doc = await db.otps.find_one({"key": phone})
+        return doc["otp"] if doc else None
+    otp = asyncio.run(get_otp())
+    assert otp is not None
+
+    # --- verify-otp: wrong OTP rejected ---
+    resp = client_fixture.post("/api/auth/verify-otp", json={
+        "phone": phone, "otp": "000000", "name": "OTP User"
+    })
+    assert resp.status_code == 400
+
+    # --- verify-otp: correct OTP for NEW user requires name ---
+    # Re-insert the OTP (consumed on wrong attempt? No — wrong OTP doesn't clear it)
+    # Check: wrong OTP does NOT clear the record
+    otp_still = asyncio.run(get_otp())
+    assert otp_still is not None, "Wrong OTP must not clear the stored OTP"
+
+    # Missing name for new user → 422
+    resp = client_fixture.post("/api/auth/verify-otp", json={
+        "phone": phone, "otp": otp
+    })
+    assert resp.status_code == 422
+
+    # Re-store OTP (it was not cleared by the missing-name attempt either,
+    # but verify-otp calls verify_and_clear_otp first so it IS consumed if OTP was correct)
+    # Re-seed for the real successful call
+    async def reseed_otp():
+        from database import set_otp
+        await set_otp(phone, otp)
+    asyncio.run(reseed_otp())
+
+    resp = client_fixture.post("/api/auth/verify-otp", json={
+        "phone": phone, "otp": otp, "name": "OTP User"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "token" in data
+    assert "refresh_token" in data
+    assert data["user"]["phone"] == phone
+
+    # --- second send-otp for same phone: is_new_user should be False now ---
+    resp = client_fixture.post("/api/auth/send-otp", json={"phone": phone})
+    assert resp.status_code == 200
+    assert resp.json()["is_new_user"] is False
+
+    # --- verify-otp: EXISTING user does NOT need name ---
+    otp2 = asyncio.run(get_otp())
+    assert otp2 is not None
+    resp = client_fixture.post("/api/auth/verify-otp", json={
+        "phone": phone, "otp": otp2
+        # no name field
+    })
+    assert resp.status_code == 200
+    assert "token" in resp.json()
+
+
+def test_auth_social_endpoint_is_removed(client_fixture):
+    """Contract test: POST /api/auth/social must NOT exist (CONTRACTS.md §2 — security risk)."""
+    resp = client_fixture.post("/api/auth/social", json={
+        "email": "attacker@evil.com", "name": "Attacker"
+    })
+    # If the endpoint existed and accepted any email it would be an account-takeover vector.
+    # We expect 404 (route gone) or 405 (method not allowed). Any 2xx is a failure.
+    assert resp.status_code in (404, 405), (
+        f"/api/auth/social returned {resp.status_code} — endpoint must be removed per CONTRACTS.md"
+    )
+
+
+def test_rider_assignment(client_fixture):
+    """Contract test: admin assign-rider seam (CONTRACTS.md §5)."""
+    import uuid
+
+    # Seed a rider and an order
+    rider_id = "assign-rider-1"
+    order_id = str(uuid.uuid4())
+
+    async def seed():
+        from database import hash_password as hp
+        await db.riders.delete_many({"id": rider_id})
+        await db.riders.insert_one({
+            "id": rider_id,
+            "name": "Assign Test Rider",
+            "phone": "+919900001122",
+            "password": hp("rpass123"),
+            "status": "online",
+            "current_order_id": None,
+        })
+        await db.orders.insert_one({
+            "id": order_id,
+            "user_id": "some-user",
+            "status": "packed",
+            "delivery_address": "Test St",
+            "assigned_rider_id": None,
+            "tracking_updates": [],
+        })
+    asyncio.run(seed())
+
+    # Login as admin
+    resp = client_fixture.post("/api/admin/login", json={
+        "email": "grocereasetv@gmail.com", "password": "admin123"
+    })
+    assert resp.status_code == 200
+    admin_headers = {"Authorization": f"Bearer {resp.json()['token']}"}
+
+    # --- assign: happy path ---
+    resp = client_fixture.post(
+        f"/api/orders/admin/{order_id}/assign-rider",
+        json={"rider_id": rider_id},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert body["order_id"] == order_id
+    assert body["rider_id"] == rider_id
+
+    # Verify DB state: canonical fields set (CONTRACTS.md §5)
+    async def check_db():
+        order = await db.orders.find_one({"id": order_id})
+        rider = await db.riders.find_one({"id": rider_id})
+        return order["assigned_rider_id"], rider["current_order_id"]
+
+    assigned_rider, active_order = asyncio.run(check_db())
+    assert assigned_rider == rider_id
+    assert active_order == order_id
+
+    # --- assign: unknown order → 404 ---
+    resp = client_fixture.post(
+        "/api/orders/admin/nonexistent-order-id/assign-rider",
+        json={"rider_id": rider_id},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 404
+
+    # --- assign: unknown rider → 404 ---
+    resp = client_fixture.post(
+        f"/api/orders/admin/{order_id}/assign-rider",
+        json={"rider_id": "ghost-rider"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 404
+
+    # --- assign: non-admin is rejected ---
+    login_data = {"email": "testuser@example.com", "password": "Password123"}
+    resp = client_fixture.post("/api/auth/login", json=login_data)
+    user_headers = {"Authorization": f"Bearer {resp.json()['token']}"}
+    resp = client_fixture.post(
+        f"/api/orders/admin/{order_id}/assign-rider",
+        json={"rider_id": rider_id},
+        headers=user_headers,
+    )
+    assert resp.status_code in (401, 403)
+
+
 def test_rider_endpoints(client_fixture):
     # 1. Seed a mock active rider and a mock suspended rider
     async def seed_riders():
