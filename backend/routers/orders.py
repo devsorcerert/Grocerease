@@ -441,6 +441,12 @@ class AssignRiderRequest(BaseModel):
 
 @router.post("/admin/{order_id}/assign-rider")
 async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admin=Depends(verify_admin)):
+    """
+    Manual rider assignment (Task 5 / CONTRACTS.md §5).
+    Task 31: if the rider already has an active order, the new order is pushed
+    onto their order_queue (up to MAX_QUEUE_SIZE) rather than replacing current.
+    """
+    from routers.riders import MAX_QUEUE_SIZE
     rider_id = payload.rider_id.strip()
     if not rider_id:
         raise HTTPException(status_code=422, detail="rider_id is required")
@@ -453,23 +459,116 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
     if not rider:
         raise HTTPException(status_code=404, detail="Rider not found")
 
+    queue = rider.get("order_queue", [])
+    has_active = bool(rider.get("current_order_id"))
+    total_load = (1 if has_active else 0) + len(queue)
+    if total_load >= MAX_QUEUE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rider already has {total_load} order(s) (max {MAX_QUEUE_SIZE}). Choose another rider."
+        )
+
     await db.orders.update_one(
         {"id": order_id},
         {"$set": {"assigned_rider_id": rider_id, "updated_at": datetime.utcnow()}}
     )
-    await db.riders.update_one(
-        {"id": rider_id},
-        {"$set": {"current_order_id": order_id, "updated_at": datetime.utcnow()}}
-    )
+
+    if has_active:
+        # Queue it — rider will pick it up after delivering current order
+        await db.riders.update_one(
+            {"id": rider_id},
+            {"$push": {"order_queue": order_id}}
+        )
+        queued = True
+    else:
+        await db.riders.update_one(
+            {"id": rider_id},
+            {"$set": {"current_order_id": order_id, "updated_at": datetime.utcnow()}}
+        )
+        queued = False
 
     title = "New Order Assigned 📦"
-    message = f"You have been assigned order #{order_id[:8]}. Check the app for details."
+    message = (
+        f"Order #{order_id[:8]} queued — complete current delivery first."
+        if queued else
+        f"You have been assigned order #{order_id[:8]}. Check the app for details."
+    )
     push_token = rider.get("push_token")
     if push_token:
         await send_push_notification(push_token, title, message, {"order_id": order_id})
     await insert_notification(rider_id, title, message, "order", f"/order/{order_id}")
 
-    return {"success": True, "order_id": order_id, "rider_id": rider_id}
+    return {"success": True, "order_id": order_id, "rider_id": rider_id, "queued": queued}
+
+
+@router.post("/admin/{order_id}/auto-assign-rider")
+async def auto_assign_rider(order_id: str, admin=Depends(verify_admin)):
+    """
+    Task 21 — Nearest-available auto-assign.
+    Finds the online rider with capacity (total load < MAX_QUEUE_SIZE) nearest to
+    the order's serving store using Haversine. Falls back to any available rider
+    if no rider has a known location. Admin can override with manual assign-rider.
+    """
+    from routers.riders import MAX_QUEUE_SIZE
+    from routers.stores import haversine_km
+
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("assigned_rider_id"):
+        raise HTTPException(status_code=400, detail="Order already has a rider assigned.")
+
+    # Resolve store location for distance calc
+    store_lat = store_lng = None
+    store_id = order.get("store_id")
+    if store_id:
+        store = await db.stores.find_one({"id": store_id})
+        if store:
+            store_lat = store.get("lat")
+            store_lng = store.get("lng")
+
+    # Find all online riders with capacity
+    online_riders = await db.riders.find({"status": "online"}).to_list(200)
+    candidates = []
+    for r in online_riders:
+        queue = r.get("order_queue", [])
+        has_active = bool(r.get("current_order_id"))
+        total_load = (1 if has_active else 0) + len(queue)
+        if total_load < MAX_QUEUE_SIZE:
+            candidates.append(r)
+
+    if not candidates:
+        raise HTTPException(
+            status_code=404,
+            detail="No available riders online. Try manual assignment."
+        )
+
+    # Pick nearest to store if we have both store coords and rider locations
+    best_rider = None
+    if store_lat is not None and store_lng is not None:
+        best_dist = float("inf")
+        for r in candidates:
+            loc = r.get("current_location") or {}
+            rlat = loc.get("lat")
+            rlng = loc.get("lng")
+            if rlat is not None and rlng is not None:
+                d = haversine_km(store_lat, store_lng, float(rlat), float(rlng))
+                if d < best_dist:
+                    best_dist = d
+                    best_rider = r
+
+    # Fallback: first candidate with lowest load (no location data)
+    if best_rider is None:
+        candidates.sort(
+            key=lambda r: (1 if r.get("current_order_id") else 0) + len(r.get("order_queue", []))
+        )
+        best_rider = candidates[0]
+
+    # Delegate to manual assign logic
+    from pydantic import BaseModel as _BM
+    class _Payload(_BM):
+        rider_id: str
+    return await assign_rider_to_order(order_id, _Payload(rider_id=best_rider["id"]), admin)
 
 
 @router.get("/admin/list")
