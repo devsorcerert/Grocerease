@@ -528,3 +528,61 @@ def test_rider_endpoints(client_fixture):
     rider_db = asyncio.run(get_rider_from_db())
     assert rider_db["current_order_id"] is None
     assert rider_db["status"] == "online"
+
+
+def test_offer_price_normalization(client_fixture):
+    """Task 18: clean_mongo_doc must expose offer_price for docs using legacy aliases.
+
+    Contract (CONTRACTS.md §7): API reads always return 'offer_price'.
+    Legacy aliases 'offerPrice' and 'original_price' must NOT appear in responses.
+    Normalization is READ-ONLY — the DB document is never written back.
+    """
+    # Single-product path: prod-apple has original_price=120.0 (no offer_price field)
+    resp = client_fixture.get("/api/products/prod-apple")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["offer_price"] == 120.0, (
+        "GET /products/{id} must normalize original_price -> offer_price"
+    )
+    assert "original_price" not in data, "legacy alias must not leak into API response"
+    assert "offerPrice" not in data, "legacy alias must not leak into API response"
+
+    # List path must normalize consistently
+    resp = client_fixture.get("/api/products")
+    assert resp.status_code == 200
+    products = {p["id"]: p for p in resp.json()["products"]}
+
+    apple = products["prod-apple"]
+    assert apple["offer_price"] == 120.0
+    assert "original_price" not in apple
+    assert "offerPrice" not in apple
+
+    milk = products["prod-milk"]
+    assert milk["offer_price"] == 55.0
+    assert "original_price" not in milk
+
+
+def test_image_url_normalization(client_fixture):
+    """Task 18: clean_mongo_doc must map legacy 'image_url' -> 'image' on reads."""
+    import asyncio
+
+    # Insert a product with the legacy image_url field
+    async def seed_legacy():
+        await db.products.insert_one({
+            "id": "prod-legacy-img",
+            "name": "Legacy Image Product",
+            "price": 10.0,
+            "stock": 3,
+            "unit": "1 pc",
+            "category": "Test",
+            "image_url": "https://example.com/legacy.jpg",
+        })
+    asyncio.run(seed_legacy())
+
+    resp = client_fixture.get("/api/products/prod-legacy-img")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("image") == "https://example.com/legacy.jpg", (
+        "image_url must be normalized to image on read"
+    )
+    assert "image_url" not in data, "legacy image_url must not appear in response"

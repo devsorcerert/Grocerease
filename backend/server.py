@@ -619,11 +619,9 @@ async def get_products(
     # Fetch products with pagination
     products = await db.products.find(query).sort(sort_field, sort_order).skip(skip).limit(limit).to_list(limit)
     
-    # Remove MongoDB _id field; normalize image field name (BUG-06 fix)
-    for product in products:
-        product.pop("_id", None)
-        # BUG-06: initial seed stored image as 'image_url'; frontend expects 'product.image'
-        product["image"] = product.pop("image_url", product.get("image", ""))
+    # Normalize all field aliases via the shared cleaner (Task 18).
+    # clean_mongo_doc handles _id removal, image_url→image, offerPrice/original_price→offer_price.
+    products = [clean_mongo_doc(p) for p in products]
     
     return {
         "products": products,
