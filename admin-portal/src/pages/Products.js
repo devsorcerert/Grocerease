@@ -131,7 +131,7 @@ const Products = () => {
                   <td>{product.category}</td>
                   <td>{product.brand || '-'}</td>
                   <td>₹{product.price}</td>
-                  <td>{product.offerPrice ? `₹${product.offerPrice}` : '-'}</td>
+                  <td>{product.offer_price ? `₹${product.offer_price}` : '-'}</td>
                   <td>{product.stock || 0}</td>
                   <td>
                     <button onClick={() => handleEdit(product)} className="edit-btn">Edit</button>

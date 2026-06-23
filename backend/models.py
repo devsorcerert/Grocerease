@@ -40,7 +40,7 @@ class ProductCreate(BaseModel):
     category: str
     subcategory: str
     price: float
-    original_price: Optional[float] = None
+    offer_price: Optional[float] = None
     image: str
     stock: int = 100
     unit: str = "1 kg"

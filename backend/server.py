@@ -622,8 +622,10 @@ async def get_products(
     # Remove MongoDB _id field; normalize image field name (BUG-06 fix)
     for product in products:
         product.pop("_id", None)
-        # BUG-06: initial seed stored image as 'image_url'; frontend expects 'product.image'
+        # Normalize legacy field names from old documents
         product["image"] = product.pop("image_url", product.get("image", ""))
+        if "offerPrice" in product or "original_price" in product:
+            product["offer_price"] = product.pop("offerPrice", product.pop("original_price", product.get("offer_price")))
     
     return {
         "products": products,
@@ -1191,7 +1193,7 @@ async def upload_products_excel(file: UploadFile = File(...), admin=Depends(veri
                 "category": str(row['Category']).strip(),
                 "brand": str(row.get('Brand', '')).strip() if pd.notna(row.get('Brand')) else '',
                 "price": float(row['Price']),
-                "offerPrice": float(row['OfferPrice']) if pd.notna(row.get('OfferPrice')) else None,
+                "offer_price": float(row['OfferPrice']) if pd.notna(row.get('OfferPrice')) else None,
                 "stock": int(row.get('Stock', 0)) if pd.notna(row.get('Stock')) else 0,
                 "description": str(row.get('Description', '')).strip() if pd.notna(row.get('Description')) else '',
                 "image": str(row.get('Image', '')).strip() if pd.notna(row.get('Image')) else '',

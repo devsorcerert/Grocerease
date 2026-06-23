@@ -140,7 +140,7 @@ export default function ProductComparePage() {
           contentContainerStyle={styles.scrollContainer}
         >
           {products.map((product) => {
-            const hasDiscount = product.original_price && product.original_price > product.price;
+            const hasDiscount = product.offer_price && product.offer_price > product.price;
             return (
               <View key={product.id} style={styles.productColumn}>
                 <View>
@@ -164,7 +164,7 @@ export default function ProductComparePage() {
                     <View style={styles.priceContainer}>
                       <Text style={styles.productPrice}>₹{product.price}</Text>
                       {hasDiscount && (
-                        <Text style={styles.productOldPrice}>₹{product.original_price}</Text>
+                        <Text style={styles.productOldPrice}>₹{product.offer_price}</Text>
                       )}
                     </View>
                   </View>

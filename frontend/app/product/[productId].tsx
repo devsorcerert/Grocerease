@@ -128,8 +128,8 @@ export default function ProductDetailPage() {
   };
 
   const calculateDiscount = () => {
-    if (product?.original_price && product?.price) {
-      const discount = ((product.original_price - product.price) / product.original_price) * 100;
+    if (product?.offer_price && product?.price) {
+      const discount = ((product.offer_price - product.price) / product.offer_price) * 100;
       return Math.round(discount);
     }
     return product?.discount_percentage || 0;
@@ -260,8 +260,8 @@ export default function ProductDetailPage() {
           {/* Price */}
           <View style={styles.priceContainer}>
             <Text style={styles.productPrice}>₹{product.price}</Text>
-            {product.original_price && product.original_price > product.price && (
-              <Text style={styles.productOldPrice}>₹{product.original_price}</Text>
+            {product.offer_price && product.offer_price > product.price && (
+              <Text style={styles.productOldPrice}>₹{product.offer_price}</Text>
             )}
             <Text style={styles.productUnit}>{product.unit || '1 kg'}</Text>
           </View>

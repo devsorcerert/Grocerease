@@ -8,7 +8,7 @@ const ProductModal = ({ product, onClose }) => {
     category: '',
     brand: '',
     price: '',
-    offerPrice: '',
+    offer_price: '',
     stock: '',
     description: '',
     image: '',
@@ -25,7 +25,7 @@ const ProductModal = ({ product, onClose }) => {
         category: product.category || '',
         brand: product.brand || '',
         price: product.price || '',
-        offerPrice: product.offerPrice || '',
+        offer_price: product.offer_price || '',
         stock: product.stock || '',
         description: product.description || '',
         image: product.image || '',
@@ -148,8 +148,8 @@ const ProductModal = ({ product, onClose }) => {
               <input
                 type="number"
                 step="0.01"
-                name="offerPrice"
-                value={formData.offerPrice}
+                name="offer_price"
+                value={formData.offer_price}
                 onChange={handleChange}
               />
             </div>

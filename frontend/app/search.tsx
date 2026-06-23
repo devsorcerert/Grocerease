@@ -94,8 +94,8 @@ export default function SearchResultsPage() {
                   <View style={styles.productFooter}>
                     <View style={styles.priceContainer}>
                       <Text style={styles.productPrice}>₹{product.price}</Text>
-                      {product.offerPrice && (
-                        <Text style={styles.productOldPrice}>₹{product.offerPrice}</Text>
+                      {product.offer_price && (
+                        <Text style={styles.productOldPrice}>₹{product.offer_price}</Text>
                       )}
                     </View>
                     

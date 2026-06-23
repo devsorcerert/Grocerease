@@ -22,12 +22,12 @@ async def seed_products():
     
     products = [
         # Fruits & Vegetables
-        {"name": "Fresh Tomato", "category": "Fruits & Vegetables", "subcategory": "Vegetables", "price": 40, "original_price": 50, "unit": "1 kg", "image": PLACEHOLDER_IMAGE},
+        {"name": "Fresh Tomato", "category": "Fruits & Vegetables", "subcategory": "Vegetables", "price": 40, "offer_price": 50, "unit": "1 kg", "image": PLACEHOLDER_IMAGE},
         {"name": "Fresh Onion", "category": "Fruits & Vegetables", "subcategory": "Vegetables", "price": 30, "unit": "1 kg", "image": PLACEHOLDER_IMAGE},
         {"name": "Fresh Potato", "category": "Fruits & Vegetables", "subcategory": "Vegetables", "price": 25, "unit": "1 kg", "image": PLACEHOLDER_IMAGE},
         {"name": "Green Capsicum", "category": "Fruits & Vegetables", "subcategory": "Vegetables", "price": 60, "unit": "500 g", "image": PLACEHOLDER_IMAGE},
         {"name": "Fresh Banana", "category": "Fruits & Vegetables", "subcategory": "Fruits", "price": 50, "unit": "1 dozen", "image": PLACEHOLDER_IMAGE},
-        {"name": "Apple Shimla", "category": "Fruits & Vegetables", "subcategory": "Fruits", "price": 180, "original_price": 200, "unit": "1 kg", "image": PLACEHOLDER_IMAGE},
+        {"name": "Apple Shimla", "category": "Fruits & Vegetables", "subcategory": "Fruits", "price": 180, "offer_price": 200, "unit": "1 kg", "image": PLACEHOLDER_IMAGE},
         {"name": "Fresh Carrot", "category": "Fruits & Vegetables", "subcategory": "Vegetables", "price": 45, "unit": "500 g", "image": PLACEHOLDER_IMAGE},
         {"name": "Fresh Spinach", "category": "Fruits & Vegetables", "subcategory": "Leafy Vegetables", "price": 20, "unit": "1 bunch", "image": PLACEHOLDER_IMAGE},
         

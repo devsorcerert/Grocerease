@@ -111,8 +111,8 @@ export default function AdminProducts() {
               <Text style={styles.productCategory}>{product.category}</Text>
               <View style={styles.productDetails}>
                 <Text style={styles.productPrice}>₹{product.price}</Text>
-                {product.offerPrice && (
-                  <Text style={styles.productOffer}>Offer: ₹{product.offerPrice}</Text>
+                {product.offer_price && (
+                  <Text style={styles.productOffer}>Offer: ₹{product.offer_price}</Text>
                 )}
                 <Text style={styles.productStock}>Stock: {product.stock || 0}</Text>
               </View>

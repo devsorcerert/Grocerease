@@ -94,8 +94,8 @@ export default function WishlistScreen() {
                   {item.brand && <Text style={styles.brand}>{item.brand}</Text>}
                   <View style={styles.priceRow}>
                     <Text style={styles.price}>₹{item.price}</Text>
-                    {item.original_price > item.price && (
-                      <Text style={styles.originalPrice}>₹{item.original_price}</Text>
+                    {item.offer_price > item.price && (
+                      <Text style={styles.originalPrice}>₹{item.offer_price}</Text>
                     )}
                   </View>
                 </TouchableOpacity>
