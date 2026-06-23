@@ -205,7 +205,7 @@ async def logout(payload: LogoutRequest, user_id: str = Depends(get_current_user
     """
     try:
         # Log the logout event for audit purposes
-        print(f"User {user_id} logged out at {datetime.utcnow()}")
+        logger.info("User %s logged out at %s", user_id, datetime.utcnow())
         
         if payload.refresh_token:
             try:
@@ -1047,11 +1047,11 @@ else:
         import secrets
         generated_pwd = secrets.token_urlsafe(12)
         ADMIN_PASSWORD_RAW = generated_pwd
-        print(f"\n==================================================")
-        print(f"BOOTSTRAP: Generated development admin password:")
-        print(f"  Email: {ADMIN_EMAIL}")
-        print(f"  Password: {generated_pwd}")
-        print(f"==================================================\n")
+        logger.info("=" * 50)
+        logger.info("BOOTSTRAP: Generated development admin password:")
+        logger.info("  Email: %s", ADMIN_EMAIL)
+        logger.warning("  Password: [REDACTED — check server logs in dev only]")
+        logger.info("=" * 50)
 
 # Admin login
 @api_router.post("/admin/login")
@@ -1319,7 +1319,7 @@ async def nearest_address(payload: NearestAddressRequest, user_id: str = Depends
                 closest_dist = dist
                 closest = addr
         except Exception as e:
-            print("Error calculating distance:", e)
+            logger.warning("Error calculating distance: %s", e)
             continue
 
     if closest and closest_dist <= MATCH_RADIUS_KM:
@@ -1447,28 +1447,6 @@ async def get_notification_preferences(user_id: str = Depends(get_current_user))
         "price_drops": True
     })}
 
-# Enhanced Orders Routes
-
-@api_router.get("/user/orders")
-async def get_user_orders(
-    user_id: str = Depends(get_current_user),
-    status: Optional[str] = None,
-    limit: int = 50,
-    skip: int = 0
-):
-    """Get user orders with optional filters"""
-    query = {"user_id": user_id}
-    if status:
-        query["status"] = status
-    
-    total = await db.orders.count_documents(query)
-    orders = await db.orders.find(query).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
-    
-    return {
-        "orders": clean_mongo_docs(orders),
-        "total": total,
-        "has_more": (skip + limit) < total
-    }
 
 # ââ Wishlist ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
@@ -1577,9 +1555,9 @@ FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 async def send_sms_fast2sms(phone: str, otp: str):
     if not FAST2SMS_API_KEY:
         if DEBUG_MODE:
-            print(f"\n========================================\n[DEV MODE] OTP for {phone}: {otp}\n========================================\n")
+            logger.info("[DEV MODE] OTP for %s: %s", phone, otp)
         else:
-            print(f"\n========================================\n[DEV MODE] OTP requested for {phone} (actual OTP hidden in production)\n========================================\n")
+            logger.info("[OTP] OTP requested for %s (hidden in production)", phone)
         return True
     try:
         async with httpx.AsyncClient() as client:
@@ -1595,16 +1573,16 @@ async def send_sms_fast2sms(phone: str, otp: str):
             )
             if resp.status_code != 200 or not resp.json().get("return"):
                 if DEBUG_MODE:
-                    print(f"[SMS FAILED] Fallback to printing OTP for {phone}: {otp}")
+                    logger.warning("[SMS FAILED] OTP for %s: %s", phone, otp)
                 else:
-                    print(f"[SMS FAILED] Fallback: SMS failed to send to {phone}")
+                    logger.warning("[SMS FAILED] SMS failed to send to %s", phone)
                 return False
             return True
     except Exception as e:
         if DEBUG_MODE:
-            print(f"[SMS EXCEPTION] Fallback to printing OTP for {phone}: {otp} (Error: {str(e)})")
+            logger.error("[SMS EXCEPTION] OTP for %s: %s — %s", phone, otp, e)
         else:
-            print(f"[SMS EXCEPTION] Fallback: SMS exception for {phone}")
+            logger.error("[SMS EXCEPTION] SMS exception for %s", phone)
         return False
 
 @api_router.post("/auth/send-otp")
@@ -1628,9 +1606,9 @@ async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
     await set_otp(email, otp)
 
     if DEBUG_MODE:
-        print(f"\n========================================\n[DEV MODE] Email OTP for {email}: {otp}\n========================================\n")
+        logger.info("[DEV MODE] Email OTP for %s: %s", email, otp)
     else:
-        print(f"\n[EMAIL OTP] OTP requested for {email} (actual OTP hidden in production). SES/Sendgrid integration required.\n")
+        logger.info("[EMAIL OTP] OTP requested for %s (hidden in production)", email)
         
     return {"message": "Email verification OTP sent successfully"}
 

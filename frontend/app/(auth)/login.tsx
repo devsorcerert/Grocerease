@@ -261,26 +261,32 @@ export default function LoginScreen() {
               </View>
             )}
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            {/* Task 48: Google Sign-In is Android/iOS only for the pilot.
+                 Web OAuth (Emergent redirect) is disabled — EMERGENT_AUTH_URL is dead. */}
+            {Platform.OS !== 'web' && (
+              <>
+                {/* Divider */}
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or continue with</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-            {/* Google Sign-In Button */}
-            <TouchableOpacity
-              style={[styles.googleBtn, loading && styles.disabledBtn]}
-              onPress={handleGoogleLogin}
-              disabled={loading}
-            >
-              <Image
-                source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
-                style={styles.googleIcon}
-                resizeMode="contain"
-              />
-              <Text style={styles.googleBtnText}>Sign in with Google</Text>
-            </TouchableOpacity>
+                {/* Google Sign-In Button */}
+                <TouchableOpacity
+                  style={[styles.googleBtn, loading && styles.disabledBtn]}
+                  onPress={handleGoogleLogin}
+                  disabled={loading}
+                >
+                  <Image
+                    source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                    style={styles.googleIcon}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.googleBtnText}>Sign in with Google</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             <TouchableOpacity style={styles.signupLink} onPress={() => router.push('/(auth)/register')}>
               <Text style={styles.signupText}>Don&apos;t have an account? <Text style={styles.signupTextBold}>Sign Up</Text></Text>
