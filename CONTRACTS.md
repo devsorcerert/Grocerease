@@ -257,3 +257,53 @@ image (string URL), is_active (bool), store_id (added in Task 20)
 | 2026-06-21 (draft) | — | Starter created from audit. |
 | 2026-06-21 | phase0 | Task 45: verified all claims, lifetimes, enums, and field names against live code. Corrected rider token lifetime (12 h). Task 46: `reached_store` added to `transition_order_status`. Status → FROZEN. |
 | 2026-06-23 | task-20 | §9 added: `stores` collection, serviceability check (Haversine), `store_id` on products and orders, pilot store seeded. §7 `store_id` confirmed. |
+
+---
+
+## §10 LOOP Credit Ledger (Tasks 15 & 25)
+
+### User balance field
+`users.loop_balance` — float, ₹, defaults to 0.0 if absent.
+
+### Ledger collection: `loop_ledger`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | str (UUID) | |
+| `user_id` | str | |
+| `type` | `"credit"` \| `"debit"` | |
+| `amount` | float | always positive |
+| `balance_after` | float | denormalised balance snapshot |
+| `reference_type` | str | `order_earn`, `order_redeem`, `admin_credit`, `cable_tv_earn` |
+| `reference_id` | str | order ID, admin-timestamp, or MSO idempotency key |
+| `description` | str | human-readable |
+| `created_at` | datetime | UTC |
+
+### Order shape additions (Task 15)
+`CreateOrderRequest` gains:
+- `loop_credits_to_redeem: float = 0.0` — requested redemption amount
+
+Order document gains:
+- `loop_credits_used: float` — actual amount applied (≤ requested, ≤ 50% of total, ≤ balance)
+
+### Endpoints
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/api/user/loop-balance` | customer JWT | current balance |
+| GET | `/api/user/loop-ledger` | customer JWT | paginated history |
+| POST | `/api/admin/loop/credit` | admin JWT | manual credit |
+| POST | `/api/admin/loop/recalc/{user_id}` | admin JWT | recompute from ledger |
+| POST | `/api/mso/spend-signal` | X-Mso-Secret header | MSO cable-TV webhook |
+
+### MSO spend-signal (Task 25 stub)
+```
+POST /api/mso/spend-signal
+Header: X-Mso-Secret: <shared-secret>
+Body: { user_id, mso_id, amount_spent, billing_month }
+```
+Issues 2% of `amount_spent` as LOOP credits. Idempotent per `(user_id, mso_id, billing_month)`.
+
+### Changelog
+| Date | Change |
+|---|---|
+| 2024-06-23 | §10 added: LOOP ledger, Task 15 (checkout redemption), Task 25 (MSO stub) |
+
