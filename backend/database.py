@@ -116,13 +116,38 @@ async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(secur
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 def clean_mongo_doc(doc):
-    """Remove MongoDB _id field from document"""
-    if isinstance(doc, dict) and "_id" in doc:
-        del doc["_id"]
+    """Remove MongoDB _id and normalize legacy field aliases for API reads.
+
+    READ-ONLY: aliases are remapped in the returned dict only — the DB is never
+    written back.  Safe to call on any document type; product-specific keys
+    (offerPrice, original_price, image_url) are no-ops on non-product docs.
+    """
+    if not isinstance(doc, dict):
+        return doc
+    doc.pop("_id", None)
+
+    # Normalize image field name: legacy seed/import stored 'image_url';
+    # CONTRACTS.md §7 requires 'image'.
+    if "image_url" in doc:
+        image_url_val = doc.pop("image_url")
+        if not doc.get("image"):
+            doc["image"] = image_url_val
+
+    # Normalize offer_price aliases (CONTRACTS.md §7 — no 'offerPrice' or
+    # 'original_price' in API responses).
+    # Priority: existing offer_price > offerPrice > original_price
+    if not doc.get("offer_price"):
+        legacy = doc.pop("offerPrice", None) or doc.pop("original_price", None)
+        if legacy:
+            doc["offer_price"] = legacy
+    else:
+        doc.pop("offerPrice", None)
+        doc.pop("original_price", None)
+
     return doc
 
 def clean_mongo_docs(docs):
-    """Remove MongoDB _id field from list of documents"""
+    """Apply clean_mongo_doc to a list of documents."""
     return [clean_mongo_doc(doc) for doc in docs]
 
 # Rate Limiting Store
