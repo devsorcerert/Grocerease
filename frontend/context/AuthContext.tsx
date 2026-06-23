@@ -400,17 +400,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       
       if (Platform.OS === 'web') {
-        // Fallback to Web Browser / redirect-based social login on Web
-        let redirectUrl = typeof window !== 'undefined' 
-          ? window.location.origin + '/auth-callback' 
-          : 'https://localhost:3000/auth-callback';
-          
-        const authUrl = `${EMERGENT_AUTH_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
-        
-        if (typeof window !== 'undefined') {
-          window.location.href = authUrl;
-        }
-        return;
+        // Task 48: Web OAuth via Emergent redirect is DEAD for the Android pilot.
+        // The EMERGENT_AUTH_URL endpoint is not live. Web sign-in is disabled.
+        throw new Error('Google Sign-In is not available on web for the pilot. Use the Android app.');
       }
 
       // Native Direct Google Sign-In Flow

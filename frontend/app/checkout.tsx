@@ -516,10 +516,13 @@ export default function CheckoutScreen() {
 }
 
 function buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId }: any) {
+  // Task 49: Mock gateway — dev-only. In production Razorpay never issues rzp_mock_ IDs.
+  // This block is dead code in production builds; kept for local testing only.
   const isMock = razorpay_order_id.startsWith("rzp_mock_");
   
   if (isMock) {
     if (!__DEV__) {
+      // Belt-and-suspenders: should never reach here in a real build.
       return `<!DOCTYPE html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#FEE2E2;color:#991B1B;font-family:sans-serif"><div style="padding:20px;text-align:center;border:1px solid #FCA5A5;background:#FFF5F5;border-radius:8px"><h2>Payment Error</h2><p>Mock payments are disabled in production builds.</p></div></body></html>`;
     }
     return `<!DOCTYPE html>
