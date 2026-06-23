@@ -5,6 +5,7 @@ import logging
 from typing import Optional, List
 from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
+from routers.stores import find_serving_store
 from models import CreateOrderRequest, OrderCreate
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -178,6 +179,20 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     subtotal = 0.0
     items_to_save = []
     
+    # 2b. Serviceability check (Task 20)
+    # If the saved address carries lat/lng, verify a store can reach it.
+    # Addresses without coordinates skip the check (fail-open for pilot).
+    addr_lat = address.get("lat")
+    addr_lng = address.get("lng")
+    serving_store = None
+    if addr_lat is not None and addr_lng is not None:
+        serving_store = await find_serving_store(float(addr_lat), float(addr_lng))
+        if serving_store is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Sorry, we don't deliver to your address yet. Check back soon!"
+            )
+
     # 3. Validate & freeze prices
     for item in cart_items:
         product = await db.products.find_one({"id": item["product_id"]})
@@ -243,6 +258,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         "created_at": datetime.utcnow(),
         "delivery_status": "pending",
         "estimated_delivery": datetime.utcnow() + timedelta(hours=1),
+        "store_id": serving_store["id"] if serving_store else None,
         "tracking_updates": [
             {
                 "timestamp": datetime.utcnow(),

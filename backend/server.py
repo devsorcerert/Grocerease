@@ -1740,6 +1740,7 @@ from routers.payments import router as payments_router
 from routers.kpis import router as kpis_router
 from routers.riders import router as riders_router
 from routers.admin_riders import router as admin_riders_router
+from routers.stores import router as stores_router
 
 api_router.include_router(cart_router)
 api_router.include_router(orders_router)
@@ -1804,6 +1805,7 @@ async def admin_find_user(q: str, admin=Depends(verify_admin)):
 
 app.include_router(api_router)
 app.include_router(riders_router, prefix="/api")
+app.include_router(stores_router, prefix="/api")
 
 
 env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
