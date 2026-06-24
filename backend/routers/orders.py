@@ -634,25 +634,13 @@ async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str =
     if total < 0:
         total = 0.0
 
-    # Task 15: LOOP credit redemption
-    loop_credits_requested = getattr(payload, "loop_credits_to_redeem", 0.0) or 0.0
-    loop_credits_used = 0.0
-    if loop_credits_requested > 0:
-        user_for_loop = await db.users.find_one({"id": user_id}) or {}
-        available_loop = round(user_for_loop.get("loop_balance", 0.0), 2)
-        max_redeemable = round(total * MAX_REDEEM_FRACTION, 2)   # 50% cap
-        loop_credits_used = round(min(loop_credits_requested, available_loop, max_redeemable), 2)
-        total = round(total - loop_credits_used, 2)
-        if total < 0:
-            total = 0.0
-
+    # Summary does not apply LOOP redemption (preview only)
     user = await db.users.find_one({"id": user_id})
     if user is None:
-        # Admin users are not in db.users — fall back gracefully with zero spend
         user = await db.admins.find_one({"id": user_id}) or {}
     rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
     rewards_will_earn = rewards_info["order_cashback"]
-    
+
     return {
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),

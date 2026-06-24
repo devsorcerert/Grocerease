@@ -1732,7 +1732,7 @@ api_router.include_router(admin_riders_router)
 api_router.include_router(loop_ledger_router)
 api_router.include_router(background_jobs_router)
 
-from routers.orders import get_checkout_summary, admin_get_orders, admin_update_order_status
+from routers.orders import get_checkout_summary, admin_get_orders, admin_update_order_status, assign_rider_to_order, auto_assign_rider, AssignRiderRequest
 
 @api_router.get("/checkout/summary")
 async def get_checkout_summary_get(coupon_code: Optional[str] = None, user_id: str = Depends(get_current_user)):
@@ -1757,6 +1757,14 @@ async def admin_orders_list_wrapper(
 @api_router.post("/admin/orders/{order_id}/status")
 async def admin_order_status_wrapper(order_id: str, payload: dict, admin=Depends(verify_admin)):
     return await admin_update_order_status(order_id=order_id, payload=payload, admin=admin)
+
+@api_router.post("/admin/orders/{order_id}/assign-rider")
+async def admin_assign_rider_wrapper(order_id: str, payload: AssignRiderRequest, admin=Depends(verify_admin)):
+    return await assign_rider_to_order(order_id=order_id, payload=payload, admin=admin)
+
+@api_router.post("/admin/orders/{order_id}/auto-assign-rider")
+async def admin_auto_assign_rider_wrapper(order_id: str, admin=Depends(verify_admin)):
+    return await auto_assign_rider(order_id=order_id, admin=admin)
 
 
 

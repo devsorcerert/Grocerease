@@ -81,6 +81,44 @@ def setup_test_db():
 def client_fixture():
     return TestClient(app)
 
+# -- Fixture aliases for async loop_ledger / background_jobs tests -----------
+
+@pytest.fixture
+def client(client_fixture):
+    return client_fixture
+
+
+@pytest.fixture
+def user_id(client_fixture):
+    async def _get():
+        u = await db.users.find_one({"email": "testuser@example.com"})
+        if u:
+            return u["id"]
+        reg = client_fixture.post("/api/auth/register", json={
+            "name": "Test User", "email": "testuser@example.com",
+            "password": "Password123", "phone": "+919999999999",
+        })
+        return reg.json()["user"]["id"]
+    return asyncio.run(_get())
+
+
+@pytest.fixture
+def auth_headers(client_fixture):
+    resp = client_fixture.post("/api/auth/login", json={
+        "email": "testuser@example.com", "password": "Password123",
+    })
+    token = resp.json().get("token", "")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def admin_headers(client_fixture):
+    resp = client_fixture.post("/api/admin/login", json={
+        "email": "grocereasetv@gmail.com", "password": "admin123",
+    })
+    token = resp.json().get("token", "")
+    return {"Authorization": f"Bearer {token}"}
+
 def test_auth_flow(client_fixture):
     # 1. Register a new user
     reg_data = {
