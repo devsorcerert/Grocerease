@@ -1263,4 +1263,3 @@ def test_auto_assign_rider(client_fixture):
     data = resp.json()
     assert data["success"] is True
     assert data["rider_id"] == "rider-auto-test"
->>>>>>> 35235c3 (feat(task-21/27/30/31): rider foundations — allocation, availability, self-register, multi-order queue)
