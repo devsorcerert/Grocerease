@@ -69,14 +69,7 @@ async def expire_stale_pending_orders() -> int:
     for order in stale:
         order_id = order["id"]
         try:
-            # Roll back stock for each line item
-            for item in order.get("items", []):
-                await db.products.update_one(
-                    {"id": item["product_id"]},
-                    {"$inc": {"stock": item.get("quantity", 0)}},
-                )
-
-            # Cancel the order (reuses existing state-machine helper)
+            # Cancel the order — transition_order_status handles stock rollback
             await transition_order_status(
                 order_id, "cancelled", "system",
                 f"Auto-expired: payment not received within {PENDING_PAYMENT_TTL_MINUTES} minutes",
