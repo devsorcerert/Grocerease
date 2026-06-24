@@ -33,6 +33,25 @@ const categoryIconMap: { [key: string]: any } = {
   'Home & Kitchen': 'home',
 };
 
+
+// Category image map — real product photos replace generic icons
+const categoryImageMap: { [key: string]: string } = {
+  'Fruits & Vegetables': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
+  'Dairy & Breakfast':   'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=200&q=80',
+  'Munchies':            'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=200&q=80',
+  'Cold Drinks & Juices':'https://images.unsplash.com/photo-1544145945-f90425340c7e?w=200&q=80',
+  'Instant & Frozen':    'https://images.unsplash.com/photo-1569093173155-f94de1a7a9a3?w=200&q=80',
+  'Tea, Coffee & More':  'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=200&q=80',
+  'Bakery & Biscuits':   'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=200&q=80',
+  'Sweet Tooth':         'https://images.unsplash.com/photo-1548907040-4baa42d10919?w=200&q=80',
+  'Atta, Rice & Dal':    'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&q=80',
+  'Masala & Spices':     'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=200&q=80',
+  'Sauces & Spreads':    'https://images.unsplash.com/photo-1472476443507-c7a5948772fc?w=200&q=80',
+  'Chicken, Meat & Fish':'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=200&q=80',
+  'Cleaning Essentials': 'https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=200&q=80',
+  'Personal Care':       'https://images.unsplash.com/photo-1556760544-74068565f05c?w=200&q=80',
+  'Home & Kitchen':      'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=200&q=80',
+};
 export default function HomeScreen() {
   const { user, refreshUser } = useAuth();
   const { t } = useTranslation();
@@ -442,7 +461,11 @@ export default function HomeScreen() {
                 onPress={() => handleCategoryClick(cat.name)}
               >
                 <View style={styles.categoryIcon}>
-                  <Ionicons name={categoryIconMap[cat.name] || 'apps'} size={32} color="#2D8B47" />
+                  {categoryImageMap[cat.name] ? (
+                    <Image source={{ uri: categoryImageMap[cat.name] }} style={{ width: 70, height: 70, borderRadius: 35 }} resizeMode="cover" />
+                  ) : (
+                    <Ionicons name={categoryIconMap[cat.name] || 'apps'} size={32} color="#2D8B47" />
+                  )}
                 </View>
                 <Text style={styles.categoryName} numberOfLines={2}>{cat.name}</Text>
               </TouchableOpacity>
