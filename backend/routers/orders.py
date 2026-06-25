@@ -117,9 +117,9 @@ async def transition_order_status(order_id: str, to_status: str, changed_by: str
 
     # Trigger push notification & insert to notifications collection
     STATUS_MESSAGES = {
-        "confirmed": ("Order Confirmed ✅", "Your order has been received and is being prepared."),
-        "out_for_delivery": ("Order On The Way 🛵", "Your delivery partner is heading to you!"),
-        "delivered": ("Order Delivered 🎉", "Your order has arrived. Enjoy your groceries!"),
+        "confirmed": ("Order Confirmed â", "Your order has been received and is being prepared."),
+        "out_for_delivery": ("Order On The Way ðµ", "Your delivery partner is heading to you!"),
+        "delivered": ("Order Delivered ð", "Your order has arrived. Enjoy your groceries!"),
         "cancelled": ("Order Cancelled", "Your order has been cancelled."),
     }
     user_id_of_order = order["user_id"]
@@ -243,7 +243,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
 
     user = await db.users.find_one({"id": user_id})
     if user is None:
-        # Admin users are not in db.users — fall back gracefully with zero spend
+        # Admin users are not in db.users â fall back gracefully with zero spend
         user = await db.admins.find_one({"id": user_id}) or {}
     rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
     rewards_will_earn = rewards_info["order_cashback"]
@@ -320,12 +320,14 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             await db.cart_items.delete_many({"user_id": user_id})
             await insert_notification(
                 user_id,
-                "Order Confirmed! 🎉",
+                "Order Confirmed! ð",
                 f"Your order #{order_dict['id'][:8].upper()} has been confirmed. Expected delivery in ~60 minutes.",
                 "order",
                 f"/order-tracking/{order_dict['id']}",
             )
 
+    except HTTPException:
+        raise  # preserve 400/404 errors from inner functions (e.g. stock check)
     except Exception as e:
         # Idempotent compensating rollback
 
@@ -464,7 +466,7 @@ class AssignRiderRequest(BaseModel):
 @router.post("/admin/{order_id}/assign-rider")
 async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admin=Depends(verify_admin)):
     """
-    Manual rider assignment (Task 5 / CONTRACTS.md §5).
+    Manual rider assignment (Task 5 / CONTRACTS.md Â§5).
     Task 31: if the rider already has an active order, the new order is pushed
     onto their order_queue (up to MAX_QUEUE_SIZE) rather than replacing current.
     """
@@ -498,7 +500,7 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
         raise HTTPException(status_code=409, detail="Order already has an assigned rider")
 
     if has_active:
-        # Queue it — rider will pick it up after delivering current order
+        # Queue it â rider will pick it up after delivering current order
         await db.riders.update_one(
             {"id": rider_id},
             {"$push": {"order_queue": order_id}}
@@ -517,9 +519,9 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
             raise HTTPException(status_code=409, detail="Rider is already assigned to an order. Order assignment rolled back.")
         queued = False
 
-    title = "New Order Assigned 📦"
+    title = "New Order Assigned ð¦"
     message = (
-        f"Order #{order_id[:8]} queued — complete current delivery first."
+        f"Order #{order_id[:8]} queued â complete current delivery first."
         if queued else
         f"You have been assigned order #{order_id[:8]}. Check the app for details."
     )
@@ -534,7 +536,7 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
 @router.post("/admin/{order_id}/auto-assign-rider")
 async def auto_assign_rider(order_id: str, admin=Depends(verify_admin)):
     """
-    Task 21 — Nearest-available auto-assign.
+    Task 21 â Nearest-available auto-assign.
     Finds the online rider with capacity (total load < MAX_QUEUE_SIZE) nearest to
     the order's serving store using Haversine. Falls back to any available rider
     if no rider has a known location. Admin can override with manual assign-rider.
