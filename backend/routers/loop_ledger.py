@@ -7,7 +7,7 @@ Every LOOP credit movement is recorded as a ledger row:
   credit  (+)  — earn from order cashback, cable-TV spend, admin manual
   debit   (-)  — redeem at checkout
 
-The canonical balance is users.loop_balance (float, ₹).
+The canonical balance is users.loop_balance_paise (float, ₹).
 The ledger is the audit trail; the user field is the operational balance.
 
 Both are updated atomically in the same async call; they can diverge only
@@ -43,7 +43,7 @@ MSO_SHARED_SECRET          = "grocerease-mso-pilot-2024"  # TODO: move to env va
 # ─── Pydantic models ──────────────────────────────────────────────────────────
 class AdminCreditRequest(BaseModel):
     user_id: str
-    amount: float
+    amount_paise: int
     description: str = "Admin manual credit"
 
 class MsoSpendSignal(BaseModel):
@@ -54,9 +54,9 @@ class MsoSpendSignal(BaseModel):
 
 # ─── Core ledger helpers (called by orders.py too) ───────────────────────────
 
-async def credit_loop_balance(
+async def credit_loop_balance_paise(
     user_id: str,
-    amount: float,
+    amount_paise: int,
     reference_type: str,
     reference_id: str,
     description: str,
@@ -66,28 +66,28 @@ async def credit_loop_balance(
     Returns the new balance.
     Inserts one ledger row (type=credit).
     """
-    if amount <= 0:
+    if amount_paise <= 0:
         return await _get_balance(user_id)
 
     # Increment atomically; $inc creates the field if absent
     result = await db.users.find_one_and_update(
         {"id": user_id},
-        {"$inc": {"loop_balance": round(amount, 2)}},
+        {"$inc": {"loop_balance_paise": amount_paise}},
         return_document=True,
     )
     if result is None:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
 
-    new_balance = round(result.get("loop_balance", 0.0), 2)
-    await _insert_row(user_id, "credit", amount, new_balance, reference_type, reference_id, description)
+    new_balance = round(result.get("loop_balance_paise", 0.0), 2)
+    await _insert_row(user_id, "credit", amount_paise, new_balance, reference_type, reference_id, description)
     logger.info("LOOP credit +%.2f for user %s (ref %s %s) → balance %.2f",
-                amount, user_id, reference_type, reference_id, new_balance)
+                amount_paise, user_id, reference_type, reference_id, new_balance)
     return new_balance
 
 
-async def debit_loop_balance(
+async def debit_loop_balance_paise(
     user_id: str,
-    amount: float,
+    amount_paise: int,
     reference_type: str,
     reference_id: str,
     description: str,
@@ -97,47 +97,47 @@ async def debit_loop_balance(
     Raises 400 if balance insufficient.
     Returns the new balance.
     """
-    if amount <= 0:
+    if amount_paise <= 0:
         return await _get_balance(user_id)
 
     user = await db.users.find_one({"id": user_id})
     if user is None:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
 
-    current = round(user.get("loop_balance", 0.0), 2)
-    if current < round(amount, 2):
+    current = round(user.get("loop_balance_paise", 0.0), 2)
+    if current < amount_paise:
         raise HTTPException(
             status_code=400,
-            detail=f"Insufficient LOOP balance: have ₹{current:.2f}, need ₹{amount:.2f}",
+            detail=f"Insufficient LOOP balance: have ₹{current:.2f}, need ₹{amount_paise:.2f}",
         )
 
     result = await db.users.find_one_and_update(
         {"id": user_id},
-        {"$inc": {"loop_balance": -round(amount, 2)}},
+        {"$inc": {"loop_balance_paise": -amount_paise}},
         return_document=True,
     )
-    new_balance = round(result.get("loop_balance", 0.0), 2)
-    await _insert_row(user_id, "debit", amount, new_balance, reference_type, reference_id, description)
+    new_balance = round(result.get("loop_balance_paise", 0.0), 2)
+    await _insert_row(user_id, "debit", amount_paise, new_balance, reference_type, reference_id, description)
     logger.info("LOOP debit -%.2f for user %s (ref %s %s) → balance %.2f",
-                amount, user_id, reference_type, reference_id, new_balance)
+                amount_paise, user_id, reference_type, reference_id, new_balance)
     return new_balance
 
 
 async def _get_balance(user_id: str) -> float:
     user = await db.users.find_one({"id": user_id})
-    return round((user or {}).get("loop_balance", 0.0), 2)
+    return round((user or {}).get("loop_balance_paise", 0.0), 2)
 
 
 async def _insert_row(
-    user_id: str, txn_type: str, amount: float, balance_after: float,
+    user_id: str, txn_type: str, amount_paise: int, balance_after_paise: int,
     reference_type: str, reference_id: str, description: str,
 ):
     await db.loop_ledger.insert_one({
         "id":             str(uuid.uuid4()),
         "user_id":        user_id,
         "type":           txn_type,            # "credit" | "debit"
-        "amount":         round(amount, 2),
-        "balance_after":  round(balance_after, 2),
+        "amount":         amount_paise,
+        "balance_after":  balance_after_paise,
         "reference_type": reference_type,      # "order_earn" | "order_redeem" | "admin_credit" | "cable_tv_earn"
         "reference_id":   reference_id,
         "description":    description,
@@ -147,10 +147,10 @@ async def _insert_row(
 # ─── Customer endpoints ───────────────────────────────────────────────────────
 
 @router.get("/user/loop-balance")
-async def get_loop_balance(user_id: str = Depends(get_current_user)):
+async def get_loop_balance_paise(user_id: str = Depends(get_current_user)):
     """Return current LOOP credit balance for the logged-in user."""
     balance = await _get_balance(user_id)
-    return {"loop_balance": balance}
+    return {"loop_balance_paise": balance}
 
 
 @router.get("/user/loop-ledger")
@@ -176,10 +176,10 @@ async def admin_credit_loop(
     _admin_id: str = Depends(verify_admin),
 ):
     """Manually credit LOOP balance to a user (e.g. goodwill, promo)."""
-    if req.amount <= 0:
+    if req.amount_paise <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
-    new_balance = await credit_loop_balance(
-        req.user_id, req.amount,
+    new_balance = await credit_loop_balance_paise(
+        req.user_id, req.amount_paise_paise,
         reference_type="admin_credit",
         reference_id=f"admin-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
         description=req.description,
@@ -188,25 +188,25 @@ async def admin_credit_loop(
 
 
 @router.post("/admin/loop/recalc/{user_id}")
-async def recalc_loop_balance(
+async def recalc_loop_balance_paise(
     user_id: str,
     _admin_id: str = Depends(verify_admin),
 ):
     """
-    Recompute loop_balance from ledger rows (reconciliation / crash-recovery).
-    Credits - Debits = correct balance. Updates users.loop_balance.
+    Recompute loop_balance_paise from ledger rows (reconciliation / crash-recovery).
+    Credits - Debits = correct balance. Updates users.loop_balance_paise.
     """
     pipeline = [
         {"$match": {"user_id": user_id}},
         {"$group": {
             "_id": "$type",
-            "total": {"$sum": "$amount"}
+            "total": {"$sum": "$amount_paise"}
         }}
     ]
     agg = await db.loop_ledger.aggregate(pipeline).to_list(10)
     totals = {row["_id"]: row["total"] for row in agg}
     correct = round(totals.get("credit", 0.0) - totals.get("debit", 0.0), 2)
-    await db.users.update_one({"id": user_id}, {"$set": {"loop_balance": correct}})
+    await db.users.update_one({"id": user_id}, {"$set": {"loop_balance_paise": correct}})
     return {"user_id": user_id, "recalculated_balance": correct}
 
 
@@ -241,20 +241,20 @@ async def mso_spend_signal(
         return {
             "success": True,
             "message": "Already processed",
-            "loop_credits_issued": existing["amount"],
+            "loop_credits_issued": existing["amount_paise"],
         }
 
     loop_amount = round(payload.amount_spent * LOOP_EARN_PERCENT_CABLE_TV, 2)
-    new_balance = await credit_loop_balance(
+    new_balance = await credit_loop_balance_paise(
         payload.user_id,
-        loop_amount,
+        loop_amount_paise,
         reference_type="cable_tv_earn",
         reference_id=ref_id,
         description=f"Cable-TV cashback: ₹{payload.amount_spent:.0f} bill with {payload.mso_id} ({payload.billing_month})",
     )
     return {
         "success": True,
-        "loop_credits_issued": loop_amount,
+        "loop_credits_issued": loop_amount_paise,
         "new_balance": new_balance,
-        "message": f"Issued ₹{loop_amount:.2f} LOOP credits for ₹{payload.amount_spent:.0f} cable bill",
+        "message": f"Issued ₹{loop_amount_paise:.2f} LOOP credits for ₹{payload.amount_spent:.0f} cable bill",
     }

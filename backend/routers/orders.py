@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from routers.stores import find_serving_store
 from models import CreateOrderRequest, OrderCreate
-from routers.loop_ledger import credit_loop_balance, debit_loop_balance, MAX_REDEEM_FRACTION
+
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -292,14 +292,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         await db.orders.insert_one(order_dict)
         order_inserted = True
 
-        if loop_credits_used > 0:
-            await debit_loop_balance(
-                user_id, loop_credits_used,
-                reference_type="order_redeem",
-                reference_id=order_dict["id"],
-                description=f"Redeemed at checkout for order #{order_dict['id'][:8].upper()}",
-            )
-            loop_debited = True
+
 
         if is_pending:
             await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
@@ -322,14 +315,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             )
             user_updated = True
             
-            if rewards_will_earn > 0:
-                await credit_loop_balance(
-                    user_id, rewards_will_earn,
-                    reference_type="order_earn",
-                    reference_id=order_dict["id"],
-                    description=f"Cashback earned on order #{order_dict['id'][:8].upper()}",
-                )
-                loop_credited = True
+
                 
             await db.cart_items.delete_many({"user_id": user_id})
             await insert_notification(
@@ -342,8 +328,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
 
     except Exception as e:
         # Idempotent compensating rollback
-        if loop_credited:
-            await debit_loop_balance(user_id, rewards_will_earn, "reversal", f"reversal_{order_dict['id']}", "Rollback earn")
+
         if user_updated:
             await db.users.update_one(
                 {"id": user_id},
@@ -353,8 +338,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
                     "current_reward": -rewards_will_earn
                 }}
             )
-        if loop_debited:
-            await credit_loop_balance(user_id, loop_credits_used, "reversal", f"reversal_{order_dict['id']}", "Rollback redeem")
+
         if status_transitioned:
             await transition_order_status(order_dict["id"], "cancelled", "system", "Rollback order")
         if order_inserted:
@@ -506,10 +490,12 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
             detail=f"Rider already has {total_load} order(s) (max {MAX_QUEUE_SIZE}). Choose another rider."
         )
 
-    await db.orders.update_one(
-        {"id": order_id},
+    order_update = await db.orders.update_one(
+        {"id": order_id, "assigned_rider_id": None},
         {"$set": {"assigned_rider_id": rider_id, "updated_at": datetime.utcnow()}}
     )
+    if order_update.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Order already has an assigned rider")
 
     if has_active:
         # Queue it — rider will pick it up after delivering current order
@@ -519,10 +505,16 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
         )
         queued = True
     else:
-        await db.riders.update_one(
-            {"id": rider_id},
+        rider_update = await db.riders.update_one(
+            {"id": rider_id, "current_order_id": None},
             {"$set": {"current_order_id": order_id, "updated_at": datetime.utcnow()}}
         )
+        if rider_update.modified_count == 0:
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {"assigned_rider_id": None, "updated_at": datetime.utcnow()}}
+            )
+            raise HTTPException(status_code=409, detail="Rider is already assigned to an order. Order assignment rolled back.")
         queued = False
 
     title = "New Order Assigned 📦"

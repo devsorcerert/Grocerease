@@ -690,8 +690,7 @@ def test_admin_create_and_update_store(client_fixture):
     resp = client_fixture.post("/api/admin/stores", headers=headers, json={
         "name": "Test Store",
         "address": "Test Address",
-        "lat": 13.6288,
-        "lng": 79.4192,
+        "location": {"lat": 13.6288, "lng": 79.4192},
         "radius_km": 3.0,
         "is_active": True
     })

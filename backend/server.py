@@ -1166,8 +1166,6 @@ async def admin_delete_product(product_id: str, admin=Depends(verify_admin)):
 
 # Excel import
 from fastapi import File, UploadFile
-import pandas as pd
-import io
 
 @api_router.post("/admin/products/upload-excel")
 async def upload_products_excel(file: UploadFile = File(...), admin=Depends(verify_admin)):
@@ -1175,6 +1173,9 @@ async def upload_products_excel(file: UploadFile = File(...), admin=Depends(veri
         raise HTTPException(status_code=400, detail="File must be Excel format (.xlsx or .xls)")
     
     try:
+        import pandas as pd
+        import io
+        
         # Read Excel file
         contents = await file.read()
         df = pd.read_excel(io.BytesIO(contents))
