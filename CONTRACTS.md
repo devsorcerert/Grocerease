@@ -227,12 +227,12 @@ Push (Expo) and in-app notifications share this shape:
 
 One product shape across seed, bulk upload, Excel upload, and API reads. Canonical field names:
 ```
-id, name, category, subcategory, brand, price (float),
-offer_price (float | null), stock (int), unit, description,
-image (string URL), is_active (bool), store_id (added in Task 20)
+id, name, category, subcategory, brand, price_paise (int),
+mrp_paise (int | null), stock (int), unit, description,
+image_url (string URL), is_active (bool), store_id (added in Task 20)
 ```
-- ❌ Do not use the variants `offerPrice`, `original_price`, or `image_url` anywhere. Normalize all write paths to the names above (Task 18).
-- API reads always return `image` (not `image_url`).
+- ❌ Do not use the variants `price`, `offerPrice`, `original_price`, `offer_price`, or `image` anywhere. Normalize all write paths to the names above (Task 18).
+- API reads always return `image_url` (not `image`).
 
 ---
 
@@ -244,8 +244,10 @@ image (string URL), is_active (bool), store_id (added in Task 20)
   "id": "uuid",
   "name": "GrocerEase Tirupati",
   "address": "Dark Store, Tirupati, Andhra Pradesh",
-  "lat": 13.6288,
-  "lng": 79.4192,
+  "location": {
+    "lat": 13.6288,
+    "lng": 79.4192
+  },
   "radius_km": 7.0,
   "is_active": true,
   "created_at": "2026-06-23T..."

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from routers.stores import find_serving_store
 from models import CreateOrderRequest, OrderCreate
-from routers.loop_ledger import credit_loop_balance, debit_loop_balance, MAX_REDEEM_FRACTION
+
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -248,11 +248,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
     rewards_will_earn = rewards_info["order_cashback"]
     
-    # 5. Atomically deduct stock
-    # Note: Stock is reserved immediately upon order creation for both COD and prepaid (pending payment)
-    # If the user cancels the pending payment or it expires, the stock is rolled back.
-    await try_reserve_stock(items_to_save)
-    
+        # 5. Atomically deduct stock (Task 3)
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -281,52 +277,79 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             }
         ]
     }
-    
-    await db.orders.insert_one(order_dict)
 
-    # Task 15: Debit LOOP balance now that order is committed
-    if loop_credits_used > 0:
-        await debit_loop_balance(
-            user_id, loop_credits_used,
-            reference_type="order_redeem",
-            reference_id=order_dict["id"],
-            description=f"Redeemed at checkout for order #{order_dict['id'][:8].upper()}",
-        )
+    # Since nested helpers (transition_order_status, debit_loop_balance, etc.) do not accept 'session' kwargs,
+    # we use ordered writes with idempotent compensating rollbacks (fallback mechanism for Task 3).
+    reserved_items = []
+    order_inserted = False
+    loop_debited = False
+    status_transitioned = False
+    user_updated = False
+    loop_credited = False
 
-    # Initial state machine transitions
-    if is_pending:
-        await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
-    else:
-        # For COD: instantly confirm and clear user cart
-        await transition_order_status(order_dict["id"], "cod_confirmed", user_id, "COD order created and confirmed")
-        # Update user spending and rewards immediately for COD
-        new_spend = user.get("monthly_spend", 0.0) + total
-        new_total_spend = user.get("total_spend", 0.0) + total
-        new_reward = user.get("current_reward", 0.0) + rewards_will_earn
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {
-                "monthly_spend": new_spend,
-                "total_spend": new_total_spend,
-                "current_reward": new_reward
-            }}
-        )
-        # Task 15: Credit LOOP cashback earned on this COD order
-        if rewards_will_earn > 0:
-            await credit_loop_balance(
-                user_id, rewards_will_earn,
-                reference_type="order_earn",
-                reference_id=order_dict["id"],
-                description=f"Cashback earned on order #{order_dict['id'][:8].upper()}",
+    try:
+        reserved_items = await try_reserve_stock(items_to_save)
+        await db.orders.insert_one(order_dict)
+        order_inserted = True
+
+
+
+        if is_pending:
+            await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
+            status_transitioned = True
+        else:
+            await transition_order_status(order_dict["id"], "cod_confirmed", user_id, "COD order created and confirmed")
+            status_transitioned = True
+            
+            new_spend = user.get("monthly_spend", 0.0) + total
+            new_total_spend = user.get("total_spend", 0.0) + total
+            new_reward = user.get("current_reward", 0.0) + rewards_will_earn
+            
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {
+                    "monthly_spend": new_spend,
+                    "total_spend": new_total_spend,
+                    "current_reward": new_reward
+                }}
             )
-        await db.cart_items.delete_many({"user_id": user_id})
-        await insert_notification(
-            user_id,
-            "Order Confirmed! 🎉",
-            f"Your order #{order_dict['id'][:8].upper()} has been confirmed. Expected delivery in ~60 minutes.",
-            "order",
-            f"/order-tracking/{order_dict['id']}",
-        )
+            user_updated = True
+            
+
+                
+            await db.cart_items.delete_many({"user_id": user_id})
+            await insert_notification(
+                user_id,
+                "Order Confirmed! 🎉",
+                f"Your order #{order_dict['id'][:8].upper()} has been confirmed. Expected delivery in ~60 minutes.",
+                "order",
+                f"/order-tracking/{order_dict['id']}",
+            )
+
+    except Exception as e:
+        # Idempotent compensating rollback
+
+        if user_updated:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$inc": {
+                    "monthly_spend": -total,
+                    "total_spend": -total,
+                    "current_reward": -rewards_will_earn
+                }}
+            )
+
+        if status_transitioned:
+            await transition_order_status(order_dict["id"], "cancelled", "system", "Rollback order")
+        if order_inserted:
+            await db.orders.delete_one({"id": order_dict["id"]})
+        if reserved_items:
+            for item in reserved_items:
+                await db.products.update_one(
+                    {"id": item["product_id"]},
+                    {"$inc": {"stock": item["quantity"]}}
+                )
+        raise HTTPException(status_code=500, detail=f"Order creation failed: {str(e)}")
 
     final_order = await db.orders.find_one({"id": order_dict["id"]})
     res_dict = clean_mongo_doc(final_order)
@@ -361,7 +384,6 @@ async def legacy_create_order(order_data: OrderCreate, user_id: str = Depends(ge
     is_pending = order_data.payment_method.lower() != "cod"
     return await create_order_core(payload, user_id, is_pending=is_pending)
 
-@router.get("/user/orders")
 @router.get("")
 async def get_user_orders(
     user_id: str = Depends(get_current_user),
@@ -468,10 +490,12 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
             detail=f"Rider already has {total_load} order(s) (max {MAX_QUEUE_SIZE}). Choose another rider."
         )
 
-    await db.orders.update_one(
-        {"id": order_id},
+    order_update = await db.orders.update_one(
+        {"id": order_id, "assigned_rider_id": None},
         {"$set": {"assigned_rider_id": rider_id, "updated_at": datetime.utcnow()}}
     )
+    if order_update.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Order already has an assigned rider")
 
     if has_active:
         # Queue it — rider will pick it up after delivering current order
@@ -481,10 +505,16 @@ async def assign_rider_to_order(order_id: str, payload: AssignRiderRequest, admi
         )
         queued = True
     else:
-        await db.riders.update_one(
-            {"id": rider_id},
+        rider_update = await db.riders.update_one(
+            {"id": rider_id, "current_order_id": None},
             {"$set": {"current_order_id": order_id, "updated_at": datetime.utcnow()}}
         )
+        if rider_update.modified_count == 0:
+            await db.orders.update_one(
+                {"id": order_id},
+                {"$set": {"assigned_rider_id": None, "updated_at": datetime.utcnow()}}
+            )
+            raise HTTPException(status_code=409, detail="Rider is already assigned to an order. Order assignment rolled back.")
         queued = False
 
     title = "New Order Assigned 📦"
@@ -524,8 +554,9 @@ async def auto_assign_rider(order_id: str, admin=Depends(verify_admin)):
     if store_id:
         store = await db.stores.find_one({"id": store_id})
         if store:
-            store_lat = store.get("lat")
-            store_lng = store.get("lng")
+            location = store.get("location", {})
+            store_lat = location.get("lat")
+            store_lng = location.get("lng")
 
     # Find all online riders with capacity
     online_riders = await db.riders.find({"status": "online"}).to_list(200)

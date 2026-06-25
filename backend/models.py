@@ -39,9 +39,9 @@ class ProductCreate(BaseModel):
     name: str
     category: str
     subcategory: str
-    price: float
-    original_price: Optional[float] = None
-    image: str
+    price_paise: int
+    mrp_paise: Optional[int] = None
+    image_url: str
     stock: int = 100
     unit: str = "1 kg"
     description: Optional[str] = ""

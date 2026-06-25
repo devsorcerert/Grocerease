@@ -126,23 +126,48 @@ def clean_mongo_doc(doc):
         return doc
     doc.pop("_id", None)
 
-    # Normalize image field name: legacy seed/import stored 'image_url';
-    # CONTRACTS.md §7 requires 'image'.
-    if "image_url" in doc:
-        image_url_val = doc.pop("image_url")
-        if not doc.get("image"):
-            doc["image"] = image_url_val
+    # Normalize image field name
+    # We want to output 'image_url' (CONTRACTS.md §7)
+    # Priority: existing image_url > image
+    if "image" in doc and "image_url" not in doc:
+        doc["image_url"] = doc.pop("image")
+    elif "image" in doc and "image_url" in doc:
+        doc.pop("image")
 
-    # Normalize offer_price aliases (CONTRACTS.md §7 — no 'offerPrice' or
-    # 'original_price' in API responses).
-    # Priority: existing offer_price > offerPrice > original_price
-    if not doc.get("offer_price"):
-        legacy = doc.pop("offerPrice", None) or doc.pop("original_price", None)
-        if legacy:
-            doc["offer_price"] = legacy
+    # Guarded helper to safely convert float prices to paise ints
+    def _to_paise(val):
+        if val is None:
+            return None
+        try:
+            val_float = float(val)
+            # If the original schema was float but it's >= 1000 and has no decimal part,
+            # it MIGHT have already been paise. But we rely on the key name instead.
+            return int(val_float * 100)
+        except (ValueError, TypeError):
+            return None
+
+    # Map Selling Price -> price_paise
+    if "price_paise" not in doc:
+        legacy_price = doc.pop("price", None)
+        legacy_offer = doc.pop("offer_price", None) or doc.pop("offerPrice", None)
+        # Use offer_price as selling price if available, else price
+        selling_price = legacy_offer if legacy_offer is not None else legacy_price
+        if selling_price is not None:
+            doc["price_paise"] = _to_paise(selling_price)
     else:
+        # Already has price_paise, just clean up legacy keys
+        doc.pop("price", None)
+        doc.pop("offer_price", None)
         doc.pop("offerPrice", None)
+        
+    # Map MRP -> mrp_paise
+    if "mrp_paise" not in doc:
+        legacy_mrp = doc.pop("original_price", None) or doc.pop("mrp", None)
+        if legacy_mrp is not None:
+            doc["mrp_paise"] = _to_paise(legacy_mrp)
+    else:
         doc.pop("original_price", None)
+        doc.pop("mrp", None)
 
     return doc
 

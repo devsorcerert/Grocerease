@@ -38,8 +38,9 @@ async def find_serving_store(lat: float, lng: float) -> Optional[dict]:
     best = None
     best_dist = float("inf")
     for store in stores:
-        slat = store.get("lat")
-        slng = store.get("lng")
+        location = store.get("location", {})
+        slat = location.get("lat")
+        slng = location.get("lng")
         if slat is None or slng is None:
             continue
         dist = haversine_km(lat, lng, float(slat), float(slng))
@@ -53,20 +54,21 @@ async def find_serving_store(lat: float, lng: float) -> Optional[dict]:
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+class Location(BaseModel):
+    lat: float
+    lng: float
+
 class StoreCreate(BaseModel):
     name: str
     address: str
-    lat: float
-    lng: float
+    location: Location
     radius_km: float = 5.0
     is_active: bool = True
-
 
 class StoreUpdate(BaseModel):
     name: Optional[str] = None
     address: Optional[str] = None
-    lat: Optional[float] = None
-    lng: Optional[float] = None
+    location: Optional[Location] = None
     radius_km: Optional[float] = None
     is_active: Optional[bool] = None
 
@@ -111,8 +113,7 @@ async def create_store(data: StoreCreate, admin=Depends(verify_admin)):
         "id": str(uuid.uuid4()),
         "name": data.name.strip(),
         "address": data.address.strip(),
-        "lat": data.lat,
-        "lng": data.lng,
+        "location": {"lat": data.location.lat, "lng": data.location.lng},
         "radius_km": data.radius_km,
         "is_active": data.is_active,
         "created_at": datetime.utcnow(),
@@ -124,7 +125,11 @@ async def create_store(data: StoreCreate, admin=Depends(verify_admin)):
 @router.put("/admin/stores/{store_id}")
 async def update_store(store_id: str, data: StoreUpdate, admin=Depends(verify_admin)):
     """Update store details or toggle active/inactive (admin only)."""
-    updates = {k: v for k, v in data.dict().items() if v is not None}
+    updates = {k: v for k, v in data.dict(exclude_unset=True).items() if v is not None}
+    if "location" in updates and isinstance(updates["location"], dict):
+        # Flatten location update or keep it if we replace the whole subdoc
+        # Usually it's fine to just set the whole location dict if provided
+        pass
     if not updates:
         raise HTTPException(status_code=422, detail="No fields to update")
     updates["updated_at"] = datetime.utcnow()
