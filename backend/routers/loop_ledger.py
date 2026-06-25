@@ -1,25 +1,25 @@
 """
-routers/loop_ledger.py — LOOP credit double-entry ledger (Tasks 15 & 25)
+routers/loop_ledger.py â LOOP credit double-entry ledger (Tasks 15 & 25)
 
 Design
 ------
 Every LOOP credit movement is recorded as a ledger row:
-  credit  (+)  — earn from order cashback, cable-TV spend, admin manual
-  debit   (-)  — redeem at checkout
+  credit  (+)  â earn from order cashback, cable-TV spend, admin manual
+  debit   (-)  â redeem at checkout
 
-The canonical balance is users.loop_balance_paise (float, ₹).
+The canonical balance is users.loop_balance_paise (float, â¹).
 The ledger is the audit trail; the user field is the operational balance.
 
 Both are updated atomically in the same async call; they can diverge only
 on a mid-flight crash, which the admin /admin/loop/recalc endpoint can fix.
 
 Task 25: MSO stub
-  POST /api/mso/spend-signal  — cable operator (MSO) calls this when a
+  POST /api/mso/spend-signal  â cable operator (MSO) calls this when a
   subscriber's monthly bill is settled. GrocerEase issues 2% of cable spend
   as LOOP credits. Real MSO API authentication is a TODO (stub uses a shared
   secret header for now).
 
-CONTRACTS.md §10 — LOOP Ledger (added in this PR)
+CONTRACTS.md Â§10 â LOOP Ledger (added in this PR)
 """
 
 import uuid
@@ -35,24 +35,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["LOOP Ledger"])
 
-# ─── Constants ────────────────────────────────────────────────────────────────
+# âââ Constants ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 LOOP_EARN_PERCENT_CABLE_TV = 0.02   # 2% of cable-TV monthly spend
 MAX_REDEEM_FRACTION        = 0.50   # Pilot cap: max 50% of order total payable with LOOP
 MSO_SHARED_SECRET          = "grocerease-mso-pilot-2024"  # TODO: move to env var
 
-# ─── Pydantic models ──────────────────────────────────────────────────────────
+# âââ Pydantic models ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 class AdminCreditRequest(BaseModel):
     user_id: str
-    amount_paise: int
+    amount: float  # in ₹
     description: str = "Admin manual credit"
 
 class MsoSpendSignal(BaseModel):
     user_id: str
     mso_id: str                   # e.g. "tataplay", "airtel_dth"
-    amount_spent: float           # monthly cable bill in ₹
+    amount_spent: float           # monthly cable bill in â¹
     billing_month: str            # "2024-06", "2024-07"
 
-# ─── Core ledger helpers (called by orders.py too) ───────────────────────────
+# âââ Core ledger helpers (called by orders.py too) âââââââââââââââââââââââââââ
 
 async def credit_loop_balance_paise(
     user_id: str,
@@ -80,7 +80,7 @@ async def credit_loop_balance_paise(
 
     new_balance = round(result.get("loop_balance_paise", 0.0), 2)
     await _insert_row(user_id, "credit", amount_paise, new_balance, reference_type, reference_id, description)
-    logger.info("LOOP credit +%.2f for user %s (ref %s %s) → balance %.2f",
+    logger.info("LOOP credit +%.2f for user %s (ref %s %s) â balance %.2f",
                 amount_paise, user_id, reference_type, reference_id, new_balance)
     return new_balance
 
@@ -108,7 +108,7 @@ async def debit_loop_balance_paise(
     if current < amount_paise:
         raise HTTPException(
             status_code=400,
-            detail=f"Insufficient LOOP balance: have ₹{current:.2f}, need ₹{amount_paise:.2f}",
+            detail=f"Insufficient LOOP balance: have â¹{current:.2f}, need â¹{amount_paise:.2f}",
         )
 
     result = await db.users.find_one_and_update(
@@ -118,7 +118,7 @@ async def debit_loop_balance_paise(
     )
     new_balance = round(result.get("loop_balance_paise", 0.0), 2)
     await _insert_row(user_id, "debit", amount_paise, new_balance, reference_type, reference_id, description)
-    logger.info("LOOP debit -%.2f for user %s (ref %s %s) → balance %.2f",
+    logger.info("LOOP debit -%.2f for user %s (ref %s %s) â balance %.2f",
                 amount_paise, user_id, reference_type, reference_id, new_balance)
     return new_balance
 
@@ -144,13 +144,13 @@ async def _insert_row(
         "created_at":     datetime.utcnow(),
     })
 
-# ─── Customer endpoints ───────────────────────────────────────────────────────
+# âââ Customer endpoints âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @router.get("/user/loop-balance")
 async def get_loop_balance_paise(user_id: str = Depends(get_current_user)):
     """Return current LOOP credit balance for the logged-in user."""
     balance = await _get_balance(user_id)
-    return {"loop_balance_paise": balance}
+    return {"loop_balance": round(balance / 100, 2) if balance else 0.0}
 
 
 @router.get("/user/loop-ledger")
@@ -168,7 +168,7 @@ async def get_loop_ledger(
     return {"rows": rows, "total": total, "has_more": (skip + limit) < total}
 
 
-# ─── Admin endpoints ─────────────────────────────────────────────────────────
+# âââ Admin endpoints âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 @router.post("/admin/loop/credit")
 async def admin_credit_loop(
@@ -176,15 +176,15 @@ async def admin_credit_loop(
     _admin_id: str = Depends(verify_admin),
 ):
     """Manually credit LOOP balance to a user (e.g. goodwill, promo)."""
-    if req.amount_paise <= 0:
+    if req.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
     new_balance = await credit_loop_balance_paise(
-        req.user_id, req.amount_paise_paise,
+        req.user_id, int(req.amount * 100),
         reference_type="admin_credit",
         reference_id=f"admin-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
         description=req.description,
     )
-    return {"success": True, "new_balance": new_balance}
+    return {"success": True, "new_balance": round(new_balance / 100, 2)}
 
 
 @router.post("/admin/loop/recalc/{user_id}")
@@ -210,7 +210,7 @@ async def recalc_loop_balance_paise(
     return {"user_id": user_id, "recalculated_balance": correct}
 
 
-# ─── Task 25: MSO spend-signal stub ──────────────────────────────────────────
+# âââ Task 25: MSO spend-signal stub ââââââââââââââââââââââââââââââââââââââââââ
 
 @router.post("/mso/spend-signal")
 async def mso_spend_signal(
@@ -225,7 +225,7 @@ async def mso_spend_signal(
     TODO: Replace with per-MSO OAuth2 or signed JWT before launch.
 
     Credit rate: 2% of cable-TV monthly spend (LOOP_EARN_PERCENT_CABLE_TV).
-    Idempotency: reference_id = '{user_id}:{mso_id}:{billing_month}' —
+    Idempotency: reference_id = '{user_id}:{mso_id}:{billing_month}' â
     duplicate calls for the same month are ignored.
     """
     if x_mso_secret != MSO_SHARED_SECRET:
@@ -250,11 +250,11 @@ async def mso_spend_signal(
         loop_amount_paise,
         reference_type="cable_tv_earn",
         reference_id=ref_id,
-        description=f"Cable-TV cashback: ₹{payload.amount_spent:.0f} bill with {payload.mso_id} ({payload.billing_month})",
+        description=f"Cable-TV cashback: â¹{payload.amount_spent:.0f} bill with {payload.mso_id} ({payload.billing_month})",
     )
     return {
         "success": True,
         "loop_credits_issued": loop_amount_paise,
         "new_balance": new_balance,
-        "message": f"Issued ₹{loop_amount_paise:.2f} LOOP credits for ₹{payload.amount_spent:.0f} cable bill",
+        "message": f"Issued â¹{loop_amount_paise:.2f} LOOP credits for â¹{payload.amount_spent:.0f} cable bill",
     }
