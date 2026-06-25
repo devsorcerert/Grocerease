@@ -118,7 +118,7 @@ async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(secur
 def clean_mongo_doc(doc):
     """Remove MongoDB _id and normalize legacy field aliases for API reads.
 
-    READ-ONLY: aliases are remapped in the returned dict only — the DB is never
+    READ-ONLY: aliases are remapped in the returned dict only â the DB is never
     written back.  Safe to call on any document type; product-specific keys
     (offerPrice, original_price, image_url) are no-ops on non-product docs.
     """
@@ -127,12 +127,12 @@ def clean_mongo_doc(doc):
     doc.pop("_id", None)
 
     # Normalize image field name
-    # We want to output 'image_url' (CONTRACTS.md §7)
+    # We want to output 'image_url' (CONTRACTS.md Â§7)
     # Priority: existing image_url > image
-    if "image" in doc and "image_url" not in doc:
-        doc["image_url"] = doc.pop("image")
-    elif "image" in doc and "image_url" in doc:
-        doc.pop("image")
+    if "image_url" in doc and "image" not in doc:
+        doc["image"] = doc.pop("image_url")
+    elif "image_url" in doc and "image" in doc:
+        doc.pop("image_url")
 
     # Guarded helper to safely convert float prices to paise ints
     def _to_paise(val):
@@ -168,6 +168,10 @@ def clean_mongo_doc(doc):
     else:
         doc.pop("original_price", None)
         doc.pop("mrp", None)
+
+    # Expose offer_price for API contract: derive from mrp_paise if not already set
+    if "offer_price" not in doc and "mrp_paise" in doc:
+        doc["offer_price"] = round(doc["mrp_paise"] / 100, 2)
 
     return doc
 
