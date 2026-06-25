@@ -248,11 +248,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
     rewards_will_earn = rewards_info["order_cashback"]
     
-    # 5. Atomically deduct stock
-    # Note: Stock is reserved immediately upon order creation for both COD and prepaid (pending payment)
-    # If the user cancels the pending payment or it expires, the stock is rolled back.
-    await try_reserve_stock(items_to_save)
-    
+        # 5. Atomically deduct stock (Task 3)
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -281,52 +277,95 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             }
         ]
     }
-    
-    await db.orders.insert_one(order_dict)
 
-    # Task 15: Debit LOOP balance now that order is committed
-    if loop_credits_used > 0:
-        await debit_loop_balance(
-            user_id, loop_credits_used,
-            reference_type="order_redeem",
-            reference_id=order_dict["id"],
-            description=f"Redeemed at checkout for order #{order_dict['id'][:8].upper()}",
-        )
+    # Since nested helpers (transition_order_status, debit_loop_balance, etc.) do not accept 'session' kwargs,
+    # we use ordered writes with idempotent compensating rollbacks (fallback mechanism for Task 3).
+    reserved_items = []
+    order_inserted = False
+    loop_debited = False
+    status_transitioned = False
+    user_updated = False
+    loop_credited = False
 
-    # Initial state machine transitions
-    if is_pending:
-        await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
-    else:
-        # For COD: instantly confirm and clear user cart
-        await transition_order_status(order_dict["id"], "cod_confirmed", user_id, "COD order created and confirmed")
-        # Update user spending and rewards immediately for COD
-        new_spend = user.get("monthly_spend", 0.0) + total
-        new_total_spend = user.get("total_spend", 0.0) + total
-        new_reward = user.get("current_reward", 0.0) + rewards_will_earn
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {
-                "monthly_spend": new_spend,
-                "total_spend": new_total_spend,
-                "current_reward": new_reward
-            }}
-        )
-        # Task 15: Credit LOOP cashback earned on this COD order
-        if rewards_will_earn > 0:
-            await credit_loop_balance(
-                user_id, rewards_will_earn,
-                reference_type="order_earn",
+    try:
+        reserved_items = await try_reserve_stock(items_to_save)
+        await db.orders.insert_one(order_dict)
+        order_inserted = True
+
+        if loop_credits_used > 0:
+            await debit_loop_balance(
+                user_id, loop_credits_used,
+                reference_type="order_redeem",
                 reference_id=order_dict["id"],
-                description=f"Cashback earned on order #{order_dict['id'][:8].upper()}",
+                description=f"Redeemed at checkout for order #{order_dict['id'][:8].upper()}",
             )
-        await db.cart_items.delete_many({"user_id": user_id})
-        await insert_notification(
-            user_id,
-            "Order Confirmed! 🎉",
-            f"Your order #{order_dict['id'][:8].upper()} has been confirmed. Expected delivery in ~60 minutes.",
-            "order",
-            f"/order-tracking/{order_dict['id']}",
-        )
+            loop_debited = True
+
+        if is_pending:
+            await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
+            status_transitioned = True
+        else:
+            await transition_order_status(order_dict["id"], "cod_confirmed", user_id, "COD order created and confirmed")
+            status_transitioned = True
+            
+            new_spend = user.get("monthly_spend", 0.0) + total
+            new_total_spend = user.get("total_spend", 0.0) + total
+            new_reward = user.get("current_reward", 0.0) + rewards_will_earn
+            
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {
+                    "monthly_spend": new_spend,
+                    "total_spend": new_total_spend,
+                    "current_reward": new_reward
+                }}
+            )
+            user_updated = True
+            
+            if rewards_will_earn > 0:
+                await credit_loop_balance(
+                    user_id, rewards_will_earn,
+                    reference_type="order_earn",
+                    reference_id=order_dict["id"],
+                    description=f"Cashback earned on order #{order_dict['id'][:8].upper()}",
+                )
+                loop_credited = True
+                
+            await db.cart_items.delete_many({"user_id": user_id})
+            await insert_notification(
+                user_id,
+                "Order Confirmed! 🎉",
+                f"Your order #{order_dict['id'][:8].upper()} has been confirmed. Expected delivery in ~60 minutes.",
+                "order",
+                f"/order-tracking/{order_dict['id']}",
+            )
+
+    except Exception as e:
+        # Idempotent compensating rollback
+        if loop_credited:
+            await debit_loop_balance(user_id, rewards_will_earn, "reversal", f"reversal_{order_dict['id']}", "Rollback earn")
+        if user_updated:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$inc": {
+                    "monthly_spend": -total,
+                    "total_spend": -total,
+                    "current_reward": -rewards_will_earn
+                }}
+            )
+        if loop_debited:
+            await credit_loop_balance(user_id, loop_credits_used, "reversal", f"reversal_{order_dict['id']}", "Rollback redeem")
+        if status_transitioned:
+            await transition_order_status(order_dict["id"], "cancelled", "system", "Rollback order")
+        if order_inserted:
+            await db.orders.delete_one({"id": order_dict["id"]})
+        if reserved_items:
+            for item in reserved_items:
+                await db.products.update_one(
+                    {"id": item["product_id"]},
+                    {"$inc": {"stock": item["quantity"]}}
+                )
+        raise HTTPException(status_code=500, detail=f"Order creation failed: {str(e)}")
 
     final_order = await db.orders.find_one({"id": order_dict["id"]})
     res_dict = clean_mongo_doc(final_order)
@@ -361,7 +400,6 @@ async def legacy_create_order(order_data: OrderCreate, user_id: str = Depends(ge
     is_pending = order_data.payment_method.lower() != "cod"
     return await create_order_core(payload, user_id, is_pending=is_pending)
 
-@router.get("/user/orders")
 @router.get("")
 async def get_user_orders(
     user_id: str = Depends(get_current_user),
@@ -524,8 +562,9 @@ async def auto_assign_rider(order_id: str, admin=Depends(verify_admin)):
     if store_id:
         store = await db.stores.find_one({"id": store_id})
         if store:
-            store_lat = store.get("lat")
-            store_lng = store.get("lng")
+            location = store.get("location", {})
+            store_lat = location.get("lat")
+            store_lng = location.get("lng")
 
     # Find all online riders with capacity
     online_riders = await db.riders.find({"status": "online"}).to_list(200)

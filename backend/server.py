@@ -781,16 +781,27 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
         # Resolve offer price: accept 'offerprice', 'offer_price', or 'mrp'
         raw_offer = (normalized.get("offerprice") or normalized.get("offer_price")
                      or normalized.get("mrp") or 0)
+        
+        # Guard against empty string prices
+        def _to_paise(val):
+            try:
+                return int(float(val) * 100) if val else None
+            except (ValueError, TypeError):
+                return None
+                
+        # Resolve price: accept 'price'
+        raw_price = normalized.get("price") or 0
+        
         product_dict = {
             "id": str(uuid.uuid4()),
             "name": normalized.get("name", "").strip(),
             "category": normalized.get("category", "General"),
-            "price": float(normalized.get("price", 0) or 0),
-            "offer_price": float(raw_offer or 0) or None,
+            "price_paise": _to_paise(raw_price) or 0,
+            "mrp_paise": _to_paise(raw_offer),
             "brand": normalized.get("brand", ""),
             "stock": int(raw_stock or 100),
             "description": normalized.get("description", ""),
-            "image": image_val.strip() if image_val else "",
+            "image_url": image_val.strip() if image_val else "",
             "unit": normalized.get("unit", ""),
             "created_at": datetime.utcnow()
         }
@@ -1186,15 +1197,19 @@ async def upload_products_excel(file: UploadFile = File(...), admin=Depends(veri
             # Check if product exists
             existing_product = await db.products.find_one({"name": product_name})
             
+            # Helper to convert to paise
+            def _to_paise(val):
+                return int(float(val) * 100) if pd.notna(val) else None
+                
             product_dict = {
                 "name": product_name,
                 "category": str(row['Category']).strip(),
                 "brand": str(row.get('Brand', '')).strip() if pd.notna(row.get('Brand')) else '',
-                "price": float(row['Price']),
-                "offerPrice": float(row['OfferPrice']) if pd.notna(row.get('OfferPrice')) else None,
+                "price_paise": _to_paise(row['Price']) or 0,
+                "mrp_paise": _to_paise(row.get('OfferPrice')),
                 "stock": int(row.get('Stock', 0)) if pd.notna(row.get('Stock')) else 0,
                 "description": str(row.get('Description', '')).strip() if pd.notna(row.get('Description')) else '',
-                "image": str(row.get('Image', '')).strip() if pd.notna(row.get('Image')) else '',
+                "image_url": str(row.get('Image', '')).strip() if pd.notna(row.get('Image')) else '',
                 "updated_at": datetime.utcnow()
             }
             
