@@ -30,7 +30,7 @@ from database import (
 )
 from models import (
     UserRegister, ProfileUpdate, UserLogin, GoogleAuthRequest,
-    CableTVLink, ProductCreate, BulkProductUpload, CartItem,
+    CableTVLink, CableTVSTBLink, ProductCreate, BulkProductUpload, CartItem,
     OrderCreate, VideoCreate, SendOtpRequest, VerifyOtpRequest,
     CreatePaymentRequest, VerifyPaymentRequest, CouponCreate,
     CouponValidate, CreateOrderRequest, LogoutRequest,
@@ -42,7 +42,7 @@ from models import (
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# BUG-05 fix: ensure all JSON responses include charset=utf-8 so ₹, •, emojis
+# BUG-05 fix: ensure all JSON responses include charset=utf-8 so â¹, â¢, emojis
 # render correctly on Android clients that default to Latin-1 decoding.
 @app.middleware("http")
 async def add_utf8_charset(request: Request, call_next):
@@ -323,7 +323,7 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
         import asyncio
 
         loop = asyncio.get_event_loop()
-        # verify_oauth2_token is synchronous â offload to thread pool
+        # verify_oauth2_token is synchronous Ã¢ÂÂ offload to thread pool
         token_info = await loop.run_in_executor(
             None,
             lambda: google_id_token.verify_oauth2_token(
@@ -409,7 +409,7 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
 async def get_me(user_id: str = Depends(get_current_user)):
     # BUG-12 fix: check db.users first, then fall through to db.admins.
     # Admin tokens carry user_id = "default-admin-id" which only exists in
-    # db.admins, not db.users — so the old code 404-ed and auto-logged admins out.
+    # db.admins, not db.users â so the old code 404-ed and auto-logged admins out.
     user = await db.users.find_one({"id": user_id})
     if user:
         return {
@@ -428,7 +428,7 @@ async def get_me(user_id: str = Depends(get_current_user)):
             "total_spend": user.get("total_spend", 0.0),
         }
 
-    # Not in db.users — check db.admins (admin JWT path)
+    # Not in db.users â check db.admins (admin JWT path)
     admin = await db.admins.find_one({"id": user_id})
     if admin:
         return {
@@ -470,14 +470,46 @@ async def get_user_notifications_legacy(user_id: str = Depends(get_current_user)
 
 # Cable TV Routes
 @api_router.post("/cable-tv/link")
-async def link_cable_tv(data: CableTVLink, user_id: str = Depends(get_current_user)):
-    """
-    Cable TV linking is not implemented yet. Real-time billing integrations are gated.
-    """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Cable TV verification is not implemented yet. Real-time billing integrations are gated."
+async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current_user)):
+    """Link a GTPL cable TV connection via STB number validation."""
+    stb_doc = await db.stb_numbers.find_one({"stb_number": data.stb_number, "network": "gtpl"})
+    if not stb_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="STB number not found in GTPL network. Please check the number printed on your set-top box."
+        )
+    if stb_doc.get("status") == "linked" and stb_doc.get("linked_user_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This STB number is already linked to another account."
+        )
+    now = datetime.utcnow()
+    cable_details = {
+        "stb_number": data.stb_number,
+        "network": "gtpl",
+        "service_provider": "GTPL",
+        "linked_at": now.isoformat()
+    }
+    await db.stb_numbers.update_one(
+        {"stb_number": data.stb_number},
+        {"$set": {"status": "linked", "linked_user_id": user_id, "linked_at": now}}
     )
+    await db.users.update_one(
+        {"_id": user_id},
+        {"$set": {"cable_tv_linked": True, "cable_tv_details": cable_details}}
+    )
+    return {"success": True, "message": "Cable TV linked successfully", "cable_details": cable_details}
+
+
+@api_router.get("/cable-tv/validate-stb/{stb_number}")
+async def validate_stb_number(stb_number: str, user_id: str = Depends(get_current_user)):
+    """Check if a GTPL STB number exists and is available for linking."""
+    stb_doc = await db.stb_numbers.find_one({"stb_number": stb_number, "network": "gtpl"})
+    if not stb_doc:
+        return {"valid": False, "message": "STB number not found in GTPL network"}
+    if stb_doc.get("status") == "linked" and stb_doc.get("linked_user_id") != user_id:
+        return {"valid": True, "available": False, "message": "Already linked to another account"}
+    return {"valid": True, "available": True, "network": "gtpl", "message": "STB number is valid and available"}
 
 async def verify_cable_tv_details(cable_details: dict) -> dict:
     """
@@ -570,7 +602,7 @@ async def get_products(
 ):
     query = {}
     
-    # Category filter — BUG-08 fix: case-insensitive match so "Cleaning Essentials"
+    # Category filter â BUG-08 fix: case-insensitive match so "Cleaning Essentials"
     # matches products stored as "cleaning_essentials", "Cleaning & Essentials", etc.
     if category:
         import re as _re_cat
@@ -622,7 +654,7 @@ async def get_products(
     products = await db.products.find(query).sort(sort_field, sort_order).skip(skip).limit(limit).to_list(limit)
     
     # Normalize all field aliases via the shared cleaner (Task 18).
-    # clean_mongo_doc handles _id removal, image_url→image, offerPrice/original_price→offer_price.
+    # clean_mongo_doc handles _id removal, image_urlâimage, offerPrice/original_priceâoffer_price.
     products = [clean_mongo_doc(p) for p in products]
     
     return {
@@ -753,7 +785,7 @@ async def create_product(product: ProductCreate, user_id: str = Depends(get_curr
 
 @api_router.post("/products/bulk")
 async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends(get_current_user)):
-    # Check admin — falls back to db.admins for admin users not in db.users
+    # Check admin â falls back to db.admins for admin users not in db.users
     user = await db.users.find_one({"id": user_id})
     if not user:
         admin = await db.admins.find_one({"id": user_id})
@@ -805,7 +837,7 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
             "unit": normalized.get("unit", ""),
             "created_at": datetime.utcnow()
         }
-        # Upsert on name — avoids duplicates when re-uploading
+        # Upsert on name â avoids duplicates when re-uploading
         result = await db.products.update_one(
             {"name": product_dict["name"]},
             {"$set": {k: v for k, v in product_dict.items() if k != "id" and k != "created_at"}},
@@ -1000,7 +1032,7 @@ async def get_brand_banners():
         {
             "id": "3",
             "brand": "Tata Tea",
-            "offer_text": "â¹50 OFF",
+            "offer_text": "Ã¢ÂÂ¹50 OFF",
             "description": "On 500g pack",
             "banner_image": "",
             "background_color": "#FEF3C7",
@@ -1010,7 +1042,7 @@ async def get_brand_banners():
         },
         {
             "id": "4",
-            "brand": "NestlÃ©",
+            "brand": "NestlÃÂ©",
             "offer_text": "15% OFF",
             "description": "On coffee range",
             "banner_image": "",
@@ -1063,7 +1095,7 @@ else:
         logger.info("=" * 50)
         logger.info("BOOTSTRAP: Generated development admin password:")
         logger.info("  Email: %s", ADMIN_EMAIL)
-        logger.warning("  Password: [REDACTED — check server logs in dev only]")
+        logger.warning("  Password: [REDACTED â check server logs in dev only]")
         logger.info("=" * 50)
 
 # Admin login
@@ -1083,7 +1115,7 @@ async def admin_login(login_data: UserLogin):
         admin_role = db_admin.get("role", "admin")
         if db_admin.get("password"):
             password_ok = verify_password(login_data.password, db_admin["password"])
-        # Also check env-var credentials — always authoritative
+        # Also check env-var credentials â always authoritative
         # (DB hash may be stale if ADMIN_PASSWORD changed after initial seeding)
         if not password_ok and email == ADMIN_EMAIL.lower().strip():
             if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
@@ -1466,7 +1498,7 @@ async def get_notification_preferences(user_id: str = Depends(get_current_user))
     })}
 
 
-# ââ Wishlist ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂ Wishlist Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 @api_router.get("/wishlist/ids")
 async def get_wishlist_ids(user_id: str = Depends(get_current_user)):
@@ -1500,7 +1532,7 @@ async def remove_from_wishlist(product_id: str, user_id: str = Depends(get_curre
     return {"status": "removed"}
 
 
-# ââ Notifications ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂ Notifications Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 @api_router.get("/notifications")
 async def get_notifications(user_id: str = Depends(get_current_user)):
@@ -1598,7 +1630,7 @@ async def send_sms_fast2sms(phone: str, otp: str):
             return True
     except Exception as e:
         if DEBUG_MODE:
-            logger.error("[SMS EXCEPTION] OTP for %s: %s — %s", phone, otp, e)
+            logger.error("[SMS EXCEPTION] OTP for %s: %s â %s", phone, otp, e)
         else:
             logger.error("[SMS EXCEPTION] SMS exception for %s", phone)
         return False
@@ -1717,7 +1749,7 @@ async def validate_coupon(payload: CouponValidate, user_id: str = Depends(get_cu
         raise HTTPException(status_code=400, detail="Coupon has expired")
         
     if payload.subtotal < coupon.get("min_order_value", 0):
-        raise HTTPException(status_code=400, detail=f"Minimum order value for this coupon is â¹{coupon['min_order_value']}")
+        raise HTTPException(status_code=400, detail=f"Minimum order value for this coupon is Ã¢ÂÂ¹{coupon['min_order_value']}")
         
     discount = 0.0
     if coupon.get("discount_percentage", 0) > 0:
