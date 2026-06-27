@@ -1007,12 +1007,8 @@ async def get_categories():
 @api_router.get("/service-providers")
 async def get_service_providers():
     providers = [
-        {"id": "1", "name": "Tata Sky", "logo": ""},
-        {"id": "2", "name": "Airtel Digital TV", "logo": ""},
-        {"id": "3", "name": "Dish TV", "logo": ""},
-        {"id": "4", "name": "Sun Direct", "logo": ""},
-        {"id": "5", "name": "Hathway", "logo": ""},
-        {"id": "6", "name": "DEN Networks", "logo": ""},
+        {"id": "1", "name": "GTPL / GTPL City Cable", "logo": ""},
+        {"id": "2", "name": "ACT", "logo": ""},
     ]
     return providers
 

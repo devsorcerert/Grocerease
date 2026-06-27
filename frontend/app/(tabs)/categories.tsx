@@ -4,7 +4,8 @@ import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import ProductImage from '../../components/ProductImage';
 import { useCartStore } from '../../store/cartStore';
 import QuantitySelector from '../../components/QuantitySelector';
@@ -29,7 +30,7 @@ const categoryIconMap: { [key: string]: any } = {
   'Home & Kitchen': 'home',
 };
 
-// Category image map â real product photos replace generic icons
+// Category image map — real product photos replace generic icons
 const categoryImageMap: { [key: string]: string } = {
   'Fruits & Vegetables': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
   'Dairy & Breakfast':   'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=200&q=80',
@@ -59,21 +60,32 @@ export default function CategoriesScreen() {
   const params = useLocalSearchParams();
   const { addToCart } = useCartStore();
 
+  // Load categories once on mount
   useEffect(() => {
     fetchCategories();
-    if (!params.selectedCategory) {
-      fetchProducts();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Handle category param changes (from home screen navigation)
   useEffect(() => {
-    if (params.selectedCategory) {
+    if (params.selectedCategory && params.selectedCategory !== '') {
       setSelectedCategory(params.selectedCategory as string);
       setShowCategories(false);
       fetchProducts(params.selectedCategory as string);
+    } else {
+      // No category selected — show all
+      setSelectedCategory(null);
+      setShowCategories(true);
+      fetchProducts();
     }
   }, [params.selectedCategory]);
+
+  // When the tab gains focus with no category param, always reset to all-categories view
+  useFocusEffect(useCallback(() => {
+    if (!params.selectedCategory || params.selectedCategory === '') {
+      setSelectedCategory(null);
+      setShowCategories(true);
+    }
+  }, [params.selectedCategory]));
 
   const fetchCategories = async () => {
     try {
@@ -216,9 +228,9 @@ export default function CategoriesScreen() {
                   <Text style={styles.productName}>{product.name}</Text>
                   <Text style={styles.productUnit}>{product.unit}</Text>
                   <View style={styles.priceRow}>
-                    <Text style={styles.productPrice}>â¹{Math.ceil(product.price || 0)}</Text>
+                    <Text style={styles.productPrice}>₹{Math.ceil(product.price || 0)}</Text>
                     {product.original_price && (
-                      <Text style={styles.originalPrice}>â¹{Math.ceil(product.original_price || 0)}</Text>
+                      <Text style={styles.originalPrice}>₹{Math.ceil(product.original_price || 0)}</Text>
                     )}
                   </View>
                 </View>

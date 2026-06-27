@@ -34,7 +34,7 @@ const categoryIconMap: { [key: string]: any } = {
 };
 
 
-// Category image map â real product photos replace generic icons
+// Category image map — real product photos replace generic icons
 const categoryImageMap: { [key: string]: string } = {
   'Fruits & Vegetables': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
   'Dairy & Breakfast':   'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=200&q=80',
@@ -58,8 +58,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { addToCart } = useCartStore();
   const [showCableTVModal, setShowCableTVModal] = useState(false);
-  const [userIdNuid, setUserIdNuid] = useState('');
-  const [phone, setPhone] = useState('');
+  const [stbNumber, setStbNumber] = useState('');
   const [serviceProvider, setServiceProvider] = useState('');
   const [providers, setProviders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -221,15 +220,14 @@ export default function HomeScreen() {
   };
 
   const handleLinkCableTV = async () => {
-    if (!userIdNuid || !phone || !serviceProvider) {
-      Alert.alert('Error', 'Please fill all fields');
+    if (!stbNumber || !serviceProvider) {
+      Alert.alert('Error', 'Please enter your STB number and select a provider');
       return;
     }
 
     try {
       await api.post('/cable-tv/link', {
-        user_id_nuid: userIdNuid,
-        phone,
+        stb_number: stbNumber,
         service_provider: serviceProvider,
       });
       Alert.alert('Success', 'Cable TV linked successfully!');
@@ -287,7 +285,7 @@ export default function HomeScreen() {
             {currentAddress ? (
               <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                 <Text style={[styles.addressText, { flexShrink: 1 }]} numberOfLines={1}>
-                  ð {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
+                  📍 {currentAddress.label ? `[${currentAddress.label}] ` : ''}{currentAddress.full_address}
                 </Text>
                 {isNewAddressDetected && (
                   <TouchableOpacity 
@@ -299,9 +297,9 @@ export default function HomeScreen() {
                 )}
               </View>
             ) : user?.address ? (
-              <Text style={styles.addressText}>ð {user.address}, {user.city} - {user.pincode}</Text>
+              <Text style={styles.addressText}>📍 {user.address}, {user.city} - {user.pincode}</Text>
             ) : (
-              <Text style={styles.addressText}>ð Detecting location...</Text>
+              <Text style={styles.addressText}>📍 Detecting location...</Text>
             )}
           </View>
           <View style={styles.headerActions}>
@@ -376,12 +374,12 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.usageStats}>
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>â¹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
+                    <Text style={styles.usageStatValue}>₹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('monthlySpend')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
                   <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>â¹{Number(user?.current_reward || 0).toFixed(2)}</Text>
+                    <Text style={styles.usageStatValue}>₹{Number(user?.current_reward || 0).toFixed(2)}</Text>
                     <Text style={styles.usageStatLabel}>{t('rewardBalance')}</Text>
                   </View>
                   <View style={styles.usageStatDivider} />
@@ -395,8 +393,8 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.nextTierText}>
                   {getMonthlyOfferUsage().used === 3 
-                    ? 'ð Maximum tier unlocked!' 
-                    : `Spend â¹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
+                    ? '🎉 Maximum tier unlocked!' 
+                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
                 </Text>
               </View>
             </View>
@@ -428,14 +426,14 @@ export default function HomeScreen() {
             </View>
             <View style={[styles.brandBanner, { backgroundColor: '#FEF3C7' }]}>
               <Text style={styles.bannerBrand}>Tata Tea</Text>
-              <Text style={styles.bannerOffer}>â¹50 OFF</Text>
+              <Text style={styles.bannerOffer}>₹50 OFF</Text>
               <Text style={styles.bannerText}>On 500g pack</Text>
               <View style={styles.bannerBadge}>
                 <Text style={styles.bannerBadgeText}>PROVISION</Text>
               </View>
             </View>
             <View style={[styles.brandBanner, { backgroundColor: '#E0E7FF' }]}>
-              <Text style={styles.bannerBrand}>NestlÃ©</Text>
+              <Text style={styles.bannerBrand}>Nestlé</Text>
               <Text style={styles.bannerOffer}>15% OFF</Text>
               <Text style={styles.bannerText}>On coffee range</Text>
               <View style={styles.bannerBadge}>
@@ -449,7 +447,7 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('categories')}</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/categories', params: { selectedCategory: '' } })}>
               <Text style={styles.viewAllText}>{t('seeAll')}</Text>
             </TouchableOpacity>
           </View>
@@ -477,7 +475,7 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('featuredProducts')}</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/categories')}>
+            <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/categories', params: { selectedCategory: '' } })}>
               <Text style={styles.viewAllText}>{t('seeAll')}</Text>
             </TouchableOpacity>
           </View>
@@ -495,8 +493,8 @@ export default function HomeScreen() {
                   <Text style={styles.productUnit}>{product.unit}</Text>
                   <View style={styles.productFooter}>
                     <View style={styles.priceContainer}>
-                      <Text style={styles.productPrice}>â¹{Math.ceil(product.price || 0)}</Text>
-                      <Text style={styles.originalPrice}>â¹{Math.ceil((product.price || 0) * 1.2)}</Text>
+                      <Text style={styles.productPrice}>₹{Math.ceil(product.price || 0)}</Text>
+                      <Text style={styles.originalPrice}>₹{Math.ceil((product.price || 0) * 1.2)}</Text>
                     </View>
                     <QuantitySelector productId={product.id} size="small" color="#FF8C42" />
                   </View>
@@ -556,28 +554,21 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.benefitsBox}>
-              <Text style={styles.benefitsTitle}>ð Benefits After Linking:</Text>
-              <Text style={styles.benefitsText}>â¢ Track monthly & yearly spending</Text>
-              <Text style={styles.benefitsText}>â¢ View offer usage in real-time</Text>
-              <Text style={styles.benefitsText}>â¢ Unlock rewards up to â¹1000</Text>
-              <Text style={styles.benefitsText}>â¢ ð§ Infrastructure ready for real API integration</Text>
+              <Text style={styles.benefitsTitle}>📊 Benefits After Linking:</Text>
+              <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
+              <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
+              <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
+              <Text style={styles.benefitsText}>• 🔧 Infrastructure ready for real API integration</Text>
             </View>
 
+            <Text style={styles.label}>STB Number (on your set-top box)</Text>
             <TextInput
               style={styles.input}
-              placeholder={t('nuidPlaceholder')}
+              placeholder="Enter your STB number"
               placeholderTextColor="#9CA3AF"
-              value={userIdNuid}
-              onChangeText={setUserIdNuid}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder={t('phonePlaceholder')}
-              placeholderTextColor="#9CA3AF"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
+              value={stbNumber}
+              onChangeText={setStbNumber}
+              autoCapitalize="none"
             />
 
             <Text style={styles.label}>{t('cableTvProvider')}</Text>
@@ -599,11 +590,10 @@ export default function HomeScreen() {
             </ScrollView>
 
             <TouchableOpacity 
-              style={[styles.submitButton, { backgroundColor: '#9CA3AF' }]}
+              style={styles.submitButton}
               onPress={handleLinkCableTV}
-              disabled={true}
             >
-              <Text style={styles.submitButtonText}>Coming Soon</Text>
+              <Text style={styles.submitButtonText}>Link Cable TV</Text>
             </TouchableOpacity>
           </View>
         </View>
