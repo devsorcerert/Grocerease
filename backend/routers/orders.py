@@ -293,7 +293,15 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         await db.orders.insert_one(order_dict)
         order_inserted = True
 
-
+        # Debit LOOP credits from wallet if used
+        if loop_credits_used > 0:
+            await debit_loop_balance(
+                user_id, loop_credits_used,
+                reference_type="order_redeem",
+                reference_id=order_dict["id"],
+                description=f"LOOP redemption for order #{order_dict['id'][:8].upper()}",
+            )
+            loop_debited = True
 
         if is_pending:
             await transition_order_status(order_dict["id"], "pending_payment", user_id, "Prepaid order created - payment pending")
@@ -340,6 +348,15 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
                     "total_spend": -total,
                     "current_reward": -rewards_will_earn
                 }}
+            )
+
+        if loop_debited:
+            from routers.loop_ledger import credit_loop_balance as _credit
+            await _credit(
+                user_id, loop_credits_used,
+                reference_type="admin_credit",
+                reference_id=f"rollback-{order_dict['id']}",
+                description="Rollback: order creation failed",
             )
 
         if status_transitioned:
