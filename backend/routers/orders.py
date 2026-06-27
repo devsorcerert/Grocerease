@@ -6,6 +6,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from routers.stores import find_serving_store
+from routers.loop_ledger import MAX_REDEEM_FRACTION, debit_loop_balance
 from models import CreateOrderRequest, OrderCreate
 
 
@@ -234,7 +235,7 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     loop_credits_used = 0.0
     if loop_credits_requested > 0:
         user_for_loop = await db.users.find_one({"id": user_id}) or {}
-        available_loop = round(user_for_loop.get("loop_balance", 0.0), 2)
+        available_loop = round(user_for_loop.get("loop_balance_paise", 0) / 100, 2)
         max_redeemable = round(total * MAX_REDEEM_FRACTION, 2)   # 50% cap
         loop_credits_used = round(min(loop_credits_requested, available_loop, max_redeemable), 2)
         total = round(total - loop_credits_used, 2)
