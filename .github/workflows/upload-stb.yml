@@ -1,0 +1,54 @@
+name: Upload GTPL STB Numbers to MongoDB
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload-stb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload 77480 GTPL STB numbers to MongoDB
+        env:
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+        run: |
+          pip install pymongo dnspython -q
+          python3 << 'PYEOF'
+          import sys, os
+          from pymongo import MongoClient, ASCENDING
+          from pymongo.errors import BulkWriteError
+
+          with open("data/stb_numbers.txt") as f:
+              stbs = [l.strip() for l in f if l.strip()]
+          print(f"Loaded {len(stbs):,} STB numbers")
+
+          client = MongoClient(os.environ['MONGO_URL'])
+          db = client['grocerease']
+          coll = db['stb_numbers']
+          coll.create_index([("stb_number", ASCENDING)], unique=True)
+
+          existing = coll.count_documents({})
+          print(f"Existing: {existing:,}")
+          if existing >= len(stbs):
+              print("Already uploaded — nothing to do.")
+              sys.exit(0)
+
+          docs = [{"stb_number": s, "network": "gtpl", "status": "available",
+                   "linked_user_id": None, "linked_at": None} for s in stbs]
+
+          inserted = skipped = 0
+          for i in range(0, len(docs), 5000):
+              batch = docs[i:i+5000]
+              try:
+                  r = coll.insert_many(batch, ordered=False)
+                  inserted += len(r.inserted_ids)
+              except BulkWriteError as e:
+                  inserted += e.details.get('nInserted', 0)
+                  skipped += len([x for x in e.details.get('writeErrors',[]) if x.get('code')==11000])
+              done = min(i+5000, len(docs))
+              print(f"  {done:,}/{len(docs):,} — inserted={inserted:,} skipped={skipped:,}")
+
+          print(f"Done! Inserted: {inserted:,}  Duplicates skipped: {skipped:,}")
+          client.close()
+          PYEOF
