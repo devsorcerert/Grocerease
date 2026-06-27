@@ -322,8 +322,8 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
         from google.auth.transport import requests as google_requests
         import asyncio
 
-        loop = asyncio.get_event_loop()
-        # verify_oauth2_token is synchronous Ã¢ÂÂ offload to thread pool
+        loop = asyncio.get_running_loop()
+        # verify_oauth2_token is synchronous — offload to thread pool
         token_info = await loop.run_in_executor(
             None,
             lambda: google_id_token.verify_oauth2_token(
@@ -361,48 +361,65 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
             detail=f"Google authentication failed: {str(e)}",
         )
         
-    db_user = await db.users.find_one({"email": email})
-    
-    if not db_user:
-        user_dict = {
-            "id": str(uuid.uuid4()),
-            "name": name,
-            "email": email,
-            "password": None,
-            "phone": None,
-            "photo": photo,
-            "cable_tv_linked": False,
-            "cable_tv_details": None,
-            "monthly_spend": 0.0,
-            "total_spend": 0.0,
-            "current_reward": 0.0,
-            "is_admin": False,
-            "created_at": datetime.utcnow()
-        }
-        await db.users.insert_one(user_dict)
-        db_user = user_dict
-    else:
-        update_fields = {}
-        if "id" not in db_user:
-            db_user["id"] = str(uuid.uuid4())
-            update_fields["id"] = db_user["id"]
+    try:
+        db_user = await db.users.find_one({"email": email})
         
-        # Keep name and photo updated in database
-        if db_user.get("name") != name or db_user.get("photo") != photo:
-            update_fields["name"] = name
-            update_fields["photo"] = photo
-            db_user["name"] = name
-            db_user["photo"] = photo
+        if not db_user:
+            user_dict = {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "email": email,
+                "password": None,
+                "photo": photo,
+                "cable_tv_linked": False,
+                "cable_tv_details": None,
+                "monthly_spend": 0.0,
+                "total_spend": 0.0,
+                "current_reward": 0.0,
+                "is_admin": False,
+                "auth_provider": "google",
+                "created_at": datetime.utcnow()
+            }
+            try:
+                await db.users.insert_one(user_dict)
+                db_user = user_dict
+            except Exception as insert_err:
+                # Race condition or duplicate key — look up the existing user
+                logging.warning(f"Google auth insert failed for {email}: {insert_err}")
+                db_user = await db.users.find_one({"email": email})
+                if not db_user:
+                    raise
+        else:
+            update_fields = {}
+            if "id" not in db_user:
+                db_user["id"] = str(uuid.uuid4())
+                update_fields["id"] = db_user["id"]
             
-        if update_fields:
-            await db.users.update_one(
-                {"_id": db_user["_id"]},
-                {"$set": update_fields}
-            )
+            # Keep name and photo updated in database
+            if db_user.get("name") != name or db_user.get("photo") != photo:
+                update_fields["name"] = name
+                update_fields["photo"] = photo
+                db_user["name"] = name
+                db_user["photo"] = photo
+                
+            if update_fields:
+                await db.users.update_one(
+                    {"_id": db_user["_id"]},
+                    {"$set": update_fields}
+                )
+        
+        token = create_access_token({"user_id": db_user["id"]})
+        refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+        return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "google")}}
     
-    token = create_access_token({"user_id": db_user["id"]})
-    refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
-    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Google auth DB error for {email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed. Please try again.",
+        )
 
 
 @api_router.get("/auth/me")
