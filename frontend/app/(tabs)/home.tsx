@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -186,11 +186,16 @@ export default function HomeScreen() {
 
   const fetchFeaturedProducts = async () => {
     try {
-      const response = await api.get('/products');
+      const response = await api.get('/products/featured');
       const products = response.data.products || response.data;
-      setProducts(Array.isArray(products) ? products.slice(0, 6) : []);
+      setProducts(Array.isArray(products) ? products : []);
     } catch (error) {
-      console.error('Failed to fetch products:', error);
+      // Fallback to regular products if no featured ones yet
+      try {
+        const fallback = await api.get('/products');
+        const prods = fallback.data.products || fallback.data;
+        setProducts(Array.isArray(prods) ? prods.slice(0, 6) : []);
+      } catch {}
     }
   };
 
@@ -350,53 +355,47 @@ export default function HomeScreen() {
         )}
 
         {user?.cable_tv_linked && (
-          <View style={styles.cableTVLinkedCard}>
-            <View style={styles.tvLinkedHeader}>
-              <View style={styles.tvLinkedLeft}>
-                <View style={styles.tvIconSmall}>
-                  <Ionicons name="tv" size={20} color="#2D8B47" />
-                </View>
-                <View>
-                  <Text style={styles.tvLinkedTitle}>Cable TV Linked</Text>
-                  <Text style={styles.tvProvider}>{user?.cable_tv_details?.service_provider}</Text>
+          <View style={styles.getvCreditsTab}>
+            {/* Row 1: provider + status */}
+            <View style={styles.getvTabHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="tv" size={18} color="#2D8B47" />
+                <Text style={styles.getvTabProvider}>{user?.cable_tv_details?.service_provider || 'Cable TV'}</Text>
+                <View style={styles.getvLinkedBadge}>
+                  <Text style={styles.getvLinkedBadgeText}>Linked</Text>
                 </View>
               </View>
-              <Ionicons name="checkmark-circle" size={24} color="#2D8B47" />
+              <TouchableOpacity onPress={() => router.push('/profile/cable-tv-settings')}>
+                <Ionicons name="settings-outline" size={18} color="#6B7280" />
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.offerUsageSection}>
-              <Text style={styles.usageTitle}>Offer Usage Tracking</Text>
-              
-              <View style={styles.usageCard}>
-                <View style={styles.usageHeader}>
-                  <Ionicons name="calendar-outline" size={20} color="#2D8B47" />
-                  <Text style={styles.usageCardTitle}>This Month</Text>
-                </View>
-                <View style={styles.usageStats}>
-                  <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{Number(user?.monthly_spend || 0).toFixed(2)}</Text>
-                    <Text style={styles.usageStatLabel}>{t('monthlySpend')}</Text>
-                  </View>
-                  <View style={styles.usageStatDivider} />
-                  <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>₹{Number(user?.current_reward || 0).toFixed(2)}</Text>
-                    <Text style={styles.usageStatLabel}>{t('rewardBalance')}</Text>
-                  </View>
-                  <View style={styles.usageStatDivider} />
-                  <View style={styles.usageStatItem}>
-                    <Text style={styles.usageStatValue}>{getMonthlyOfferUsage().used}/{getMonthlyOfferUsage().total}</Text>
-                    <Text style={styles.usageStatLabel}>Tiers</Text>
-                  </View>
-                </View>
-                <View style={styles.progressBarContainer}>
-                  <View style={[styles.progressBar, { width: `${Math.min((user?.monthly_spend || 0) / 250, 100)}%` }]} />
-                </View>
-                <Text style={styles.nextTierText}>
-                  {getMonthlyOfferUsage().used === 3 
-                    ? '🎉 Maximum tier unlocked!' 
-                    : `Spend ₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(2)} more for next tier`}
-                </Text>
+            {/* Row 2: 3 stats */}
+            <View style={styles.getvStatsRow}>
+              <View style={styles.getvStatBox}>
+                <Text style={styles.getvStatVal}>₹{Number(user?.current_reward || 0).toFixed(0)}</Text>
+                <Text style={styles.getvStatLbl}>GETV Credits</Text>
               </View>
+              <View style={styles.getvStatDivider} />
+              <View style={styles.getvStatBox}>
+                <Text style={styles.getvStatVal}>₹{Number(user?.monthly_spend || 0).toFixed(0)}</Text>
+                <Text style={styles.getvStatLbl}>This Month</Text>
+              </View>
+              <View style={styles.getvStatDivider} />
+              <View style={styles.getvStatBox}>
+                <Text style={styles.getvStatVal}>{getMonthlyOfferUsage().used}/{getMonthlyOfferUsage().total}</Text>
+                <Text style={styles.getvStatLbl}>Tiers Used</Text>
+              </View>
+            </View>
+            {/* Row 3: progress */}
+            <View style={{ paddingHorizontal: 2, marginTop: 4 }}>
+              <View style={styles.getvProgressBg}>
+                <View style={[styles.getvProgressFill, { width: `${Math.min(((user?.monthly_spend || 0) / 25000) * 100, 100)}%` }]} />
+              </View>
+              <Text style={styles.getvProgressLabel}>
+                {getMonthlyOfferUsage().used === 3
+                  ? 'Maximum tier reached this month!'
+                  : `₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(0)} more to next reward tier`}
+              </Text>
             </View>
           </View>
         )}
@@ -475,7 +474,7 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('featuredProducts')}</Text>
-            <TouchableOpacity onPress={() => router.push({ pathname: '/(tabs)/categories', params: { selectedCategory: '' } })}>
+            <TouchableOpacity onPress={() => router.push('/featured-products')}>
               <Text style={styles.viewAllText}>{t('seeAll')}</Text>
             </TouchableOpacity>
           </View>
@@ -545,7 +544,11 @@ export default function HomeScreen() {
 
       <Modal visible={showCableTVModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 30}
+        >
+        <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('linkCableTvTitle')}</Text>
               <TouchableOpacity onPress={() => setShowCableTVModal(false)}>
@@ -597,6 +600,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Save Detected Address Modal */}
@@ -970,4 +974,23 @@ const styles = StyleSheet.create({
   labelChipSelected: { borderColor: '#2D8B47', backgroundColor: '#ECFDF5' },
   labelChipText: { color: '#6B7280', fontWeight: '600' },
   labelChipTextSelected: { color: '#2D8B47' },
+  // GETV Credits compact tab
+  getvCreditsTab: {
+    backgroundColor: '#fff', marginHorizontal: 16, marginTop: 12, borderRadius: 16,
+    padding: 14, borderWidth: 1, borderColor: '#D1FAE5',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  getvTabHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  getvTabProvider: { fontSize: 14, fontWeight: '700', color: '#111' },
+  getvLinkedBadge: { backgroundColor: '#ECFDF5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  getvLinkedBadgeText: { fontSize: 11, color: '#2D8B47', fontWeight: '600' },
+  getvStatsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  getvStatBox: { flex: 1, alignItems: 'center' },
+  getvStatVal: { fontSize: 16, fontWeight: '800', color: '#111' },
+  getvStatLbl: { fontSize: 10, color: '#6B7280', marginTop: 2 },
+  getvStatDivider: { width: 1, height: 28, backgroundColor: '#E5E7EB' },
+  getvProgressBg: { height: 5, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden' },
+  getvProgressFill: { height: 5, backgroundColor: '#2D8B47', borderRadius: 3 },
+  getvProgressLabel: { fontSize: 10, color: '#6B7280', marginTop: 4 },
+
 });

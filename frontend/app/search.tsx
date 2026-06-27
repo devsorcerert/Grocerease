@@ -93,9 +93,9 @@ export default function SearchResultsPage() {
                   
                   <View style={styles.productFooter}>
                     <View style={styles.priceContainer}>
-                      <Text style={styles.productPrice}>â¹{Math.ceil(product.price || 0)}</Text>
+                      <Text style={styles.productPrice}>₹{Math.ceil(product.price || 0)}</Text>
                       {product.offerPrice && (
-                        <Text style={styles.productOldPrice}>â¹{product.offerPrice}</Text>
+                        <Text style={styles.productOldPrice}>₹{product.offerPrice}</Text>
                       )}
                     </View>
                     

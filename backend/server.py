@@ -1212,6 +1212,25 @@ async def admin_delete_product(product_id: str, admin=Depends(verify_admin)):
 # Excel import
 from fastapi import File, UploadFile
 
+
+@api_router.get("/products/featured")
+async def get_featured_products():
+    """Return all products marked as featured."""
+    products = await db.products.find({"is_featured": True}).to_list(100)
+    products = [clean_mongo_doc(p) for p in products]
+    return {"products": products, "total": len(products)}
+
+@api_router.post("/admin/products/{product_id}/toggle-featured")
+async def toggle_featured_product(product_id: str, admin=Depends(verify_admin)):
+    """Toggle the is_featured flag on a product."""
+    product = await db.products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    new_val = not product.get("is_featured", False)
+    await db.products.update_one({"id": product_id}, {"$set": {"is_featured": new_val}})
+    return {"id": product_id, "is_featured": new_val}
+
+
 @api_router.post("/admin/products/upload-excel")
 async def upload_products_excel(file: UploadFile = File(...), admin=Depends(verify_admin)):
     if not file.filename.endswith(('.xlsx', '.xls')):

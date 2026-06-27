@@ -178,15 +178,15 @@ export default function WelcomeScreen() {
               {/* Features List */}
               <View style={styles.features}>
                 <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>ðº</Text>
+                  <Text style={styles.featureIcon}>📺</Text>
                   <Text style={styles.featureText}>{t('featureLinkCable')}</Text>
                 </View>
                 <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>ð¬</Text>
+                  <Text style={styles.featureIcon}>🎬</Text>
                   <Text style={styles.featureText}>{t('featureWatchShows')}</Text>
                 </View>
                 <View style={styles.feature}>
-                  <Text style={styles.featureIcon}>ð</Text>
+                  <Text style={styles.featureIcon}>🛒</Text>
                   <Text style={styles.featureText}>{t('featureShopRewards')}</Text>
                 </View>
               </View>
