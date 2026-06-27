@@ -17,6 +17,7 @@ import * as Location from 'expo-location';
 import { useTranslation } from '../context/LanguageContext';
 import { RAZORPAY_KEY_ID } from '../constants/api';
 import api from '../utils/api';
+import { Ionicons } from '@expo/vector-icons';
 
 type PaymentMethod = 'razorpay' | 'cod';
 
