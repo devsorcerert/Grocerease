@@ -1,9 +1,9 @@
 /**
- * GrocerEase — Checkout Screen
+ * GrocerEase â Checkout Screen
  * Fixes applied:
- *   [1] Razorpay payment gate — order only confirmed after real payment verification
- *   [2] Rewards auto-apply removed — rewards shown as earned info only, NOT deducted
- *   [4] Saved addresses — auto-detect location, match to saved, pick or add new
+ *   [1] Razorpay payment gate â order only confirmed after real payment verification
+ *   [2] Rewards auto-apply removed â rewards shown as earned info only, NOT deducted
+ *   [4] Saved addresses â auto-detect location, match to saved, pick or add new
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -51,7 +51,7 @@ export default function CheckoutScreen() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
 
-  // FIX [1]: payment gate state — order only marked paid after Razorpay verification
+  // FIX [1]: payment gate state â order only marked paid after Razorpay verification
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [razorpayHtml, setRazorpayHtml] = useState<string | null>(null);
   const [paymentVerified, setPaymentVerified] = useState(false);
@@ -66,7 +66,7 @@ export default function CheckoutScreen() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
 
-  // ── Load summary ────────────────────────────────────────────────────────
+  // ââ Load summary ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const fetchSummary = useCallback(async (code?: string, attempt = 1) => {
@@ -91,7 +91,7 @@ export default function CheckoutScreen() {
       } else if (detail === 'Cart is empty') {
         setSummaryError('Your cart is empty. Please add items before checkout.');
       } else if (err?.code === 'ECONNABORTED' && attempt < 2) {
-        // Render cold-start — retry once automatically
+        // Render cold-start â retry once automatically
         await fetchSummary(code, attempt + 1);
         return;
       } else {
@@ -116,7 +116,7 @@ export default function CheckoutScreen() {
     fetchSummary();
   };
 
-  // ── Load saved addresses ────────────────────────────────────────────────
+  // ââ Load saved addresses ââââââââââââââââââââââââââââââââââââââââââââââââ
   const fetchSavedAddresses = useCallback(async () => {
     try {
       const res = await api.get('/user/addresses');
@@ -135,7 +135,7 @@ export default function CheckoutScreen() {
     autoDetectAndMatch();
   }, []);
 
-  // ── FIX [4]: auto-detect location & match nearest saved address ─────────
+  // ââ FIX [4]: auto-detect location & match nearest saved address âââââââââ
   const autoDetectAndMatch = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -159,7 +159,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  // ── Save new address ────────────────────────────────────────────────────
+  // ââ Save new address ââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const handleSaveNewAddress = async () => {
     if (!newAddress.trim()) { Alert.alert('Required', 'Please enter an address.'); return; }
     setSavingAddress(true);
@@ -192,7 +192,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  // ── FIX [1]: Place order — for Razorpay, only create order (not confirm) ─
+  // ââ FIX [1]: Place order â for Razorpay, only create order (not confirm) â
   const handlePlaceOrder = async () => {
     if (summaryError) {
       Alert.alert('Cart Error', summaryError);
@@ -220,7 +220,7 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // FIX [1]: Razorpay — create a PENDING order first, DO NOT confirm yet
+      // FIX [1]: Razorpay â create a PENDING order first, DO NOT confirm yet
       const res = await api.post(
         '/orders/create-pending',
         { address_id: selectedAddress.id, payment_method: 'razorpay', coupon_code: appliedCoupon }
@@ -235,8 +235,8 @@ export default function CheckoutScreen() {
       );
       const { razorpay_order_id, amount, currency } = payRes.data;
 
-      // Open Razorpay WebView — order only confirmed in handleWebViewMessage after signature verified
-      // (Key already validated before setPlacing — see BUG-01/02 fix above)
+      // Open Razorpay WebView â order only confirmed in handleWebViewMessage after signature verified
+      // (Key already validated before setPlacing â see BUG-01/02 fix above)
       setRazorpayHtml(buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId: newOrderId }));
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.detail || 'Something went wrong. Please try again.');
@@ -245,7 +245,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  // ── FIX [1]: Only navigate to success AFTER backend signature verification ─
+  // ââ FIX [1]: Only navigate to success AFTER backend signature verification â
   const handleWebViewMessage = async (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -261,7 +261,7 @@ export default function CheckoutScreen() {
             order_id: pendingOrderId,
           }
         );
-        // Only here — after server confirms — do we navigate to success
+        // Only here â after server confirms â do we navigate to success
         setRazorpayHtml(null);
         setPaymentVerified(true);
         router.replace({ pathname: '/order-success', params: { orderId: pendingOrderId!, payment: 'razorpay' } });
@@ -292,7 +292,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  // ── Razorpay WebView ────────────────────────────────────────────────────
+  // ââ Razorpay WebView ââââââââââââââââââââââââââââââââââââââââââââââââââââ
   if (razorpayHtml) {
     return (
       <View style={{ flex: 1 }}>
@@ -313,11 +313,11 @@ export default function CheckoutScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <Text style={styles.heading}>{t('checkout')}</Text>
 
-      {/* ── FIX [4]: Saved Address Picker Inline ─────────────────── */}
+      {/* ââ FIX [4]: Saved Address Picker Inline âââââââââââââââââââ */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>📍 {t('deliveryAddress')}</Text>
-          {detectingLocation && <Text style={styles.detectingText}>📡 Detecting location...</Text>}
+          <Text style={styles.sectionTitle}>ð {t('deliveryAddress')}</Text>
+          {detectingLocation && <Text style={styles.detectingText}>ð¡ Detecting location...</Text>}
         </View>
 
         {savedAddresses.length > 0 ? (
@@ -421,9 +421,9 @@ export default function CheckoutScreen() {
         )}
       </View>
 
-      {/* ── Coupon Section ─────────────────────────────────────────── */}
+      {/* ââ Coupon Section âââââââââââââââââââââââââââââââââââââââââââ */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🎟️ Apply Coupon</Text>
+        <Text style={styles.sectionTitle}>ðï¸ Apply Coupon</Text>
         <View style={styles.couponRow}>
           <TextInput
             style={styles.couponInput}
@@ -446,7 +446,7 @@ export default function CheckoutScreen() {
         {appliedCoupon && !couponError && <Text style={styles.couponSuccessText}>Coupon applied successfully!</Text>}
       </View>
 
-      {/* ── Order Summary ─────────────────────────────────────────── */}
+      {/* ââ Order Summary âââââââââââââââââââââââââââââââââââââââââââ */}
       {summaryError && (
         <View style={styles.summaryErrorBanner}>
           <Text style={styles.summaryErrorText}>{summaryError}</Text>
@@ -457,30 +457,30 @@ export default function CheckoutScreen() {
       )}
       {summary && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🧾 {t('orderSummary')}</Text>
-          <View style={styles.row}><Text style={styles.label}>{t('subtotal')}</Text><Text style={styles.value}>₹{summary.subtotal.toFixed(2)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>{t('deliveryFee')}</Text><Text style={styles.value}>₹{summary.delivery_fee.toFixed(2)}</Text></View>
+          <Text style={styles.sectionTitle}>ð§¾ {t('orderSummary')}</Text>
+          <View style={styles.row}><Text style={styles.label}>{t('subtotal')}</Text><Text style={styles.value}>â¹{Math.ceil(summary.subtotal || 0)}</Text></View>
+          <View style={styles.row}><Text style={styles.label}>{t('deliveryFee')}</Text><Text style={styles.value}>â¹{summary.delivery_fee.toFixed(2)}</Text></View>
           {summary.discount > 0 && (
-            <View style={styles.row}><Text style={styles.label}>Discount</Text><Text style={[styles.value, {color: '#10B981'}]}>-₹{summary.discount.toFixed(2)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Discount</Text><Text style={[styles.value, {color: '#10B981'}]}>-â¹{summary.discount.toFixed(2)}</Text></View>
           )}
           <View style={[styles.row, styles.totalRow]}>
             <Text style={styles.totalLabel}>{t('totalAmount')}</Text>
-            <Text style={styles.totalValue}>₹{summary.total.toFixed(2)}</Text>
+            <Text style={styles.totalValue}>â¹{Math.ceil(summary.total || 0)}</Text>
           </View>
           {/* Rewards shown as what they WILL earn */}
           {summary.rewards_will_earn > 0 && (
             <View style={styles.rewardsBadge}>
               <Text style={styles.rewardsBadgeText}>
-                ✨ {t('rewardsWillEarn')}: ₹{summary.rewards_will_earn.toFixed(2)} ({summary.tier} tier)
+                â¨ {t('rewardsWillEarn')}: â¹{summary.rewards_will_earn.toFixed(2)} ({summary.tier} tier)
               </Text>
             </View>
           )}
         </View>
       )}
 
-      {/* ── Payment Method ──────────────────────────────────────────── */}
+      {/* ââ Payment Method ââââââââââââââââââââââââââââââââââââââââââââ */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💳 {t('selectPaymentMethod')}</Text>
+        <Text style={styles.sectionTitle}>ð³ {t('selectPaymentMethod')}</Text>
         {(['razorpay', 'cod'] as PaymentMethod[]).map(method => (
           <TouchableOpacity
             key={method}
@@ -490,7 +490,7 @@ export default function CheckoutScreen() {
             <View style={[styles.radio, paymentMethod === method && styles.radioSelected]} />
             <View>
               <Text style={styles.payLabel}>{method === 'razorpay' ? t('payOnlineRazorpay') : t('cashOnDelivery')}</Text>
-              <Text style={styles.paySubLabel}>{method === 'razorpay' ? 'Powered by Razorpay — secure & instant' : 'Pay when your order arrives'}</Text>
+              <Text style={styles.paySubLabel}>{method === 'razorpay' ? 'Powered by Razorpay â secure & instant' : 'Pay when your order arrives'}</Text>
             </View>
           </TouchableOpacity>
         ))}
@@ -505,7 +505,7 @@ export default function CheckoutScreen() {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.placeBtnText}>
-            {paymentMethod === 'cod' ? `✅ ${t('placeOrder')} (COD)` : `🔒 ${t('checkout')} ₹${summary?.total.toFixed(2) || '0'}`}
+            {paymentMethod === 'cod' ? `â ${t('placeOrder')} (COD)` : `ð ${t('checkout')} â¹${summary?.total.toFixed(2) || '0'}`}
           </Text>
         )}
       </TouchableOpacity>
@@ -516,7 +516,7 @@ export default function CheckoutScreen() {
 }
 
 function buildRazorpayHtml({ razorpay_order_id, amount, currency, orderId }: any) {
-  // Task 49: Mock gateway — dev-only. In production Razorpay never issues rzp_mock_ IDs.
+  // Task 49: Mock gateway â dev-only. In production Razorpay never issues rzp_mock_ IDs.
   // This block is dead code in production builds; kept for local testing only.
   const isMock = razorpay_order_id.startsWith("rzp_mock_");
   
