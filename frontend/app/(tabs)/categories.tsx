@@ -29,7 +29,7 @@ const categoryIconMap: { [key: string]: any } = {
   'Home & Kitchen': 'home',
 };
 
-// Category image map — real product photos replace generic icons
+// Category image map â real product photos replace generic icons
 const categoryImageMap: { [key: string]: string } = {
   'Fruits & Vegetables': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&q=80',
   'Dairy & Breakfast':   'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=200&q=80',
@@ -216,9 +216,9 @@ export default function CategoriesScreen() {
                   <Text style={styles.productName}>{product.name}</Text>
                   <Text style={styles.productUnit}>{product.unit}</Text>
                   <View style={styles.priceRow}>
-                    <Text style={styles.productPrice}>₹{product.price}</Text>
+                    <Text style={styles.productPrice}>â¹{Math.ceil(product.price || 0)}</Text>
                     {product.original_price && (
-                      <Text style={styles.originalPrice}>₹{product.original_price}</Text>
+                      <Text style={styles.originalPrice}>â¹{Math.ceil(product.original_price || 0)}</Text>
                     )}
                   </View>
                 </View>
