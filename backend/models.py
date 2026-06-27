@@ -35,6 +35,10 @@ class CableTVLink(BaseModel):
     phone: str
     service_provider: str
 
+class CableTVSTBLink(BaseModel):
+    stb_number: str
+    service_provider: str = "GTPL"
+
 class ProductCreate(BaseModel):
     name: str
     category: str
@@ -118,7 +122,7 @@ class CreateOrderRequest(BaseModel):
     address_id: str
     payment_method: str
     coupon_code: Optional[str] = None
-    # Task 15: LOOP credits to redeem at checkout (₹). 0 = none. Capped server-side.
+    # Task 15: LOOP credits to redeem at checkout (â¹). 0 = none. Capped server-side.
     loop_credits_to_redeem: Optional[float] = 0.0
 
 class LogoutRequest(BaseModel):
