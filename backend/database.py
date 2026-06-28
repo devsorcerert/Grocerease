@@ -94,10 +94,15 @@ def create_access_token(data: dict, expires_in: Optional[timedelta] = None) -> s
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("user_id")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
+        # Reject blacklisted access tokens (e.g. after logout)
+        is_blacklisted = await db.blacklisted_tokens.find_one({"token": token})
+        if is_blacklisted:
+            raise HTTPException(status_code=401, detail="Token has been revoked")
         return user_id
     except jwt.PyJWTError as e:
         logging.warning(f"User authentication token verification failed: {e}")
@@ -105,11 +110,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         is_admin = payload.get("is_admin", False)
         role = payload.get("role", "")
         if not is_admin or role not in ["super-admin", "ops", "support", "admin"]:
             raise HTTPException(status_code=403, detail="Admin access required")
+        # Reject blacklisted tokens
+        is_blacklisted = await db.blacklisted_tokens.find_one({"token": token})
+        if is_blacklisted:
+            raise HTTPException(status_code=401, detail="Token has been revoked")
         return payload
     except jwt.PyJWTError as e:
         logging.warning(f"Admin authentication failed: {e}")

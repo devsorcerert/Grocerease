@@ -193,6 +193,35 @@ def test_auth_flow(client_fixture):
     resp = client_fixture.post("/api/auth/logout", json={"refresh_token": refresh_token}, headers=headers)
     assert resp.status_code == 200
 
+def test_access_token_blacklisted_after_logout(client_fixture):
+    """After logout the access token must be rejected (HTTP 401)."""
+    # Register a fresh user so we have clean tokens
+    import uuid
+    uid = uuid.uuid4().hex[:8]
+    reg = client_fixture.post("/api/auth/register", json={
+        "name": "Blacklist Test",
+        "email": f"blacklist_{uid}@test.com",
+        "password": "pass123",
+        "phone": f"+9188{uid[:8]}",
+    })
+    assert reg.status_code == 200, reg.text
+    data = reg.json()
+    access = data["token"]
+    refresh = data["refresh_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+
+    # Confirm token works before logout
+    resp = client_fixture.get("/api/auth/me", headers=headers)
+    assert resp.status_code == 200
+
+    # Logout — should blacklist both tokens
+    resp = client_fixture.post("/api/auth/logout", json={"refresh_token": refresh}, headers=headers)
+    assert resp.status_code == 200
+
+    # Access token must now be rejected
+    resp = client_fixture.get("/api/auth/me", headers=headers)
+    assert resp.status_code == 401, f"Expected 401 after logout, got {resp.status_code}: {resp.text}"
+
 def test_cart_operations(client_fixture):
     # Log in test user to get token
     login_data = {"email": "testuser@example.com", "password": "Password123"}

@@ -201,35 +201,38 @@ async def login(user: UserLogin, _=Depends(rate_limit)):
 
 
 @api_router.post("/auth/logout")
-async def logout(payload: LogoutRequest, user_id: str = Depends(get_current_user)):
+async def logout(
+    payload: LogoutRequest,
+    user_id: str = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     """
-    Logout endpoint - Blacklists the user's refresh token
+    Logout endpoint — blacklists both the access token and the refresh token
+    so neither can be used after logout, even if they haven't expired yet.
     """
+    async def _blacklist(token: str, fallback_ttl_days: int) -> None:
+        try:
+            decoded = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            exp = decoded.get("exp")
+            expires_at = datetime.utcfromtimestamp(exp) if exp else datetime.utcnow() + timedelta(days=fallback_ttl_days)
+        except Exception:
+            expires_at = datetime.utcnow() + timedelta(days=fallback_ttl_days)
+        await db.blacklisted_tokens.update_one(
+            {"token": token},
+            {"$setOnInsert": {"token": token, "expires_at": expires_at, "blacklisted_at": datetime.utcnow()}},
+            upsert=True,
+        )
+
     try:
-        # Log the logout event for audit purposes
         logger.info("User %s logged out at %s", user_id, datetime.utcnow())
-        
+
+        # Blacklist the access token (short-lived, so fallback 1 day is fine)
+        await _blacklist(credentials.credentials, fallback_ttl_days=1)
+
+        # Blacklist the refresh token if provided
         if payload.refresh_token:
-            try:
-                # Decode to extract the expiration timestamp
-                decoded = jwt.decode(payload.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-                exp = decoded.get("exp")
-                expires_at = datetime.utcfromtimestamp(exp) if exp else datetime.utcnow() + timedelta(days=30)
-                
-                # Insert the token into blacklisted_tokens
-                await db.blacklisted_tokens.update_one(
-                    {"token": payload.refresh_token},
-                    {"$setOnInsert": {
-                        "token": payload.refresh_token,
-                        "expires_at": expires_at,
-                        "blacklisted_at": datetime.utcnow()
-                    }},
-                    upsert=True
-                )
-            except Exception as e:
-                # Invalid or already expired token doesn't need to block logout
-                logging.warning(f"Failed to blacklist refresh token during logout: {e}")
-        
+            await _blacklist(payload.refresh_token, fallback_ttl_days=30)
+
         return {"message": "Logout successful", "success": True}
     except Exception as e:
         logging.error(f"Logout error: {e}")
