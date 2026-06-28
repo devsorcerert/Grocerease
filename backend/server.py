@@ -518,6 +518,23 @@ async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current
     return {"success": True, "message": "Cable TV linked successfully", "cable_details": cable_details}
 
 
+@api_router.post("/cable-tv/unlink")
+async def unlink_cable_tv(user_id: str = Depends(get_current_user)):
+    """Unlink cable TV account. GETV coin balance is preserved; future monthly credits stop."""
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "cable_tv_linked": False,
+            "cable_tv_details": None,
+            "loop_suspended": False,
+            "loop_consecutive_no_bill_months": 0,
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "message": "Cable TV unlinked. Your GETV coin balance is preserved."}
+
+
 @api_router.get("/cable-tv/validate-stb/{stb_number}")
 async def validate_stb_number(stb_number: str, user_id: str = Depends(get_current_user)):
     """Check if a GTPL STB number exists and is available for linking."""

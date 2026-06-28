@@ -35,6 +35,16 @@ export default function CableTVSettingsScreen() {
   const [totalSpent, setTotalSpent] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
+  const [eligibility, setEligibility] = useState<{
+    tier: string;
+    tier_max_redeemable: number;
+    current_month_spend: number;
+    available_to_redeem: number;
+    can_redeem: boolean;
+    already_redeemed: number;
+    next_tier: { name: string; spend_needed: number; unlocks: number } | null;
+    coins_suspended: boolean;
+  } | null>(null);
 
   const fetchWalletData = useCallback(async () => {
     if (!user?.cable_tv_linked) return;
@@ -54,6 +64,9 @@ export default function CableTVSettingsScreen() {
       });
       setTotalEarned(earned);
       setTotalSpent(spent);
+      // Fetch tier eligibility
+      const eligRes = await api.get('/user/loop-eligibility').catch(() => null);
+      if (eligRes) setEligibility(eligRes.data);
     } catch (err) {
       console.warn('Wallet fetch error:', err);
     }
@@ -163,10 +176,51 @@ export default function CableTVSettingsScreen() {
           <Text style={styles.cardTitle}>GETV Coins Wallet</Text>
 
           <View style={styles.balanceHero}>
-            <Text style={styles.balanceLabel}>Available Balance</Text>
-            <Text style={styles.balanceAmount}>{'₹'}{balance.toFixed(2)}</Text>
-            <Text style={styles.balanceHint}>Redeem at checkout (up to 50% of order)</Text>
+            <Text style={styles.balanceLabel}>GETV Coin Balance</Text>
+            <Text style={styles.balanceAmount}>₹{balance.toFixed(0)}</Text>
+            <Text style={styles.balanceHint}>
+              {eligibility?.coins_suspended
+                ? '⚠️ Auto-credit paused — pay cable bill to resume'
+                : eligibility?.can_redeem
+                  ? `Redeem up to ₹${eligibility.available_to_redeem.toFixed(0)} this month`
+                  : 'Spend ₹7,000/month to unlock redemption'}
+            </Text>
           </View>
+
+          {/* Tier progress */}
+          {eligibility && (
+            <View style={styles.tierBox}>
+              <View style={styles.tierRow}>
+                <Text style={styles.tierLabel}>Current Tier</Text>
+                <Text style={styles.tierName}>{eligibility.tier}</Text>
+              </View>
+              <View style={styles.tierRow}>
+                <Text style={styles.tierLabel}>This Month's Spend</Text>
+                <Text style={styles.tierSpend}>₹{eligibility.current_month_spend.toFixed(0)}</Text>
+              </View>
+              {eligibility.can_redeem && (
+                <View style={styles.tierRow}>
+                  <Text style={styles.tierLabel}>Redeemable This Month</Text>
+                  <Text style={styles.tierRedeem}>
+                    ₹{eligibility.available_to_redeem.toFixed(0)} / ₹{eligibility.tier_max_redeemable.toFixed(0)}
+                    {eligibility.already_redeemed > 0 ? ` (₹${eligibility.already_redeemed.toFixed(0)} used)` : ''}
+                  </Text>
+                </View>
+              )}
+              {eligibility.next_tier && !eligibility.can_redeem && (
+                <View style={styles.nextTierHint}>
+                  <Text style={styles.nextTierText}>
+                    Spend ₹{eligibility.next_tier.spend_needed.toFixed(0)} more → unlock {eligibility.next_tier.name} (₹{eligibility.next_tier.unlocks}/month)
+                  </Text>
+                  <View style={styles.progressBarBg}>
+                    <View style={[styles.progressBarFill, {
+                      width: `${Math.min(100, (eligibility.current_month_spend / 7000) * 100)}%`
+                    }]} />
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
@@ -191,7 +245,7 @@ export default function CableTVSettingsScreen() {
           <View style={styles.earnInfo}>
             <Ionicons name="information-circle-outline" size={15} color="#6B7280" />
             <Text style={styles.earnInfoText}>
-              Earn 2% of your monthly cable TV bill as GETV Coins automatically.
+              1,000 GETV coins (₹1,000) credited every month when your cable+broadband bill is ₹1,000+. 1 coin = ₹1.
             </Text>
           </View>
         </View>
@@ -278,7 +332,17 @@ const styles = StyleSheet.create({
   balanceHero: { backgroundColor: BRAND, borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 },
   balanceLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
   balanceAmount: { fontSize: 34, fontWeight: '800', color: '#fff' },
-  balanceHint: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  balanceHint: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4, textAlign: 'center' },
+  tierBox: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 12, marginTop: 12, gap: 6 },
+  tierRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tierLabel: { fontSize: 12, color: '#6B7280' },
+  tierName: { fontSize: 13, fontWeight: '700', color: BRAND },
+  tierSpend: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  tierRedeem: { fontSize: 12, fontWeight: '600', color: '#F59E0B' },
+  nextTierHint: { marginTop: 4 },
+  nextTierText: { fontSize: 11, color: '#6B7280', marginBottom: 6 },
+  progressBarBg: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden' },
+  progressBarFill: { height: 6, backgroundColor: BRAND, borderRadius: 3 },
 
   statsRow: { flexDirection: 'row', alignItems: 'stretch', marginBottom: 14 },
   statBox: { flex: 1, alignItems: 'center', gap: 4 },

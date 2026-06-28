@@ -6,45 +6,18 @@ from typing import Optional, List
 from pydantic import BaseModel
 from database import db, get_current_user, verify_admin, clean_mongo_doc, clean_mongo_docs, send_push_notification, insert_notification
 from routers.stores import find_serving_store
-from routers.loop_ledger import MAX_REDEEM_FRACTION, debit_loop_balance
+from routers.loop_ledger import debit_loop_balance, check_gadget_eligibility
 from models import CreateOrderRequest, OrderCreate
 
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
-# Spending tiers & rewards
-def calculate_spending_tiers_and_rewards(current_monthly_spend: float, order_total: float) -> dict:
-    new_monthly_spend = current_monthly_spend + order_total
-    
-    tiers = [
-        {"threshold": 25000, "reward": 1000, "tier_name": "Platinum"},
-        {"threshold": 13000, "reward": 500, "tier_name": "Gold"},
-        {"threshold": 7000, "reward": 250, "tier_name": "Silver"},
-        {"threshold": 0, "reward": 0, "tier_name": "Base"}
-    ]
-    
-    current_tier = {"threshold": 0, "reward": 0, "tier_name": "Base"}
-    for tier in tiers:
-        if new_monthly_spend >= tier["threshold"]:
-            current_tier = tier
-            break
-            
-    order_reward_percentage = 0.01  # 1% cashback base
-    if current_tier["tier_name"] == "Platinum":
-        order_reward_percentage = 0.05
-    elif current_tier["tier_name"] == "Gold":
-        order_reward_percentage = 0.03
-    elif current_tier["tier_name"] == "Silver":
-        order_reward_percentage = 0.02
-        
-    order_cashback = order_total * order_reward_percentage
-    
-    return {
-        "new_monthly_spend": new_monthly_spend,
-        "current_tier": current_tier,
-        "order_cashback": order_cashback,
-        "total_available_reward": current_tier["reward"]
-    }
+# GETV tier display helper
+def _get_display_tier(monthly_spend: float) -> str:
+    if monthly_spend >= 25000: return "Platinum"
+    if monthly_spend >= 13000: return "Gold"
+    if monthly_spend >= 7000:  return "Silver"
+    return "Base"
 
 # Unified state machine transition function
 async def transition_order_status(order_id: str, to_status: str, changed_by: str, reason: Optional[str] = None):
@@ -230,26 +203,22 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     if total < 0:
         total = 0.0
 
-    # Task 15: LOOP credit redemption
+    # GETV coin redemption — tier/monthly-limit validation happens inside debit_loop_balance
     loop_credits_requested = getattr(payload, "loop_credits_to_redeem", 0.0) or 0.0
     loop_credits_used = 0.0
     if loop_credits_requested > 0:
         user_for_loop = await db.users.find_one({"id": user_id}) or {}
         available_loop = round(user_for_loop.get("loop_balance_paise", 0) / 100, 2)
-        max_redeemable = round(total * MAX_REDEEM_FRACTION, 2)   # 50% cap
-        loop_credits_used = round(min(loop_credits_requested, available_loop, max_redeemable), 2)
+        loop_credits_used = round(min(loop_credits_requested, available_loop), 2)
         total = round(total - loop_credits_used, 2)
         if total < 0:
             total = 0.0
 
     user = await db.users.find_one({"id": user_id})
     if user is None:
-        # Admin users are not in db.users â fall back gracefully with zero spend
         user = await db.admins.find_one({"id": user_id}) or {}
-    rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
-    rewards_will_earn = rewards_info["order_cashback"]
     
-        # 5. Atomically deduct stock (Task 3)
+    # 5. Atomically deduct stock (Task 3)
     order_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -260,7 +229,6 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         "coupon_code": payload.coupon_code.upper() if payload.coupon_code else None,
         "total": round(total, 2),
         "loop_credits_used": round(loop_credits_used, 2),
-        "rewards_will_earn": round(rewards_will_earn, 2),
         "delivery_address": address["full_address"],
         "address_id": payload.address_id,
         "payment_method": payload.payment_method,
@@ -293,13 +261,13 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         await db.orders.insert_one(order_dict)
         order_inserted = True
 
-        # Debit LOOP credits from wallet if used
+        # Debit GETV coins from wallet (tier/monthly-limit validated inside debit_loop_balance)
         if loop_credits_used > 0:
             await debit_loop_balance(
                 user_id, loop_credits_used,
                 reference_type="order_redeem",
                 reference_id=order_dict["id"],
-                description=f"LOOP redemption for order #{order_dict['id'][:8].upper()}",
+                description=f"GETV coin redemption — order #{order_dict['id'][:8].upper()}",
             )
             loop_debited = True
 
@@ -312,17 +280,19 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             
             new_spend = user.get("monthly_spend", 0.0) + total
             new_total_spend = user.get("total_spend", 0.0) + total
-            new_reward = user.get("current_reward", 0.0) + rewards_will_earn
             
             await db.users.update_one(
                 {"id": user_id},
                 {"$set": {
                     "monthly_spend": new_spend,
                     "total_spend": new_total_spend,
-                    "current_reward": new_reward
                 }}
             )
             user_updated = True
+            # Set first_purchase_date if not set; check gadget eligibility
+            if not user.get("first_purchase_date"):
+                await db.users.update_one({"id": user_id}, {"$set": {"first_purchase_date": datetime.utcnow()}})
+            await check_gadget_eligibility(user_id)
             
 
                 
@@ -346,7 +316,6 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
                 {"$inc": {
                     "monthly_spend": -total,
                     "total_spend": -total,
-                    "current_reward": -rewards_will_earn
                 }}
             )
 
@@ -689,46 +658,49 @@ async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str =
     user = await db.users.find_one({"id": user_id})
     if user is None:
         user = await db.admins.find_one({"id": user_id}) or {}
-    rewards_info = calculate_spending_tiers_and_rewards(user.get("monthly_spend", 0.0), total)
-    rewards_will_earn = rewards_info["order_cashback"]
+    monthly_spend = (user or {}).get("monthly_spend", 0.0)
+    tier = _get_display_tier(monthly_spend)
 
     return {
         "subtotal": round(subtotal, 2),
         "delivery_fee": round(delivery_fee, 2),
         "discount": round(discount, 2),
         "total": round(total, 2),
-        "rewards_will_earn": round(rewards_will_earn, 2),
-        "tier": rewards_info["current_tier"]["tier_name"]
+        "tier": tier,
     }
 
 @router.post("/checkout/calculate-rewards")
 async def calculate_checkout_rewards(checkout_data: dict, user_id: str = Depends(get_current_user)):
+    """GETV redemption preview for checkout screen."""
+    from routers.loop_ledger import _get_monthly_spend_paise, _get_monthly_redeemed_paise, get_tier, _get_balance_paise
     user = await db.users.find_one({"id": user_id})
-    if not user:
-        user = await db.admins.find_one({"id": user_id}) or {}
-        
     subtotal = checkout_data.get("subtotal", 0.0)
-    current_monthly_spend = user.get("monthly_spend", 0.0)
-    current_reward_balance = user.get("current_reward", 0.0)
-    
-    rewards_info = calculate_spending_tiers_and_rewards(current_monthly_spend, subtotal)
-    
-    max_applicable_reward = min(current_reward_balance, subtotal)
-    reward_applied = max_applicable_reward
-    final_total = subtotal - reward_applied
-    
+    loop_requested = checkout_data.get("loop_credits_to_redeem", 0.0)
+
+    monthly_spend_paise = await _get_monthly_spend_paise(user_id)
+    already_redeemed_paise = await _get_monthly_redeemed_paise(user_id)
+    balance_paise = await _get_balance_paise(user_id)
+    tier = get_tier(monthly_spend_paise)
+    tier_max = tier["max_redeemable_paise"]
+    remaining_allowance = max(0, tier_max - already_redeemed_paise)
+    available = min(balance_paise, remaining_allowance)
+
+    loop_applied = 0.0
+    if loop_requested > 0 and available > 0:
+        loop_applied = round(min(loop_requested, available / 100), 2)
+
+    final_total = round(subtotal - loop_applied, 2)
+    if final_total < 0:
+        final_total = 0.0
+
     return {
         "subtotal": subtotal,
-        "current_reward_balance": current_reward_balance,
-        "rewards_auto_applied": reward_applied,
+        "loop_balance": round(balance_paise / 100, 2),
+        "loop_applied": loop_applied,
         "final_total": final_total,
-        "new_tier_info": rewards_info["current_tier"],
-        "order_cashback_earned": rewards_info["order_cashback"],
-        "breakdown": {
-            "original_amount": subtotal,
-            "rewards_applied": reward_applied,
-            "amount_to_pay": final_total,
-            "cashback_earning": rewards_info["order_cashback"]
-        }
+        "tier": tier["tier_name"],
+        "tier_max_redeemable": tier["max_redeemable"],
+        "already_redeemed_this_month": round(already_redeemed_paise / 100, 2),
+        "available_to_redeem": round(available / 100, 2),
+        "can_redeem": available > 0,
     }
-

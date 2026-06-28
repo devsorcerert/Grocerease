@@ -36,8 +36,20 @@ type OrderSummary = {
   delivery_fee: number;
   total: number;
   discount: number;
-  rewards_will_earn: number; // FIX [2]: only shows what user WILL earn, not auto-deducted
   tier: string;
+};
+
+type GetvEligibility = {
+  cable_linked: boolean;
+  coins_suspended: boolean;
+  balance: number;
+  current_month_spend: number;
+  tier: string;
+  tier_max_redeemable: number;
+  already_redeemed: number;
+  available_to_redeem: number;
+  can_redeem: boolean;
+  next_tier: { name: string; spend_needed: number; unlocks: number } | null;
 };
 
 const BRAND = '#2D8B47';
@@ -59,6 +71,11 @@ export default function CheckoutScreen() {
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [razorpayHtml, setRazorpayHtml] = useState<string | null>(null);
   const [paymentVerified, setPaymentVerified] = useState(false);
+
+  // GETV coin redemption state
+  const [getvEligibility, setGetvEligibility] = useState<GetvEligibility | null>(null);
+  const [getvApply, setGetvApply] = useState(false);
+  const [getvAmount, setGetvAmount] = useState(0);
 
   // FIX [4]: address management
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -135,9 +152,20 @@ export default function CheckoutScreen() {
     }
   }, []);
 
+  // ── Load GETV eligibility ──────────────────────────────────────────────────
+  const fetchGetvEligibility = useCallback(async () => {
+    try {
+      const res = await api.get('/user/loop-eligibility');
+      setGetvEligibility(res.data);
+    } catch {
+      // Non-critical — silently skip
+    }
+  }, []);
+
   useEffect(() => {
     fetchSummary();
     fetchSavedAddresses();
+    fetchGetvEligibility();
     autoDetectAndMatch();
   }, []);
 
@@ -199,6 +227,16 @@ export default function CheckoutScreen() {
     }
   };
 
+  // ── GETV toggle ────────────────────────────────────────────────────────────
+  const handleGetvToggle = (on: boolean) => {
+    setGetvApply(on);
+    if (on && getvEligibility) {
+      setGetvAmount(getvEligibility.available_to_redeem);
+    } else {
+      setGetvAmount(0);
+    }
+  };
+
   // ── FIX [1]: Place order — for Razorpay, only create order (not confirm) ─
   const handlePlaceOrder = async () => {
     if (summaryError) {
@@ -230,7 +268,7 @@ export default function CheckoutScreen() {
         // COD: create + immediately confirm
         const res = await api.post(
           '/orders/create',
-          { address_id: selectedAddress.id, payment_method: 'cod', coupon_code: appliedCoupon }
+          { address_id: selectedAddress.id, payment_method: 'cod', coupon_code: appliedCoupon, loop_credits_to_redeem: getvApply ? getvAmount : 0 }
         );
         router.replace({ pathname: '/order-success', params: { orderId: res.data.order_id, payment: 'cod' } });
         return;
@@ -239,7 +277,7 @@ export default function CheckoutScreen() {
       // FIX [1]: Razorpay — create a PENDING order first, DO NOT confirm yet
       const res = await api.post(
         '/orders/create-pending',
-        { address_id: selectedAddress.id, payment_method: 'razorpay', coupon_code: appliedCoupon }
+        { address_id: selectedAddress.id, payment_method: 'razorpay', coupon_code: appliedCoupon, loop_credits_to_redeem: getvApply ? getvAmount : 0 }
       );
       const newOrderId = res.data.order_id;
       setPendingOrderId(newOrderId);
@@ -542,11 +580,64 @@ export default function CheckoutScreen() {
             <Text style={styles.totalLabel}>{t('totalAmount')}</Text>
             <Text style={styles.totalValue}>₹{Math.ceil(summary.total || 0)}</Text>
           </View>
-          {/* Rewards shown as what they WILL earn */}
-          {summary.rewards_will_earn > 0 && (
-            <View style={styles.rewardsBadge}>
-              <Text style={styles.rewardsBadgeText}>
-                ✨ {t('rewardsWillEarn')}: ₹{summary.rewards_will_earn.toFixed(2)} ({summary.tier} tier)
+          {/* ── GETV Coin Redemption ─────────────────────────────── */}
+          {getvEligibility && getvEligibility.cable_linked && !getvEligibility.coins_suspended && (
+            <View style={styles.getvSection}>
+              <View style={styles.getvHeader}>
+                <Text style={styles.getvTitle}>🪙 GETV Coins</Text>
+                <Text style={styles.getvBalance}>Balance: ₹{getvEligibility.balance.toFixed(0)}</Text>
+              </View>
+
+              {getvEligibility.can_redeem ? (
+                <>
+                  <View style={styles.getvTierRow}>
+                    <Text style={styles.getvTierText}>
+                      {getvEligibility.tier} tier · up to ₹{getvEligibility.tier_max_redeemable}/month
+                    </Text>
+                    <Text style={styles.getvAvailable}>
+                      Available: ₹{getvEligibility.available_to_redeem.toFixed(0)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.getvToggle, getvApply && styles.getvToggleActive]}
+                    onPress={() => handleGetvToggle(!getvApply)}
+                  >
+                    <Text style={[styles.getvToggleText, getvApply && styles.getvToggleTextActive]}>
+                      {getvApply
+                        ? `✅ Using ₹${getvAmount.toFixed(0)} GETV coins`
+                        : `Apply ₹${getvEligibility.available_to_redeem.toFixed(0)} GETV coins`}
+                    </Text>
+                  </TouchableOpacity>
+                  {getvApply && (
+                    <View style={styles.getvSavingRow}>
+                      <Text style={styles.getvSavingText}>
+                        You save ₹{getvAmount.toFixed(0)} · Pay ₹{Math.max(0, (summary?.total ?? 0) - getvAmount).toFixed(0)}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.getvLockedBox}>
+                  {getvEligibility.next_tier ? (
+                    <Text style={styles.getvLockedText}>
+                      Spend ₹{getvEligibility.next_tier.spend_needed.toFixed(0)} more this month to unlock up to ₹{getvEligibility.next_tier.unlocks} redemption ({getvEligibility.next_tier.name} tier)
+                    </Text>
+                  ) : (
+                    <Text style={styles.getvLockedText}>
+                      Spend ₹7,000 this month to start redeeming GETV coins
+                    </Text>
+                  )}
+                  <Text style={styles.getvSpendProgress}>
+                    This month: ₹{getvEligibility.current_month_spend.toFixed(0)} / ₹7,000
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+          {getvEligibility && getvEligibility.cable_linked && getvEligibility.coins_suspended && (
+            <View style={styles.getvSuspendedBox}>
+              <Text style={styles.getvSuspendedText}>
+                ⚠️ GETV coins paused — no cable bill received for 2 months. Pay your bill to resume.
               </Text>
             </View>
           )}
@@ -844,8 +935,25 @@ const styles = StyleSheet.create({
   value:{ color:'#111827', fontSize:14, fontWeight:'500' },
   totalLabel:{ fontSize:17, fontWeight:'800', color:'#111827' },
   totalValue:{ fontSize:17, fontWeight:'800', color:BRAND },
-  rewardsBadge:{ backgroundColor:'#F0FDF4', borderRadius:8, padding:10, marginTop:10 },
-  rewardsBadgeText:{ color:BRAND, fontSize:13, fontWeight:'600', textAlign:'center' },
+  // GETV coin styles
+  getvSection:{ backgroundColor:'#FFFBEB', borderRadius:10, padding:12, marginTop:12, borderWidth:1, borderColor:'#FCD34D' },
+  getvHeader:{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:6 },
+  getvTitle:{ fontSize:14, fontWeight:'700', color:'#92400E' },
+  getvBalance:{ fontSize:13, color:'#92400E', fontWeight:'600' },
+  getvTierRow:{ flexDirection:'row', justifyContent:'space-between', marginBottom:8 },
+  getvTierText:{ fontSize:12, color:'#78716C' },
+  getvAvailable:{ fontSize:12, color:'#92400E', fontWeight:'600' },
+  getvToggle:{ borderWidth:1, borderColor:'#FCD34D', borderRadius:8, paddingVertical:10, alignItems:'center', backgroundColor:'#FEF3C7' },
+  getvToggleActive:{ backgroundColor:'#F59E0B', borderColor:'#D97706' },
+  getvToggleText:{ fontSize:13, fontWeight:'600', color:'#92400E' },
+  getvToggleTextActive:{ color:'#fff' },
+  getvSavingRow:{ marginTop:8, alignItems:'center' },
+  getvSavingText:{ fontSize:12, color:'#16A34A', fontWeight:'600' },
+  getvLockedBox:{ backgroundColor:'#F9FAFB', borderRadius:8, padding:10 },
+  getvLockedText:{ fontSize:12, color:'#6B7280', textAlign:'center' },
+  getvSpendProgress:{ fontSize:11, color:'#9CA3AF', textAlign:'center', marginTop:4 },
+  getvSuspendedBox:{ backgroundColor:'#FEF2F2', borderRadius:8, padding:10, marginTop:8 },
+  getvSuspendedText:{ fontSize:12, color:'#991B1B', textAlign:'center' },
   payOption:{ flexDirection:'row', alignItems:'center', gap:14, borderWidth:1.5, borderColor:'#E5E7EB', borderRadius:12, padding:14, marginBottom:10 },
   payOptionSelected:{ borderColor:BRAND, backgroundColor:'#F0FDF4' },
   radio:{ width:20, height:20, borderRadius:10, borderWidth:2, borderColor:'#D1D5DB' },
