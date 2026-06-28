@@ -1216,10 +1216,11 @@ async def test_refund_status_wrong_user(client, user_id):
         "payment_method": "prepaid",
         "created_at": __import__("datetime").datetime.utcnow(),
     })
-    # Login as a different user
+    # Login as a different user — use a phone not shared with any other test
+    await db.users.delete_many({"email": "other@test.com"})
     client.post("/api/auth/register", json={
         "name": "Other", "email": "other@test.com",
-        "phone": "+910000000077", "password": "pass123",
+        "phone": "+910000000055", "password": "pass123",
     })
     login = client.post("/api/auth/login",
                         json={"email": "other@test.com", "password": "pass123"})
