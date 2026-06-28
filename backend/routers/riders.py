@@ -135,7 +135,7 @@ async def rider_login(data: RiderLogin):
 
     await db.riders.update_one(
         {"id": rider["id"]},
-        {"$set": {"last_seen": datetime.utcnow(), "status": "online"}}
+        {"$set": {"last_seen": datetime.utcnow()}}  # B-9: do not override rider's intended availability on login
     )
     return {
         "token": token,
