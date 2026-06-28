@@ -275,13 +275,6 @@ export default function HomeScreen() {
     });
   };
 
-  const getMonthlyOfferUsage = () => {
-    const spend = user?.monthly_spend || 0;
-    if (spend >= 25000) return { used: 3, total: 3, maxReward: 1000 };
-    if (spend >= 13000) return { used: 2, total: 3, maxReward: 500 };
-    if (spend >= 7000) return { used: 1, total: 3, maxReward: 250 };
-    return { used: 0, total: 3, maxReward: 0 };
-  };
 
   const getYearlyStats = () => {
     const totalSpend = user?.total_spend || 0;
@@ -362,51 +355,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {user?.cable_tv_linked && (
-          <View style={styles.getvCreditsTab}>
-            {/* Row 1: provider + status */}
-            <View style={styles.getvTabHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="tv" size={18} color="#2D8B47" />
-                <Text style={styles.getvTabProvider}>{user?.cable_tv_details?.service_provider || 'Cable TV'}</Text>
-                <View style={styles.getvLinkedBadge}>
-                  <Text style={styles.getvLinkedBadgeText}>Linked</Text>
-                </View>
-              </View>
-              <TouchableOpacity onPress={() => router.push('/profile/cable-tv-settings')}>
-                <Ionicons name="settings-outline" size={18} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-            {/* Row 2: 3 stats */}
-            <View style={styles.getvStatsRow}>
-              <View style={styles.getvStatBox}>
-                <Text style={styles.getvStatVal}>₹{Number(user?.current_reward || 0).toFixed(0)}</Text>
-                <Text style={styles.getvStatLbl}>GETV Credits</Text>
-              </View>
-              <View style={styles.getvStatDivider} />
-              <View style={styles.getvStatBox}>
-                <Text style={styles.getvStatVal}>₹{Number(user?.monthly_spend || 0).toFixed(0)}</Text>
-                <Text style={styles.getvStatLbl}>This Month</Text>
-              </View>
-              <View style={styles.getvStatDivider} />
-              <View style={styles.getvStatBox}>
-                <Text style={styles.getvStatVal}>{getMonthlyOfferUsage().used}/{getMonthlyOfferUsage().total}</Text>
-                <Text style={styles.getvStatLbl}>Tiers Used</Text>
-              </View>
-            </View>
-            {/* Row 3: progress */}
-            <View style={{ paddingHorizontal: 2, marginTop: 4 }}>
-              <View style={styles.getvProgressBg}>
-                <View style={[styles.getvProgressFill, { width: `${Math.min(((user?.monthly_spend || 0) / 25000) * 100, 100)}%` }]} />
-              </View>
-              <Text style={styles.getvProgressLabel}>
-                {getMonthlyOfferUsage().used === 3
-                  ? 'Maximum tier reached this month!'
-                  : `₹${Math.max(7000 - (user?.monthly_spend || 0), 0).toFixed(0)} more to next reward tier`}
-              </Text>
-            </View>
-          </View>
-        )}
+        
 
         {/* FMCG Brand Banners */}
         <View style={styles.section}>
@@ -550,65 +499,69 @@ export default function HomeScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      <Modal visible={showCableTVModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
+      <Modal visible={showCableTVModal} animationType="slide" transparent onRequestClose={() => setShowCableTVModal(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 30}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-        <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('linkCableTvTitle')}</Text>
-              <TouchableOpacity onPress={() => setShowCableTVModal(false)}>
-                <Ionicons name="close" size={24} color="#111" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.benefitsBox}>
-              <Text style={styles.benefitsTitle}>📊 Benefits After Linking:</Text>
-              <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
-              <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
-              <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
-              <Text style={styles.benefitsText}>• 🔧 Infrastructure ready for real API integration</Text>
-            </View>
-
-            <Text style={styles.label}>STB Number (on your set-top box)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your STB number"
-              placeholderTextColor="#9CA3AF"
-              value={stbNumber}
-              onChangeText={setStbNumber}
-              autoCapitalize="none"
-            />
-
-            <Text style={styles.label}>{t('cableTvProvider')}</Text>
-            <ScrollView style={styles.providerList}>
-              {providers.map((provider) => (
-                <TouchableOpacity
-                  key={provider.id}
-                  style={[styles.providerItem, serviceProvider === provider.name && styles.providerItemSelected]}
-                  onPress={() => setServiceProvider(provider.name)}
-                >
-                  <Text style={[styles.providerText, serviceProvider === provider.name && styles.providerTextSelected]}>
-                    {provider.name}
-                  </Text>
-                  {serviceProvider === provider.name && (
-                    <Ionicons name="checkmark-circle" size={20} color="#2D8B47" />
-                  )}
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t('linkCableTvTitle')}</Text>
+                <TouchableOpacity onPress={() => setShowCableTVModal(false)}>
+                  <Ionicons name="close" size={24} color="#111" />
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </View>
 
-            <TouchableOpacity 
-              style={styles.submitButton}
-              onPress={handleLinkCableTV}
-            >
-              <Text style={styles.submitButtonText}>Link Cable TV</Text>
-            </TouchableOpacity>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={styles.benefitsBox}>
+                  <Text style={styles.benefitsTitle}>📊 Benefits After Linking:</Text>
+                  <Text style={styles.benefitsText}>• Track monthly & yearly spending</Text>
+                  <Text style={styles.benefitsText}>• View offer usage in real-time</Text>
+                  <Text style={styles.benefitsText}>• Unlock rewards up to ₹1000</Text>
+                  <Text style={styles.benefitsText}>• 🔧 Infrastructure ready for real API integration</Text>
+                </View>
+
+                <Text style={styles.label}>STB Number (on your set-top box)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your STB number"
+                  placeholderTextColor="#9CA3AF"
+                  value={stbNumber}
+                  onChangeText={setStbNumber}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                />
+
+                <Text style={styles.label}>{t('cableTvProvider')}</Text>
+                <View style={styles.providerList}>
+                  {providers.map((provider) => (
+                    <TouchableOpacity
+                      key={provider.id}
+                      style={[styles.providerItem, serviceProvider === provider.name && styles.providerItemSelected]}
+                      onPress={() => setServiceProvider(provider.name)}
+                    >
+                      <Text style={[styles.providerText, serviceProvider === provider.name && styles.providerTextSelected]}>
+                        {provider.name}
+                      </Text>
+                      {serviceProvider === provider.name && (
+                        <Ionicons name="checkmark-circle" size={20} color="#2D8B47" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.submitButton}
+                  onPress={handleLinkCableTV}
+                >
+                  <Text style={styles.submitButtonText}>Link Cable TV</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
           </View>
         </KeyboardAvoidingView>
-        </View>
       </Modal>
 
       {/* Save Detected Address Modal */}

@@ -37,7 +37,6 @@ export default function EditProfileScreen() {
       Alert.alert('Error', 'Name and email are required');
       return;
     }
-
     setLoading(true);
     try {
       await api.post('/auth/update-profile', formData);
@@ -45,7 +44,7 @@ export default function EditProfileScreen() {
       Alert.alert('Success', 'Profile updated successfully!', [
         { text: 'OK', onPress: () => router.back() }
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
@@ -54,106 +53,113 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
+      {/* Header stays fixed — never pushed by keyboard */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              placeholder="Enter your full name"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email *</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
-              placeholder="Enter your email"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
-              placeholder="Enter your phone number"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Address</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.address}
-              onChangeText={(text) => setFormData({ ...formData, address: text })}
-              placeholder="Enter your address"
-              placeholderTextColor="#9CA3AF"
-              multiline
-              numberOfLines={2}
-            />
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>City</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.city}
-                onChangeText={(text) => setFormData({ ...formData, city: text })}
-                placeholder="City"
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Pincode</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.pincode}
-                onChangeText={(text) => setFormData({ ...formData, pincode: text })}
-                placeholder="Pincode"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={loading}
+      {/* KeyboardAvoidingView wraps only the scrollable form area */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 80}
+      >
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.saveButtonText}>
-            {loading ? 'Saving...' : 'Save Changes'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Full Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+                placeholder="Enter your full name"
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email *</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.email}
+                onChangeText={(text) => setFormData({ ...formData, email: text })}
+                placeholder="Enter your email"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Phone Number</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.phone}
+                onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                placeholder="Enter your phone number"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Address</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.address}
+                onChangeText={(text) => setFormData({ ...formData, address: text })}
+                placeholder="Enter your address"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={2}
+              />
+            </View>
+
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, styles.halfWidth]}>
+                <Text style={styles.label}>City</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.city}
+                  onChangeText={(text) => setFormData({ ...formData, city: text })}
+                  placeholder="City"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              <View style={[styles.inputGroup, styles.halfWidth]}>
+                <Text style={styles.label}>Pincode</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.pincode}
+                  onChangeText={(text) => setFormData({ ...formData, pincode: text })}
+                  placeholder="Pincode"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            <Text style={styles.saveButtonText}>
+              {loading ? 'Saving...' : 'Save Changes'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -168,7 +174,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    borderBottomColor: '#E5E7EB',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
   content: { flex: 1, padding: 16 },
@@ -182,16 +188,11 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: '#111',
-    backgroundColor: '#F9FAFB'
+    backgroundColor: '#F9FAFB',
   },
   row: { flexDirection: 'row', gap: 16 },
   halfWidth: { flex: 1 },
-  saveButton: {
-    backgroundColor: '#2D8B47',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center'
-  },
+  saveButton: { backgroundColor: '#2D8B47', padding: 16, borderRadius: 12, alignItems: 'center' },
   saveButtonDisabled: { opacity: 0.5 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
