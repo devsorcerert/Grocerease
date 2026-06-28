@@ -899,7 +899,7 @@ async def test_loop_redemption_at_checkout(client, auth_headers, user_id):
     await _db.orders.insert_one({
         "id": "seed-ord-silver", "user_id": user_id,
         "payment_status": "paid", "status": "delivered",
-        "total_amount": 8000.0, "total_amount_paise": 800000,
+        "total": 8000.0,
         "created_at": datetime.utcnow(),
     })
 
@@ -985,7 +985,7 @@ async def test_loop_redemption_capped_at_tier_max(client, auth_headers, user_id)
     await _db.orders.insert_one({
         "id": "seed-ord-tiercap", "user_id": user_id,
         "payment_status": "paid", "status": "delivered",
-        "total_amount": 8000.0, "total_amount_paise": 800000,
+        "total": 8000.0,
         "created_at": datetime.utcnow(),
     })
 
@@ -1100,7 +1100,7 @@ async def test_loop_recalc_admin(client, admin_headers, user_id):
     await _db.orders.insert_one({
         "id": "seed-ord-recalc", "user_id": user_id,
         "payment_status": "paid", "status": "delivered",
-        "total_amount": 8000.0, "total_amount_paise": 800000,
+        "total": 8000.0,
         "created_at": datetime.utcnow(),
     })
     from routers.loop_ledger import debit_loop_balance
