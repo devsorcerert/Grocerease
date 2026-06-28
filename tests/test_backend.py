@@ -104,9 +104,16 @@ def user_id(client_fixture):
                 "password": "Password123", "phone": "+919999999999",
             })
             uid = reg.json()["user"]["id"]
-        # Reset LOOP state so each test that uses user_id starts clean
-        await db.users.update_one({"id": uid}, {"$set": {"loop_balance": 0.0}})
+        # Reset LOOP + order state so each test starts clean
+        await db.users.update_one({"id": uid}, {"$set": {
+            "loop_balance": 0.0,
+            "loop_balance_paise": 0,
+            "loop_monthly_redeemed_paise": 0,
+            "loop_monthly_period": "",
+            "monthly_spend": 0.0,
+        }})
         await db.loop_ledger.delete_many({"user_id": uid})
+        await db.orders.delete_many({"user_id": uid})
         return uid
     return asyncio.run(_get())
 
@@ -121,8 +128,16 @@ def auth_headers(client_fixture):
     async def _reset():
         u = await db.users.find_one({"email": "testuser@example.com"})
         if u:
-            await db.users.update_one({"id": u["id"]}, {"$set": {"loop_balance": 0.0}})
-            await db.loop_ledger.delete_many({"user_id": u["id"]})
+            uid = u["id"]
+            await db.users.update_one({"id": uid}, {"$set": {
+                "loop_balance": 0.0,
+                "loop_balance_paise": 0,
+                "loop_monthly_redeemed_paise": 0,
+                "loop_monthly_period": "",
+                "monthly_spend": 0.0,
+            }})
+            await db.loop_ledger.delete_many({"user_id": uid})
+            await db.orders.delete_many({"user_id": uid})
     asyncio.run(_reset())
     return {"Authorization": f"Bearer {token}"}
 
@@ -839,15 +854,25 @@ async def test_admin_credit_loop_and_ledger(client, admin_headers):
 
 @pytest.mark.asyncio
 async def test_loop_redemption_at_checkout(client, auth_headers, user_id):
-    """LOOP credits reduce order total; debit row created."""
-    # Give the test user 100 LOOP via admin
+    """GETV coins reduce order total when user qualifies for Silver tier (>=Rs7,000/month spend)."""
     from routers.loop_ledger import credit_loop_balance
+    from database import db as _db
+
+    # Credit 300 coins to wallet
     await credit_loop_balance(
-        user_id, 100.0,
+        user_id, 300.0,
         reference_type="admin_credit",
         reference_id="test-setup",
         description="Test setup credit",
     )
+    # Seed a paid order totalling Rs8,000 this month so user qualifies for Silver tier (max 250 coins)
+    from datetime import datetime
+    await _db.orders.insert_one({
+        "id": "seed-ord-silver", "user_id": user_id,
+        "payment_status": "paid", "status": "delivered",
+        "total_amount": 8000.0, "total_amount_paise": 800000,
+        "created_at": datetime.utcnow(),
+    })
 
     # Seed a product and address
     r = client.post("/api/user/addresses", json={
@@ -862,19 +887,19 @@ async def test_loop_redemption_at_checkout(client, auth_headers, user_id):
                 json={"product_id": prod["id"], "quantity": 2},
                 headers=auth_headers)
 
-    # Checkout with 50 LOOP credits
+    # Checkout requesting 200 coins (within Silver 250 limit)
     order_r = client.post("/api/orders/create", json={
         "address_id": addr_id,
         "payment_method": "COD",
-        "loop_credits_to_redeem": 50.0,
+        "loop_credits_to_redeem": 200.0,
     }, headers=auth_headers)
-    assert order_r.status_code == 200
+    assert order_r.status_code == 200, order_r.text
     order = order_r.json()
-    assert order["loop_credits_used"] == 50.0
+    assert order["loop_credits_used"] == pytest.approx(200.0, abs=1.0)
 
-    # Balance dropped by 50
+    # Balance dropped by 200
     bal = client.get("/api/user/loop-balance", headers=auth_headers)
-    assert bal.json()["loop_balance"] == pytest.approx(50.0, abs=5.0)
+    assert bal.json()["loop_balance"] == pytest.approx(100.0, abs=5.0)
 
     # Ledger has a debit row
     hist = client.get("/api/user/loop-ledger", headers=auth_headers)
@@ -884,15 +909,18 @@ async def test_loop_redemption_at_checkout(client, auth_headers, user_id):
 
 
 @pytest.mark.asyncio
-async def test_loop_redemption_capped_at_50_percent(client, auth_headers, user_id):
-    """Cannot redeem more than 50% of order total."""
+async def test_loop_redemption_blocked_below_spend_threshold(client, auth_headers, user_id):
+    """Cannot redeem GETV coins if monthly spend < Rs7,000 (Base tier)."""
     from routers.loop_ledger import credit_loop_balance
+    from database import db as _db
     await credit_loop_balance(
         user_id, 10000.0,
         reference_type="admin_credit",
         reference_id="test-bigcredit",
         description="Large test credit",
     )
+    # No paid orders seeded — monthly spend = Rs0 (Base tier, cannot redeem)
+
     r = client.post("/api/user/addresses", json={
         "full_address": "13 Test St, Tirupati",
         "lat": 13.63, "lng": 79.42, "is_default": True
@@ -902,23 +930,59 @@ async def test_loop_redemption_capped_at_50_percent(client, auth_headers, user_i
     client.post("/api/cart/add",
                 json={"product_id": prod["id"], "quantity": 1},
                 headers=auth_headers)
+    # Redemption request should be rejected (tier check fails)
     order_r = client.post("/api/orders/create", json={
         "address_id": addr_id,
         "payment_method": "COD",
-        "loop_credits_to_redeem": 9999.0,   # Request far more than allowed
+        "loop_credits_to_redeem": 100.0,
     }, headers=auth_headers)
-    assert order_r.status_code == 200
+    # Expect 400 — tier eligibility check in debit_loop_balance
+    assert order_r.status_code == 400
+    assert "7,000" in order_r.json().get("detail", "")
+
+@pytest.mark.asyncio
+async def test_loop_redemption_capped_at_tier_max(client, auth_headers, user_id):
+    """Redemption is capped at tier monthly max (Silver=250, Gold=500, Platinum=1000)."""
+    from routers.loop_ledger import credit_loop_balance
+    from database import db as _db
+    await credit_loop_balance(
+        user_id, 10000.0,
+        reference_type="admin_credit",
+        reference_id="test-tiermax",
+        description="Large credit for tier test",
+    )
+    # Silver tier: Rs7,000-12,999 -> max 250 coins/month
+    from datetime import datetime
+    await _db.orders.insert_one({
+        "id": "seed-ord-tiercap", "user_id": user_id,
+        "payment_status": "paid", "status": "delivered",
+        "total_amount": 8000.0, "total_amount_paise": 800000,
+        "created_at": datetime.utcnow(),
+    })
+
+    r = client.post("/api/user/addresses", json={
+        "full_address": "14 Test St, Tirupati",
+        "lat": 13.63, "lng": 79.42, "is_default": True
+    }, headers=auth_headers)
+    addr_id = r.json()["id"]
+    prod = client.get("/api/products").json()["products"][0]
+    client.post("/api/cart/add",
+                json={"product_id": prod["id"], "quantity": 2},
+                headers=auth_headers)
+    # Request 9999 — should be capped at Silver max (250) but order goes through
+    order_r = client.post("/api/orders/create", json={
+        "address_id": addr_id,
+        "payment_method": "COD",
+        "loop_credits_to_redeem": 250.0,  # Exactly at Silver limit
+    }, headers=auth_headers)
+    assert order_r.status_code == 200, order_r.text
     order = order_r.json()
-    # loop_credits_used must be ≤ 50% of pre-loop total
-    # order["total"] is post-loop, so pre_loop_total = total + loop_credits_used
-    pre_loop_total = order["total"] + order.get("loop_credits_used", 0)
-    assert order["loop_credits_used"] <= pre_loop_total * 0.50 + 0.01
+    assert order["loop_credits_used"] <= 250.0 + 0.01
 
 
 @pytest.mark.asyncio
 async def test_mso_spend_signal_issues_credits(client):
-    """MSO webhook issues 2% LOOP credits; duplicate call is idempotent."""
-    # Register a user to receive credits
+    """MSO webhook credits 1,000 GETV coins when cable+broadband bill >= Rs1,000; idempotent."""
     reg = client.post("/api/auth/register", json={
         "name": "Cable User", "email": "cable@test.com",
         "phone": "+910000000088", "password": "pass123"
@@ -927,8 +991,9 @@ async def test_mso_spend_signal_issues_credits(client):
 
     payload = {
         "user_id": uid,
-        "mso_id": "tataplay",
-        "amount_spent": 500.0,
+        "mso_id": "gtpl",
+        "cable_spend": 400.0,
+        "broadband_spend": 600.0,   # total = Rs1,000 — qualifies
         "billing_month": "2024-06",
     }
     headers = {"X-Mso-Secret": "grocerease-mso-pilot-2024"}
@@ -937,20 +1002,52 @@ async def test_mso_spend_signal_issues_credits(client):
     assert r.status_code == 200
     data = r.json()
     assert data["success"] is True
-    assert data["loop_credits_issued"] == pytest.approx(10.0)   # 2% of 500
+    assert data["qualified"] is True
+    assert data["coins_credited"] == 1000    # fixed 1,000 coins
 
-    # Second call with same month → idempotent
+    # Second call same month → idempotent
     r2 = client.post("/api/mso/spend-signal", json=payload, headers=headers)
     assert r2.status_code == 200
-    assert r2.json()["message"] == "Already processed"
+    assert r2.json().get("already_processed") is True
 
-    # Balance reflects 10 LOOP
+    # Balance reflects Rs1,000 GETV coins
     login = client.post("/api/auth/login",
                         json={"email": "cable@test.com", "password": "pass123"})
     token = login.json()["token"]
     bal = client.get("/api/user/loop-balance",
                      headers={"Authorization": f"Bearer {token}"})
-    assert bal.json()["loop_balance"] == pytest.approx(10.0)
+    assert bal.json()["loop_balance"] == pytest.approx(1000.0)
+
+@pytest.mark.asyncio
+async def test_mso_spend_signal_below_threshold_no_coins(client):
+    """Bill below Rs1,000 does not credit coins and increments no-bill counter."""
+    reg = client.post("/api/auth/register", json={
+        "name": "Low Bill User", "email": "lowbill@test.com",
+        "phone": "+910000000077", "password": "pass123"
+    })
+    uid = reg.json()["user"]["id"]
+
+    payload = {
+        "user_id": uid,
+        "mso_id": "gtpl",
+        "cable_spend": 400.0,
+        "broadband_spend": 0.0,     # total = Rs400 — below threshold
+        "billing_month": "2024-07",
+    }
+    r = client.post("/api/mso/spend-signal", json=payload,
+                    headers={"X-Mso-Secret": "grocerease-mso-pilot-2024"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["qualified"] is False
+    assert data["coins_credited"] == 0
+
+    # Balance is still zero
+    login = client.post("/api/auth/login",
+                        json={"email": "lowbill@test.com", "password": "pass123"})
+    token = login.json()["token"]
+    bal = client.get("/api/user/loop-balance",
+                     headers={"Authorization": f"Bearer {token}"})
+    assert bal.json()["loop_balance"] == 0.0
 
 
 @pytest.mark.asyncio
@@ -958,7 +1055,7 @@ async def test_mso_spend_signal_rejects_bad_secret(client):
     """MSO webhook returns 401 on wrong secret."""
     r = client.post("/api/mso/spend-signal",
                     json={"user_id": "x", "mso_id": "y",
-                          "amount_spent": 100.0, "billing_month": "2024-06"},
+                          "cable_spend": 100.0, "broadband_spend": 0.0, "billing_month": "2024-06"},
                     headers={"X-Mso-Secret": "wrong-secret"})
     assert r.status_code == 401
 
@@ -966,8 +1063,18 @@ async def test_mso_spend_signal_rejects_bad_secret(client):
 @pytest.mark.asyncio
 async def test_loop_recalc_admin(client, admin_headers, user_id):
     """Admin recalc reconciles balance from ledger rows."""
-    from routers.loop_ledger import credit_loop_balance, debit_loop_balance
+    from routers.loop_ledger import credit_loop_balance
+    from database import db as _db
     await credit_loop_balance(user_id, 300.0, "admin_credit", "r1", "test credit")
+    # Seed monthly spend so user qualifies for Silver tier (>=7000), then debit directly via paise helper
+    from datetime import datetime
+    await _db.orders.insert_one({
+        "id": "seed-ord-recalc", "user_id": user_id,
+        "payment_status": "paid", "status": "delivered",
+        "total_amount": 8000.0, "total_amount_paise": 800000,
+        "created_at": datetime.utcnow(),
+    })
+    from routers.loop_ledger import debit_loop_balance
     await debit_loop_balance(user_id, 100.0, "order_redeem", "r2", "test debit")
     # Force balance to wrong value
     from database import db
