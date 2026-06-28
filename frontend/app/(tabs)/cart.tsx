@@ -112,8 +112,8 @@ export default function CartScreen() {
           return (
             <View key={item.product_id} style={styles.cartItem}>
               <TouchableOpacity onPress={() => router.push(`/product/${item.product_id}` as any)} style={styles.productImage}>
-                {product.image?.startsWith('http') ? (
-                  <Image source={{ uri: product.image }} style={{ width: '100%', height: '100%', borderRadius: 8 }} resizeMode="cover" />
+                {product.image_url?.startsWith('http') ? (
+                  <Image source={{ uri: product.image_url }} style={{ width: '100%', height: '100%', borderRadius: 8 }} resizeMode="cover" />
                 ) : (
                   <Ionicons name="bag-outline" size={32} color="#2D8B47" />
                 )}

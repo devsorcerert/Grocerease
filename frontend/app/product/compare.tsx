@@ -146,8 +146,8 @@ export default function ProductComparePage() {
                 <View>
                   {/* Image & Main Info Header Card */}
                   <View style={styles.productCard}>
-                    {product.image ? (
-                      <Image source={{ uri: product.image }} style={styles.productImage} />
+                    {product.image_url ? (
+                      <Image source={{ uri: product.image_url }} style={styles.productImage} />
                     ) : (
                       <View style={styles.productImagePlaceholder}>
                         <Ionicons name="cube-outline" size={40} color="#9CA3AF" />

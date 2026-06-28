@@ -60,7 +60,7 @@ export default function FeaturedProductsScreen() {
               style={styles.card}
               onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: product.id } })}
             >
-              <ProductImage uri={product.image} style={styles.image} />
+              <ProductImage uri={product.image_url} style={styles.image} />
               <View style={styles.info}>
                 <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
                 <Text style={styles.unit}>{product.unit}</Text>

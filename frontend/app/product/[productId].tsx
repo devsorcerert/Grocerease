@@ -166,7 +166,7 @@ export default function ProductDetailPage() {
   // Product images
   const productImages = product.images && Array.isArray(product.images) && product.images.length > 0
     ? product.images
-    : (product.image ? [product.image] : []);
+    : (product.image_url ? [product.image_url] : []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -402,9 +402,9 @@ export default function ProductDetailPage() {
                       style={styles.relatedProductCard}
                       onPress={() => router.push(`/product/${relatedProduct.id}`)}
                     >
-                      {relatedProduct.image ? (
+                      {relatedProduct.image_url ? (
                         <Image
-                          source={{ uri: relatedProduct.image }}
+                          source={{ uri: relatedProduct.image_url }}
                           style={styles.relatedProductImage}
                         />
                       ) : (

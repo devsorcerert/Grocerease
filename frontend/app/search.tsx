@@ -85,7 +85,7 @@ export default function SearchResultsPage() {
           <View style={styles.productsGrid}>
             {products.map((product) => (
               <View key={product.id} style={styles.productCard}>
-                <ProductImage uri={product.image} style={styles.productImage} iconSize={32} />
+                <ProductImage uri={product.image_url} style={styles.productImage} iconSize={32} />
                 
                 <View style={styles.productInfo}>
                   <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
