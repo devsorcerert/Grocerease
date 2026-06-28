@@ -175,11 +175,8 @@ def clean_mongo_doc(doc):
     else:
         doc.setdefault("price", 0)
 
-    # Expose original_price in rupees
-    if "mrp_paise" in doc and doc["mrp_paise"] is not None:
-        doc["original_price"] = round(doc["mrp_paise"] / 100, 2)
-
     # Expose offer_price for API contract: derive from mrp_paise if not already set
+    # NOTE: do NOT re-expose original_price - contract forbids legacy aliases in responses
     if "offer_price" not in doc and "mrp_paise" in doc and doc["mrp_paise"] is not None:
         doc["offer_price"] = round(doc["mrp_paise"] / 100, 2)
 

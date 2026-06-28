@@ -66,8 +66,8 @@ export default function FeaturedProductsScreen() {
                 <Text style={styles.unit}>{product.unit}</Text>
                 <View style={styles.footer}>
                   <Text style={styles.price}>₹{Math.ceil(product.price || 0)}</Text>
-                  {product.original_price && product.original_price > product.price && (
-                    <Text style={styles.mrp}>₹{Math.ceil(product.original_price)}</Text>
+                  {product.offer_price && product.offer_price > product.price && (
+                    <Text style={styles.mrp}>₹{Math.ceil(product.offer_price)}</Text>
                   )}
                 </View>
                 <View style={{ marginTop: 8 }}>
