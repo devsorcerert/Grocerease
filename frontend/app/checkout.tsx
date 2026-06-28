@@ -68,6 +68,7 @@ export default function CheckoutScreen() {
   const [newLabel, setNewLabel] = useState('Home');
   const [newLandmark, setNewLandmark] = useState('');
   const [newPincode, setNewPincode] = useState('');
+  const [orderPincode, setOrderPincode] = useState(''); // override pincode for selected address
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
 
@@ -208,8 +209,8 @@ export default function CheckoutScreen() {
       Alert.alert('No Address Selected', 'Please select or add a delivery address before placing your order.');
       return;
     }
-    // Pilot launch: only allow orders for Tirupati pilot pincodes
-    const addrPincode = (selectedAddress.pincode || '').toString().trim();
+    // Pilot launch: use pincode from address OR inline override input
+    const addrPincode = (selectedAddress.pincode || orderPincode || '').toString().trim();
     if (!PILOT_PINCODES.includes(addrPincode)) {
       Alert.alert(
         'Delivery Not Available',
@@ -369,6 +370,28 @@ export default function CheckoutScreen() {
         )}
 
         {/* Inline Add Address Accordion Form */}
+        {/* Inline pincode override when selected address has no pincode */}
+        {selectedAddress && !selectedAddress.pincode && (
+          <View style={styles.pincodeOverrideBox}>
+            <Text style={styles.pincodeOverrideLabel}>📍 Enter delivery pincode</Text>
+            <TextInput
+              style={styles.pincodeOverrideInput}
+              placeholder="e.g. 517501"
+              value={orderPincode}
+              onChangeText={setOrderPincode}
+              keyboardType="numeric"
+              maxLength={6}
+              placeholderTextColor="#9CA3AF"
+            />
+            {orderPincode.length === 6 && !PILOT_PINCODES.includes(orderPincode) && (
+              <Text style={styles.pincodeError}>We only deliver to Tirupati (517501–517507)</Text>
+            )}
+            {orderPincode.length === 6 && PILOT_PINCODES.includes(orderPincode) && (
+              <Text style={styles.pincodeValid}>✓ Pincode accepted</Text>
+            )}
+          </View>
+        )}
+
         {!showNewAddressForm ? (
           <TouchableOpacity
             style={styles.addAddressInlineBtn}
@@ -831,6 +854,11 @@ const styles = StyleSheet.create({
   paySubLabel:{ fontSize:12, color:'#6B7280', marginTop:2 },
   placeBtn:{ backgroundColor:BRAND, paddingVertical:17, borderRadius:14, alignItems:'center', marginTop:8 },
   disabledBtn:{ opacity:0.6 },
+  pincodeOverrideBox:{ backgroundColor:'#FFFBEB', borderWidth:1, borderColor:'#F59E0B', borderRadius:12, padding:12, marginBottom:12 },
+  pincodeOverrideLabel:{ fontSize:13, fontWeight:'600', color:'#92400E', marginBottom:8 },
+  pincodeOverrideInput:{ backgroundColor:'#fff', borderWidth:1, borderColor:'#D1D5DB', borderRadius:8, paddingHorizontal:12, paddingVertical:10, fontSize:16, color:'#111827' },
+  pincodeError:{ color:'#EF4444', fontSize:12, marginTop:4 },
+  pincodeValid:{ color:'#2D8B47', fontSize:12, marginTop:4, fontWeight:'600' },
   placeBtnText:{ color:'#fff', fontSize:17, fontWeight:'800' },
   emptyText:{ textAlign:'center', color:'#9CA3AF', padding:20 },
   formLabel:{ fontSize:13, fontWeight:'600', color:'#374151', marginBottom:6, marginTop:12 },

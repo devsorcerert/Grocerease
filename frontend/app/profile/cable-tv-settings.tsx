@@ -1,299 +1,312 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
+/**
+ * Cable TV Settings & GETV Coins Wallet
+ */
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Alert,
+  ScrollView, ActivityIndicator, RefreshControl,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 
+const BRAND = '#2D8B47';
+const BRAND_LIGHT = '#ECFDF5';
+
+type LedgerRow = {
+  id: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  description: string;
+  reference_type: string;
+  created_at: string;
+};
+
 export default function CableTVSettingsScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<any>(null);
-  const [autoSync, setAutoSync] = useState(true);
-  const [notifications, setNotifications] = useState(true);
 
-  useEffect(() => {
-    fetchSyncStatus();
-  }, []);
+  const [balance, setBalance] = useState<number>(0);
+  const [ledgerRows, setLedgerRows] = useState<LedgerRow[]>([]);
+  const [totalEarned, setTotalEarned] = useState<number>(0);
+  const [totalSpent, setTotalSpent] = useState<number>(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
 
-  const fetchSyncStatus = async () => {
+  const fetchWalletData = useCallback(async () => {
     if (!user?.cable_tv_linked) return;
-    
     try {
-      const response = await api.get('/cable-tv/sync-status');
-      setSyncStatus(response.data);
-    } catch (error) {
-      console.error('Failed to fetch sync status:', error);
+      const [balRes, ledgerRes] = await Promise.all([
+        api.get('/user/loop-balance'),
+        api.get('/user/loop-ledger?limit=30'),
+      ]);
+      const bal: number = balRes.data.loop_balance ?? 0;
+      setBalance(bal);
+      const rows: LedgerRow[] = ledgerRes.data.rows ?? [];
+      setLedgerRows(rows);
+      let earned = 0; let spent = 0;
+      rows.forEach(r => {
+        if (r.type === 'credit') earned += r.amount;
+        else spent += Math.abs(r.amount);
+      });
+      setTotalEarned(earned);
+      setTotalSpent(spent);
+    } catch (err) {
+      console.warn('Wallet fetch error:', err);
     }
-  };
+  }, [user?.cable_tv_linked]);
 
-  const handleForceSync = async () => {
-    setLoading(true);
-    try {
-      const response = await api.post('/cable-tv/force-sync');
-      Alert.alert('Sync Complete', 'Your cable TV data has been synchronized successfully.');
-      fetchSyncStatus();
-    } catch (error) {
-      Alert.alert('Sync Failed', 'Unable to sync data. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
+  useFocusEffect(useCallback(() => { fetchWalletData(); }, [fetchWalletData]));
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchWalletData(), refreshUser()]);
+    setRefreshing(false);
   };
 
   const handleUnlink = () => {
     Alert.alert(
       'Unlink Cable TV',
-      'Are you sure you want to unlink your cable TV? This will stop spending tracking and reward calculations.',
+      'This will disconnect your cable TV. Your existing GETV coins will remain.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Unlink',
-          style: 'destructive',
+          text: 'Unlink', style: 'destructive',
           onPress: async () => {
+            setUnlinking(true);
             try {
-              // Add unlink API call here when available
-              Alert.alert('Success', 'Cable TV has been unlinked.');
-              refreshUser();
+              await api.post('/cable-tv/unlink').catch(() => {});
+              await refreshUser();
               router.back();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to unlink cable TV.');
+            } catch {
+              Alert.alert('Error', 'Failed to unlink. Please try again.');
+            } finally {
+              setUnlinking(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch { return iso; }
+  };
+
+  if (!user?.cable_tv_linked) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Cable TV & GETV Coins</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.notLinkedWrap}>
+          <Ionicons name="tv-outline" size={64} color="#9CA3AF" />
+          <Text style={styles.notLinkedTitle}>Cable TV Not Linked</Text>
+          <Text style={styles.notLinkedText}>
+            Link your cable TV account to start earning GETV coins on every bill payment.
+          </Text>
+          <TouchableOpacity style={styles.linkBtn} onPress={() => router.push('/(tabs)/home')}>
+            <Text style={styles.linkBtnText}>Link on Home Screen</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cable TV Settings</Text>
+        <Text style={styles.headerTitle}>Cable TV & GETV Coins</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content}>
-        {!user?.cable_tv_linked ? (
-          <View style={styles.notLinkedCard}>
-            <Ionicons name="tv-outline" size={64} color="#9CA3AF" />
-            <Text style={styles.notLinkedTitle}>Cable TV Not Linked</Text>
-            <Text style={styles.notLinkedText}>
-              Link your cable TV to track spending and unlock exclusive grocery rewards.
-            </Text>
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={() => router.push('/(tabs)/home')}
-            >
-              <Text style={styles.linkButtonText}>Go to Home to Link</Text>
-            </TouchableOpacity>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND} />}
+      >
+        {/* Provider status */}
+        <View style={styles.providerCard}>
+          <View style={styles.providerRow}>
+            <View style={styles.tvIconWrap}>
+              <Ionicons name="tv" size={26} color={BRAND} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.providerName}>
+                {user.cable_tv_details?.service_provider || 'Cable TV'}
+              </Text>
+              <Text style={styles.providerSub}>
+                NUID: {user.cable_tv_details?.user_id_nuid || 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.activeBadge}>
+              <Ionicons name="checkmark-circle" size={13} color={BRAND} />
+              <Text style={styles.activeText}>Active</Text>
+            </View>
           </View>
-        ) : (
-          <>
-            {/* Connection Status */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.statusIndicator}>
-                  <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                  <Text style={styles.cardTitle}>Connected</Text>
-                </View>
-                <Text style={styles.providerText}>
-                  {user.cable_tv_details?.service_provider || 'Cable TV Provider'}
-                </Text>
-              </View>
-              
-              <View style={styles.connectionDetails}>
-                <Text style={styles.detailLabel}>User ID/NUID:</Text>
-                <Text style={styles.detailValue}>
-                  {user.cable_tv_details?.user_id_nuid || 'Not available'}
-                </Text>
-              </View>
-              
-              <View style={styles.connectionDetails}>
-                <Text style={styles.detailLabel}>Last Sync:</Text>
-                <Text style={styles.detailValue}>
-                  {syncStatus?.last_sync ? new Date(syncStatus.last_sync).toLocaleString() : 'Never'}
-                </Text>
-              </View>
-            </View>
+        </View>
 
-            {/* Sync Settings */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Sync Settings</Text>
-              
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Auto Sync</Text>
-                  <Text style={styles.settingDesc}>Automatically sync spending data</Text>
-                </View>
-                <Switch
-                  value={autoSync}
-                  onValueChange={setAutoSync}
-                  trackColor={{ false: '#E5E7EB', true: '#2D8B47' }}
-                  thumbColor={autoSync ? '#fff' : '#f4f3f4'}
+        {/* Wallet */}
+        <View style={styles.walletCard}>
+          <Text style={styles.cardTitle}>GETV Coins Wallet</Text>
+
+          <View style={styles.balanceHero}>
+            <Text style={styles.balanceLabel}>Available Balance</Text>
+            <Text style={styles.balanceAmount}>{'₹'}{balance.toFixed(2)}</Text>
+            <Text style={styles.balanceHint}>Redeem at checkout (up to 50% of order)</Text>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Ionicons name="trending-up-outline" size={20} color={BRAND} />
+              <Text style={styles.statValue}>{'₹'}{totalEarned.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>Total Received</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Ionicons name="wallet-outline" size={20} color="#F59E0B" />
+              <Text style={styles.statValue}>{'₹'}{balance.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>Activated</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Ionicons name="bag-handle-outline" size={20} color="#EF4444" />
+              <Text style={styles.statValue}>{'₹'}{totalSpent.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>Spent</Text>
+            </View>
+          </View>
+
+          <View style={styles.earnInfo}>
+            <Ionicons name="information-circle-outline" size={15} color="#6B7280" />
+            <Text style={styles.earnInfoText}>
+              Earn 2% of your monthly cable TV bill as GETV Coins automatically.
+            </Text>
+          </View>
+        </View>
+
+        {/* Transaction history */}
+        <View style={styles.section}>
+          <Text style={styles.cardTitle}>Transaction History</Text>
+          {ledgerRows.length === 0 ? (
+            <View style={styles.emptyTx}>
+              <Ionicons name="receipt-outline" size={36} color="#D1D5DB" />
+              <Text style={styles.emptyTxText}>No transactions yet</Text>
+              <Text style={styles.emptyTxSub}>Coins appear here after your cable bill is processed</Text>
+            </View>
+          ) : (
+            ledgerRows.map((row, i) => (
+              <View key={row.id ?? i} style={[styles.txRow, i === ledgerRows.length - 1 && { borderBottomWidth: 0 }]}>
+                <Ionicons
+                  name={row.type === 'credit' ? 'add-circle' : 'remove-circle'}
+                  size={22}
+                  color={row.type === 'credit' ? BRAND : '#EF4444'}
+                  style={{ marginRight: 12 }}
                 />
-              </View>
-              
-              <View style={styles.settingRow}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Sync Notifications</Text>
-                  <Text style={styles.settingDesc}>Get notified when data is synced</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txDesc}>{row.description || row.reference_type}</Text>
+                  <Text style={styles.txDate}>{formatDate(row.created_at)}</Text>
                 </View>
-                <Switch
-                  value={notifications}
-                  onValueChange={setNotifications}
-                  trackColor={{ false: '#E5E7EB', true: '#2D8B47' }}
-                  thumbColor={notifications ? '#fff' : '#f4f3f4'}
-                />
-              </View>
-              
-              <TouchableOpacity
-                style={[styles.syncButton, loading && styles.syncButtonDisabled]}
-                onPress={handleForceSync}
-                disabled={loading}
-              >
-                <Ionicons name="refresh" size={20} color="#2D8B47" />
-                <Text style={styles.syncButtonText}>
-                  {loading ? 'Syncing...' : 'Force Sync Now'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Infrastructure Info */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>API Integration Status</Text>
-              <View style={styles.infrastructureInfo}>
-                <Ionicons name="settings-outline" size={20} color="#6B7280" />
-                <Text style={styles.infrastructureText}>
-                  Infrastructure ready for real cable TV provider API integration.
-                  Currently using mock data for demonstration.
+                <Text style={[styles.txAmount, { color: row.type === 'credit' ? BRAND : '#EF4444' }]}>
+                  {row.type === 'credit' ? '+' : '-'}{'₹'}{Math.abs(row.amount).toFixed(2)}
                 </Text>
               </View>
-            </View>
+            ))
+          )}
+        </View>
 
-            {/* Danger Zone */}
-            <View style={styles.card}>
-              <Text style={styles.dangerTitle}>Danger Zone</Text>
-              <TouchableOpacity style={styles.unlinkButton} onPress={handleUnlink}>
-                <Ionicons name="unlink" size={20} color="#EF4444" />
-                <Text style={styles.unlinkButtonText}>Unlink Cable TV</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+        {/* Unlink */}
+        <TouchableOpacity style={styles.unlinkBtn} onPress={handleUnlink} disabled={unlinking}>
+          {unlinking
+            ? <ActivityIndicator color="#EF4444" size="small" />
+            : <>
+                <Ionicons name="unlink" size={17} color="#EF4444" />
+                <Text style={styles.unlinkText}>Unlink Cable TV</Text>
+              </>
+          }
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#F3F4F6' },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB'
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
-  content: { flex: 1, padding: 16 },
-  
-  // Not linked state
-  notLinkedCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center'
+  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
+
+  notLinkedWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  notLinkedTitle: { fontSize: 20, fontWeight: '700', color: '#111', marginTop: 16 },
+  notLinkedText: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 8, marginBottom: 24, lineHeight: 20 },
+  linkBtn: { backgroundColor: BRAND, paddingHorizontal: 28, paddingVertical: 13, borderRadius: 14 },
+  linkBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16, paddingBottom: 40 },
+
+  providerCard: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: '#E5E7EB',
   },
-  notLinkedTitle: { fontSize: 20, fontWeight: 'bold', color: '#111', marginTop: 16 },
-  notLinkedText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-    lineHeight: 20
+  providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tvIconWrap: { backgroundColor: BRAND_LIGHT, borderRadius: 10, padding: 10 },
+  providerName: { fontSize: 14, fontWeight: '700', color: '#111' },
+  providerSub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  activeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: BRAND_LIGHT, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
+  activeText: { fontSize: 11, fontWeight: '700', color: BRAND },
+
+  walletCard: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 18, marginBottom: 12,
+    borderWidth: 1, borderColor: '#E5E7EB',
   },
-  linkButton: {
-    backgroundColor: '#2D8B47',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#111', marginBottom: 14 },
+
+  balanceHero: { backgroundColor: BRAND, borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 },
+  balanceLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
+  balanceAmount: { fontSize: 34, fontWeight: '800', color: '#fff' },
+  balanceHint: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+
+  statsRow: { flexDirection: 'row', alignItems: 'stretch', marginBottom: 14 },
+  statBox: { flex: 1, alignItems: 'center', gap: 4 },
+  statDivider: { width: 1, backgroundColor: '#E5E7EB', marginVertical: 4 },
+  statValue: { fontSize: 13, fontWeight: '700', color: '#111' },
+  statLabel: { fontSize: 10, color: '#6B7280', textAlign: 'center' },
+
+  earnInfo: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#F9FAFB', borderRadius: 8, padding: 10 },
+  earnInfoText: { fontSize: 12, color: '#6B7280', flex: 1, lineHeight: 16 },
+
+  section: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 18, marginBottom: 12,
+    borderWidth: 1, borderColor: '#E5E7EB',
   },
-  linkButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  
-  // Cards
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16
+
+  emptyTx: { alignItems: 'center', paddingVertical: 20 },
+  emptyTxText: { fontSize: 13, fontWeight: '600', color: '#9CA3AF', marginTop: 10 },
+  emptyTxSub: { fontSize: 11, color: '#D1D5DB', marginTop: 4, textAlign: 'center' },
+
+  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  txDesc: { fontSize: 13, fontWeight: '600', color: '#111' },
+  txDate: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  txAmount: { fontSize: 14, fontWeight: '700' },
+
+  unlinkBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: '#FCA5A5', borderRadius: 12,
+    paddingVertical: 13, marginTop: 4,
   },
-  cardHeader: { marginBottom: 16 },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#111' },
-  dangerTitle: { fontSize: 16, fontWeight: 'bold', color: '#EF4444', marginBottom: 16 },
-  
-  // Status
-  statusIndicator: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  providerText: { fontSize: 14, color: '#6B7280' },
-  
-  // Connection details
-  connectionDetails: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  detailLabel: { fontSize: 14, color: '#6B7280' },
-  detailValue: { fontSize: 14, fontWeight: '600', color: '#111' },
-  
-  // Settings
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20
-  },
-  settingInfo: { flex: 1 },
-  settingLabel: { fontSize: 14, fontWeight: '600', color: '#111' },
-  settingDesc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  
-  // Sync button
-  syncButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#2D8B47',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8
-  },
-  syncButtonDisabled: { opacity: 0.5 },
-  syncButtonText: { fontSize: 14, fontWeight: '600', color: '#2D8B47' },
-  
-  // Infrastructure
-  infrastructureInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#F3F4F6',
-    padding: 12,
-    borderRadius: 8
-  },
-  infrastructureText: { fontSize: 12, color: '#6B7280', flex: 1, lineHeight: 16 },
-  
-  // Unlink
-  unlinkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    borderRadius: 12,
-    padding: 12
-  },
-  unlinkButtonText: { fontSize: 14, fontWeight: '600', color: '#EF4444' },
+  unlinkText: { fontSize: 14, fontWeight: '600', color: '#EF4444' },
 });

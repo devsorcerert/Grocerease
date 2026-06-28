@@ -512,7 +512,7 @@ async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current
         {"$set": {"status": "linked", "linked_user_id": user_id, "linked_at": now}}
     )
     await db.users.update_one(
-        {"_id": user_id},
+        {"id": user_id},
         {"$set": {"cable_tv_linked": True, "cable_tv_details": cable_details}}
     )
     return {"success": True, "message": "Cable TV linked successfully", "cable_details": cable_details}
@@ -1229,6 +1229,53 @@ async def toggle_featured_product(product_id: str, admin=Depends(verify_admin)):
     new_val = not product.get("is_featured", False)
     await db.products.update_one({"id": product_id}, {"$set": {"is_featured": new_val}})
     return {"id": product_id, "is_featured": new_val}
+
+
+# ─── Offers endpoints ────────────────────────────────────────────────────────
+
+@api_router.get("/admin/offers")
+async def list_offers(admin=Depends(verify_admin)):
+    offers = await db.offers.find({}).sort("created_at", -1).to_list(500)
+    for o in offers:
+        o.pop("_id", None)
+    return {"offers": offers}
+
+
+@api_router.post("/admin/offers")
+async def create_offer(offer_data: dict, admin=Depends(verify_admin)):
+    offer = {
+        "id": str(uuid.uuid4()),
+        "is_active": True,
+        "created_at": datetime.utcnow(),
+        **offer_data,
+    }
+    await db.offers.insert_one(offer)
+    offer.pop("_id", None)
+    return offer
+
+
+@api_router.delete("/admin/offers/{offer_id}")
+async def delete_offer(offer_id: str, admin=Depends(verify_admin)):
+    result = await db.offers.delete_one({"id": offer_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    return {"success": True}
+
+
+@api_router.patch("/admin/offers/{offer_id}")
+async def update_offer(offer_id: str, offer_data: dict, admin=Depends(verify_admin)):
+    result = await db.offers.update_one({"id": offer_id}, {"$set": offer_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    return {"success": True}
+
+
+@api_router.get("/offers")
+async def get_active_offers():
+    offers = await db.offers.find({"is_active": True}).sort("created_at", -1).to_list(100)
+    for o in offers:
+        o.pop("_id", None)
+    return {"offers": offers}
 
 
 @api_router.post("/admin/products/upload-excel")

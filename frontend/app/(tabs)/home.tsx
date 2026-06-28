@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, StyleSheet, TouchableOpacity, TextInput, Alert, Modal, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import ProductImage from '../../components/ProductImage';
 import { useCartStore } from '../../store/cartStore';
 import Toast from 'react-native-toast-message';
@@ -87,6 +88,14 @@ export default function HomeScreen() {
     fetchUnreadNotifCount();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh featured products whenever this tab comes into focus (so admin changes show immediately)
+  useFocusEffect(
+    useCallback(() => {
+      fetchFeaturedProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   const detectLocation = async () => {
     try {
