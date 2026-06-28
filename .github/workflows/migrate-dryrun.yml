@@ -1,0 +1,28 @@
+name: Migration Dry-Run
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sprint-a-fixes
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install motor==3.3.2 "pymongo[srv]==4.6.3" python-dotenv
+
+      - name: Run migration dry-run
+        env:
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+          DB_NAME: grocerease
+          DRY_RUN: "1"
+        run: |
+          cd backend
+          python migrate_product_schema.py
