@@ -80,8 +80,8 @@ export default function WishlistScreen() {
           renderItem={({ item }) => (
             <View style={styles.card}>
               <TouchableOpacity onPress={() => router.push(`/product/${item.id}` as any)} style={styles.cardLeft}>
-                {item.image?.startsWith('http') ? (
-                  <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
+                {item.image_url?.startsWith('http') ? (
+                  <Image source={{ uri: item.image_url }} style={styles.productImage} resizeMode="cover" />
                 ) : (
                   <View style={styles.productImagePlaceholder}>
                     <Ionicons name="leaf-outline" size={32} color="#D1D5DB" />

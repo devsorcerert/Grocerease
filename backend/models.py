@@ -66,6 +66,51 @@ class ProductCreate(BaseModel):
 class BulkProductUpload(BaseModel):
     products: List[dict]
 
+
+# ── Admin product write models (Task 18 — canonical schema enforcement) ─────────
+
+class AdminProductCreate(BaseModel):
+    """
+    Canonical shape for admin-created products.
+    All write paths must produce documents that match this shape.
+    Field names and units are authoritative per CONTRACTS.md §7.
+    """
+    name: str
+    category: str
+    subcategory: Optional[str] = ""
+    brand: Optional[str] = ""
+    price_paise: int                    # selling price in paise (e.g. 4900 = ₹49)
+    mrp_paise: Optional[int] = None     # MRP in paise; None = no strikethrough price
+    stock: int = 100
+    unit: str = "1 kg"
+    description: Optional[str] = ""
+    image_url: str = ""                 # full URL or empty string — NEVER "image"
+    is_active: bool = True
+    store_id: Optional[str] = None      # Task 20: dark-store assignment; None = all stores
+
+
+class AdminProductUpdate(BaseModel):
+    """
+    All fields optional — only provided keys are written to $set.
+    Same canonical names/units as AdminProductCreate.
+    Unknown fields rejected by Pydantic (extra = 'forbid').
+    """
+    model_config = {"extra": "forbid"}
+
+    name: Optional[str] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    brand: Optional[str] = None
+    price_paise: Optional[int] = None
+    mrp_paise: Optional[int] = None
+    stock: Optional[int] = None
+    unit: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: Optional[bool] = None
+    store_id: Optional[str] = None
+
+
 class CartItem(BaseModel):
     product_id: str
     quantity: int

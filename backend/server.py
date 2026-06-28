@@ -20,6 +20,10 @@ import jwt
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Logger — defined here so it's available throughout the module (AC-7)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # Import shared database, auth, models
 from database import (
     db, client, SECRET_KEY, ALGORITHM, pwd_context, security,
@@ -30,7 +34,8 @@ from database import (
 )
 from models import (
     UserRegister, ProfileUpdate, UserLogin, GoogleAuthRequest,
-    CableTVLink, CableTVSTBLink, ProductCreate, BulkProductUpload, CartItem,
+    CableTVLink, CableTVSTBLink, ProductCreate, BulkProductUpload,
+    AdminProductCreate, AdminProductUpdate, CartItem,
     OrderCreate, VideoCreate, SendOtpRequest, VerifyOtpRequest,
     CreatePaymentRequest, VerifyPaymentRequest, CouponCreate,
     CouponValidate, CreateOrderRequest, LogoutRequest,
@@ -653,13 +658,13 @@ async def get_products(
             {"brand": {"$regex": search, "$options": "i"}}
         ]
     
-    # Price range filter
+    # Price range filter — params are in rupees (float); price_paise is stored in paise (int)
     if min_price is not None or max_price is not None:
-        query["price"] = {}
+        query["price_paise"] = {}
         if min_price is not None:
-            query["price"]["$gte"] = min_price
+            query["price_paise"]["$gte"] = int(min_price * 100)
         if max_price is not None:
-            query["price"]["$lte"] = max_price
+            query["price_paise"]["$lte"] = int(max_price * 100)
     
     # Stock filter
     if in_stock is not None:
@@ -674,8 +679,8 @@ async def get_products(
     
     # Sorting
     sort_options = {
-        "price_asc": ("price", 1),
-        "price_desc": ("price", -1),
+        "price_asc": ("price_paise", 1),    # AC-7: sort on stored field
+        "price_desc": ("price_paise", -1),
         "name_asc": ("name", 1),
         "name_desc": ("name", -1),
         "popularity": ("popularity", -1),
@@ -712,19 +717,19 @@ async def get_filter_options():
     # Get unique brands
     brands = await db.products.distinct("brand")
     
-    # Get price range
-    all_products = await db.products.find({}, {"price": 1}).to_list(10000)
-    prices = [p.get("price", 0) for p in all_products if p.get("price")]
+    # Get price range — read price_paise (int, paise); return rupees for the UI
+    all_products = await db.products.find({}, {"price_paise": 1}).to_list(10000)
+    prices_paise = [p.get("price_paise", 0) for p in all_products if p.get("price_paise")]
     
-    min_price = min(prices) if prices else 0
-    max_price = max(prices) if prices else 0
+    min_price = round(min(prices_paise) / 100, 2) if prices_paise else 0
+    max_price = round(max(prices_paise) / 100, 2) if prices_paise else 0
     
     return {
         "categories": sorted([c for c in categories if c]),
         "brands": sorted([b for b in brands if b]),
         "price_range": {
-            "min": round(min_price, 2),
-            "max": round(max_price, 2)
+            "min": min_price,
+            "max": max_price
         }
     }
 
@@ -773,7 +778,7 @@ async def get_product_analytics(user_id: str = Depends(get_current_user)):
     
     # Calculate KPIs
     total_products = len(all_products)
-    total_stock_value = sum(p.get("price", 0) * p.get("stock", 0) for p in all_products)
+    total_stock_value = sum(p.get("price_paise", 0) / 100 * p.get("stock", 0) for p in all_products)  # AC-7
     low_stock_items = len([p for p in all_products if p.get("stock", 0) < p.get("min_stock_level", 10)])
     out_of_stock = len([p for p in all_products if p.get("stock", 0) == 0])
     active_products = len([p for p in all_products if p.get("is_active", True)])
@@ -785,7 +790,7 @@ async def get_product_analytics(user_id: str = Depends(get_current_user)):
         if cat not in category_stats:
             category_stats[cat] = {"count": 0, "stock_value": 0}
         category_stats[cat]["count"] += 1
-        category_stats[cat]["stock_value"] += product.get("price", 0) * product.get("stock", 0)
+        category_stats[cat]["stock_value"] += product.get("price_paise", 0) / 100 * product.get("stock", 0)  # AC-7
     
     return {
         "total_products": total_products,
@@ -794,7 +799,7 @@ async def get_product_analytics(user_id: str = Depends(get_current_user)):
         "low_stock_items": low_stock_items,
         "out_of_stock": out_of_stock,
         "categories": category_stats,
-        "avg_price": round(sum(p.get("price", 0) for p in all_products) / total_products if total_products > 0 else 0, 2)
+        "avg_price": round(sum(p.get("price_paise", 0) / 100 for p in all_products) / total_products if total_products > 0 else 0, 2)  # AC-7
     }
 
 @api_router.get("/products/{product_id}")
@@ -865,14 +870,17 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
             "id": str(uuid.uuid4()),
             "name": normalized.get("name", "").strip(),
             "category": normalized.get("category", "General"),
+            "subcategory": normalized.get("subcategory", ""),   # Task 18
+            "brand": normalized.get("brand", ""),
             "price_paise": _to_paise(raw_price) or 0,
             "mrp_paise": _to_paise(raw_offer),
-            "brand": normalized.get("brand", ""),
             "stock": int(raw_stock or 100),
+            "unit": normalized.get("unit", ""),
             "description": normalized.get("description", ""),
             "image_url": image_val.strip() if image_val else "",
-            "unit": normalized.get("unit", ""),
-            "created_at": datetime.utcnow()
+            "is_active": True,                                   # Task 18
+            "store_id": normalized.get("store_id") or None,     # Task 18 / Task 20
+            "created_at": datetime.utcnow(),
         }
         # Upsert on name â avoids duplicates when re-uploading
         result = await db.products.update_one(
@@ -1150,23 +1158,23 @@ async def admin_login(login_data: UserLogin):
         # Also check env-var credentials â always authoritative
         # (DB hash may be stale if ADMIN_PASSWORD changed after initial seeding)
         if not password_ok and email == ADMIN_EMAIL.lower().strip():
-            if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
+            if ADMIN_PASSWORD_RAW and hmac.compare_digest(login_data.password, ADMIN_PASSWORD_RAW):  # AC-7: timing-safe
                 password_ok = True
             elif ADMIN_PASSWORD_HASH:
                 try:
                     password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
                 except Exception:
-                    password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
+                    password_ok = hmac.compare_digest(login_data.password, ADMIN_PASSWORD_HASH)  # AC-7: timing-safe
     else:
         # Fallback to environment credentials if needed (e.g. dev bootstrap)
         if email == ADMIN_EMAIL.lower().strip():
-            if ADMIN_PASSWORD_RAW and login_data.password == ADMIN_PASSWORD_RAW:
+            if ADMIN_PASSWORD_RAW and hmac.compare_digest(login_data.password, ADMIN_PASSWORD_RAW):  # AC-7: timing-safe
                 password_ok = True
             elif ADMIN_PASSWORD_HASH:
                 try:
                     password_ok = verify_password(login_data.password, ADMIN_PASSWORD_HASH)
                 except Exception:
-                    password_ok = (login_data.password == ADMIN_PASSWORD_HASH)
+                    password_ok = hmac.compare_digest(login_data.password, ADMIN_PASSWORD_HASH)  # AC-7: timing-safe
             
             if password_ok:
                 admin_name = "System Admin"
@@ -1202,20 +1210,29 @@ async def admin_get_products(admin=Depends(verify_admin), limit: int = 100, skip
     }
 
 @api_router.post("/admin/products")
-async def admin_create_product(product: dict, admin=Depends(verify_admin)):
+async def admin_create_product(product: AdminProductCreate, admin=Depends(verify_admin)):
+    """Create a product using the canonical schema (CONTRACTS.md §7 / Task 18).
+    Pydantic rejects any field not in AdminProductCreate, preventing price/image
+    alias bugs from entering the database."""
     product_dict = {
         "id": str(uuid.uuid4()),
-        **product,
-        "created_at": datetime.utcnow()
+        **product.dict(),
+        "created_at": datetime.utcnow(),
     }
     await db.products.insert_one(product_dict)
     return clean_mongo_doc(product_dict)
 
 @api_router.put("/admin/products/{product_id}")
-async def admin_update_product(product_id: str, product: dict, admin=Depends(verify_admin)):
+async def admin_update_product(product_id: str, product: AdminProductUpdate, admin=Depends(verify_admin)):
+    """Partial update using canonical schema (Task 18).
+    Only provided (non-None) fields are written; unknown fields are rejected."""
+    updates = {k: v for k, v in product.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields provided")
+    updates["updated_at"] = datetime.utcnow()
     result = await db.products.update_one(
         {"id": product_id},
-        {"$set": {**product, "updated_at": datetime.utcnow()}}
+        {"$set": updates}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -1335,13 +1352,16 @@ async def upload_products_excel(file: UploadFile = File(...), admin=Depends(veri
             product_dict = {
                 "name": product_name,
                 "category": str(row['Category']).strip(),
+                "subcategory": str(row.get('Subcategory', '')).strip() if pd.notna(row.get('Subcategory')) else '',  # Task 18
                 "brand": str(row.get('Brand', '')).strip() if pd.notna(row.get('Brand')) else '',
                 "price_paise": _to_paise(row['Price']) or 0,
                 "mrp_paise": _to_paise(row.get('OfferPrice')),
                 "stock": int(row.get('Stock', 0)) if pd.notna(row.get('Stock')) else 0,
+                "unit": str(row.get('Unit', '')).strip() if pd.notna(row.get('Unit')) else '',
                 "description": str(row.get('Description', '')).strip() if pd.notna(row.get('Description')) else '',
                 "image_url": str(row.get('Image', '')).strip() if pd.notna(row.get('Image')) else '',
-                "updated_at": datetime.utcnow()
+                "is_active": True,   # Task 18
+                "updated_at": datetime.utcnow(),
             }
             
             if existing_product:
@@ -1420,7 +1440,7 @@ async def delete_account(user_id: str = Depends(get_current_user)):
     
     # Also delete user's orders and cart
     await db.orders.delete_many({"user_id": user_id})
-    await db.carts.delete_many({"user_id": user_id})
+    await db.cart_items.delete_many({"user_id": user_id})  # AC-7: collection is cart_items
     
     return {"message": "Account deleted successfully", "success": True}
 
@@ -1970,8 +1990,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -223,7 +223,7 @@ export default function CategoriesScreen() {
                 onPress={() => router.push(`/product/${product.id}`)}
                 activeOpacity={0.7}
               >
-                <ProductImage uri={product.image} style={styles.productImage} iconSize={40} />
+                <ProductImage uri={product.image_url} style={styles.productImage} iconSize={40} />
                 <View style={styles.productInfo}>
                   <Text style={styles.productName}>{product.name}</Text>
                   <Text style={styles.productUnit}>{product.unit}</Text>

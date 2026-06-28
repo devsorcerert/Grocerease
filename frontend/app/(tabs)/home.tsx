@@ -417,7 +417,7 @@ export default function HomeScreen() {
             {products.slice(0, 6).map((product, index) => (
               <TouchableOpacity key={product.id} style={styles.productCard} onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: product.id } })}>
                 <View style={styles.productImageContainer}>
-                  <ProductImage uri={product.image} style={styles.productImage} />
+                  <ProductImage uri={product.image_url} style={styles.productImage} />
                   <View style={styles.productBadge}>
                     <Text style={styles.badgeText}>Fresh</Text>
                   </View>

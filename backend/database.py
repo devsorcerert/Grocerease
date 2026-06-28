@@ -136,13 +136,9 @@ def clean_mongo_doc(doc):
         return doc
     doc.pop("_id", None)
 
-    # Normalize image field name
-    # We want to output 'image_url' (CONTRACTS.md Â§7)
-    # Priority: existing image_url > image
-    if "image_url" in doc and "image" not in doc:
-        doc["image"] = doc.pop("image_url")
-    elif "image_url" in doc and "image" in doc:
-        doc.pop("image_url")
+    # image_url is canonical (CONTRACTS.md §7). Drop any legacy "image" alias so
+    # API responses always use image_url — never rename it.
+    doc.pop("image", None)
 
     # Guarded helper to safely convert float prices to paise ints
     def _to_paise(val):

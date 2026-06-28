@@ -300,8 +300,8 @@ export default function AdvancedSearchPage() {
                 )}
 
                 <TouchableOpacity onPress={() => router.push(`/product/${product.id}`)}>
-                {product.image ? (
-                  <Image source={{ uri: product.image }} style={styles.productImage} />
+                {product.image_url ? (
+                  <Image source={{ uri: product.image_url }} style={styles.productImage} />
                 ) : (
                   <View style={styles.productImagePlaceholder}>
                     <Ionicons name="cube-outline" size={40} color="#D1D5DB" />

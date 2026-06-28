@@ -135,8 +135,8 @@ function FeaturedProductsManager() {
           ) : (
             filtered.slice(0, 30).map(p => (
               <TouchableOpacity key={p.id} style={fp.pickerRow} onPress={() => handleFeature(p.id)} disabled={saving}>
-                {p.image ? (
-                  <Image source={{ uri: p.image }} style={fp.pickerThumb} />
+                {p.image_url ? (
+                  <Image source={{ uri: p.image_url }} style={fp.pickerThumb} />
                 ) : (
                   <View style={[fp.pickerThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
                     <Ionicons name="image-outline" size={14} color="#9CA3AF" />
@@ -159,7 +159,7 @@ function FeaturedProductsManager() {
 
       {featured.map(p => (
         <View key={p.id} style={fp.row}>
-          {p.image ? <Image source={{ uri: p.image }} style={fp.thumb} /> : (
+          {p.image_url ? <Image source={{ uri: p.image_url }} style={fp.thumb} /> : (
             <View style={[fp.thumb, { backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center' }]}>
               <Ionicons name="image-outline" size={20} color="#9CA3AF" />
             </View>
@@ -296,8 +296,8 @@ function OffersManager() {
               <View style={off.productList}>
                 {filtered.slice(0, 25).map(p => (
                   <TouchableOpacity key={p.id} style={off.productRow} onPress={() => setSelectedProduct(p)}>
-                    {p.image ? (
-                      <Image source={{ uri: p.image }} style={off.productThumb} />
+                    {p.image_url ? (
+                      <Image source={{ uri: p.image_url }} style={off.productThumb} />
                     ) : (
                       <View style={[off.productThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
                         <Ionicons name="cube-outline" size={14} color="#9CA3AF" />
@@ -315,8 +315,8 @@ function OffersManager() {
           ) : (
             <>
               <View style={off.selectedProduct}>
-                {selectedProduct.image ? (
-                  <Image source={{ uri: selectedProduct.image }} style={off.selectedThumb} />
+                {selectedProduct.image_url ? (
+                  <Image source={{ uri: selectedProduct.image_url }} style={off.selectedThumb} />
                 ) : (
                   <View style={[off.selectedThumb, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
                     <Ionicons name="cube-outline" size={20} color="#9CA3AF" />
