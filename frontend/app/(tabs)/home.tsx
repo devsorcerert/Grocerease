@@ -197,7 +197,7 @@ export default function HomeScreen() {
       const response = await api.get('/products/featured');
       const products = response.data.products || response.data;
       setProducts(Array.isArray(products) ? products : []);
-    } catch (error) {
+    } catch {
       // Fallback to regular products if no featured ones yet
       try {
         const fallback = await api.get('/products');
@@ -251,22 +251,6 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAddToCart = async (productId: string) => {
-    try {
-      await addToCart(productId, 1);
-      Toast.show({
-        type: 'success',
-        text1: t('addedToCart') || 'Added to Cart',
-        text2: t('addedToCartDesc') || 'Product added to cart successfully!',
-        position: 'bottom',
-        visibilityTime: 2000,
-        autoHide: true,
-      });
-    } catch (error) {
-      console.error('Failed to add to cart:', error);
-      Alert.alert('Error', 'Failed to add product to cart. Please try again.');
-    }
-  };
 
   const handleCategoryClick = (categoryName: string) => {
     router.push({
@@ -276,11 +260,6 @@ export default function HomeScreen() {
   };
 
 
-  const getYearlyStats = () => {
-    const totalSpend = user?.total_spend || 0;
-    const yearlyOffers = Math.floor(totalSpend / 25000);
-    return { offers: yearlyOffers, savings: yearlyOffers * 1000 };
-  };
 
   return (
     <SafeAreaView style={styles.container}>
