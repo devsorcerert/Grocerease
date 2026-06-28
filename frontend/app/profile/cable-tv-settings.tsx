@@ -195,7 +195,7 @@ export default function CableTVSettingsScreen() {
                 <Text style={styles.tierName}>{eligibility.tier}</Text>
               </View>
               <View style={styles.tierRow}>
-                <Text style={styles.tierLabel}>This Month's Spend</Text>
+                <Text style={styles.tierLabel}>This Month&apos;s Spend</Text>
                 <Text style={styles.tierSpend}>₹{eligibility.current_month_spend.toFixed(0)}</Text>
               </View>
               {eligibility.can_redeem && (
