@@ -75,7 +75,7 @@ function FeaturedProductsManager() {
   };
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
     if (!result.canceled && result.assets[0]) setNewImage(result.assets[0].uri);
   };
 
@@ -196,6 +196,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'featured'>('overview');
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!user || user.is_admin !== true) {
       Alert.alert('Access Denied', 'Admin access required');
