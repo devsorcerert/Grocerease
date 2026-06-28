@@ -1,0 +1,60 @@
+name: STB Diagnostic — count only (safe to delete)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Count STB documents in MongoDB
+        env:
+          MONGO_URL: ${{ secrets.MONGO_URL }}
+        run: |
+          pip install pymongo dnspython -q
+          python3 << 'PYEOF'
+          import os, re
+          from pymongo import MongoClient
+
+          client = MongoClient(os.environ['MONGO_URL'])
+          db = client['grocerease']
+          coll = db['stb_numbers']
+
+          total   = coll.count_documents({})
+          numeric = coll.count_documents({"stb_number": {"$regex": r"^\d{10}$"}})
+          hex16   = coll.count_documents({"stb_number": {"$regex": r"^[0-9A-Fa-f]{16}$"}})
+          hex_uc  = coll.count_documents({"stb_number": {"$regex": r"^[0-9A-F]{16}$"}})
+          hex_lc  = coll.count_documents({"stb_number": {"$regex": r"^[0-9a-f]{16}$"}})
+          other   = total - numeric - hex16
+
+          print("=== STB COLLECTION COUNTS ===")
+          print(f"Total documents      : {total:,}")
+          print(f"10-digit numeric     : {numeric:,}")
+          print(f"16-char hex (any case): {hex16:,}")
+          print(f"  └─ all-UPPERCASE   : {hex_uc:,}")
+          print(f"  └─ all-lowercase   : {hex_lc:,}")
+          print(f"Other / non-standard : {other:,}")
+
+          # Sample probe — 3 hex + 3 numeric (known from source file)
+          samples = [
+              ("00008306003385A6", "hex-upper"),
+              ("00008306003018F0", "hex-upper"),
+              ("0000832B002A7B8E", "hex-upper"),
+              ("00008306003385a6", "hex-lower"),  # lowercase version of first
+              ("3057811785",       "numeric"),
+              ("3057694362",       "numeric"),
+              ("3435675202",       "numeric"),
+          ]
+          print("\n=== SAMPLE PROBE ===")
+          for stb, kind in samples:
+              doc = coll.find_one({"stb_number": stb, "network": "gtpl"})
+              status = "FOUND" if doc else "NOT FOUND"
+              print(f"  {stb:<20} ({kind:<12}) → {status}")
+
+          # Check if any hex NUIDs stored with lowercase letters
+          lc_sample = list(coll.find({"stb_number": {"$regex": r"[a-f]"}}, {"stb_number":1,"_id":0}).limit(3))
+          print(f"\n=== LOWERCASE HEX IN DB (first 3) ===")
+          print(lc_sample if lc_sample else "  None — all hex stored uppercase")
+
+          client.close()
+          PYEOF
