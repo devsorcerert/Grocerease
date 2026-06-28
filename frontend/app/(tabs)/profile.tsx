@@ -64,7 +64,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-}
 
         {/* Language Selection Section */}
         <View style={styles.section}>

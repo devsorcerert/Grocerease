@@ -57,7 +57,6 @@ export default function HomeScreen() {
   const { user, refreshUser } = useAuth();
   const { t } = useTranslation();
   const router = useRouter();
-  const { addToCart } = useCartStore();
   const [showCableTVModal, setShowCableTVModal] = useState(false);
   const [stbNumber, setStbNumber] = useState('');
   const [serviceProvider, setServiceProvider] = useState('');
