@@ -119,24 +119,12 @@ async def _get_monthly_spend_paise(user_id: str) -> int:
             "payment_status": "paid",
             "created_at": {"$gte": month_start, "$lte": month_end},
         }},
-        {"$group": {"_id": None, "total": {"$sum": "$total_amount_paise"}}},
+        # orders.total is stored in rupees (float); multiply by 100 to return paise
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}},
     ]
     result = await db.orders.aggregate(pipeline).to_list(1)
     if result:
-        return int(result[0].get("total", 0))
-
-    # Fallback: total_amount field in rupees (older orders)
-    pipeline2 = [
-        {"$match": {
-            "user_id": user_id,
-            "payment_status": "paid",
-            "created_at": {"$gte": month_start, "$lte": month_end},
-        }},
-        {"$group": {"_id": None, "total": {"$sum": "$total_amount"}}},
-    ]
-    result2 = await db.orders.aggregate(pipeline2).to_list(1)
-    if result2:
-        return int(round(result2[0].get("total", 0) * 100))
+        return int(round(result[0].get("total", 0) * 100))
     return 0
 
 
@@ -318,12 +306,12 @@ async def check_gadget_eligibility(user_id: str):
             "payment_status": "paid",
             "created_at": {"$gte": first_purchase, "$lte": window_end},
         }},
-        {"$group": {"_id": None, "total": {"$sum": "$total_amount"}}},
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}},
     ]
     result = await db.orders.aggregate(pipeline).to_list(1)
-    total_spend = result[0].get("total", 0) if result else 0
+    total_spend = result[0].get("total", 0) if result else 0  # rupees
 
-    if int(round(total_spend * 100)) >= GADGET_THRESHOLD_PAISE:
+    if int(round(total_spend * 100)) >= GADGET_THRESHOLD_PAISE:  # convert rupees→paise
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"loop_gadget_eligible": True}},
