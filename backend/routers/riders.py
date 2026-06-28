@@ -263,3 +263,71 @@ async def save_rider_push_token(payload: dict, rider_id: str = Depends(get_curre
     if token:
         await db.riders.update_one({"id": rider_id}, {"$set": {"push_token": token}})
     return {"success": True}
+
+
+# ── P1-B1: Rider earnings ─────────────────────────────────────────────────────
+@router.get("/earnings")
+async def get_rider_earnings(rider_id: str = Depends(get_current_rider)):
+    """Return today / week / month / all-time earnings + last 30 deliveries."""
+    from datetime import timezone, timedelta
+
+    now = datetime.utcnow()
+    start_of_today  = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_week   = start_of_today - timedelta(days=now.weekday())
+    start_of_month  = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Delivered orders assigned to this rider
+    pipeline = [
+        {"$match": {
+            "assigned_rider_id": rider_id,
+            "status": "delivered",
+        }},
+        {"$sort": {"updated_at": -1}},
+        {"$limit": 200},
+        {"$project": {
+            "_id": 0,
+            "id": 1,
+            "delivery_fee": 1,
+            "total_amount": 1,
+            "updated_at": 1,
+            "delivery_address": 1,
+        }},
+    ]
+    orders = await db.orders.aggregate(pipeline).to_list(200)
+
+    # Helper: delivery_fee per order (fallback ₹30 if field missing)
+    def fee(o):
+        return float(o.get("delivery_fee") or 30.0)
+
+    def in_range(o, start):
+        ts = o.get("updated_at")
+        if not ts:
+            return False
+        if isinstance(ts, str):
+            ts = datetime.fromisoformat(ts)
+        return ts >= start
+
+    today_total  = sum(fee(o) for o in orders if in_range(o, start_of_today))
+    week_total   = sum(fee(o) for o in orders if in_range(o, start_of_week))
+    month_total  = sum(fee(o) for o in orders if in_range(o, start_of_month))
+    all_time     = sum(fee(o) for o in orders)
+    count        = len(orders)
+
+    recent = [
+        {
+            "order_id": o["id"],
+            "amount": fee(o),
+            "address": o.get("delivery_address", ""),
+            "delivered_at": o.get("updated_at").isoformat() if o.get("updated_at") else None,
+        }
+        for o in orders[:30]
+    ]
+
+    return {
+        "today":       round(today_total, 2),
+        "this_week":   round(week_total, 2),
+        "this_month":  round(month_total, 2),
+        "all_time":    round(all_time, 2),
+        "total_deliveries": count,
+        "recent_deliveries": recent,
+    }
