@@ -25,4 +25,12 @@ jobs:
           DRY_RUN: "1"
         run: |
           cd backend
-          python migrate_product_schema.py
+          python migrate_product_schema.py 2>&1 | tee /tmp/dryrun-output.txt
+          echo "--- EXIT CODE: $? ---"
+
+      - name: Upload dry-run output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dryrun-output
+          path: /tmp/dryrun-output.txt
