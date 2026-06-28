@@ -599,8 +599,8 @@ export default function HomeScreen() {
               <Text style={styles.submitButtonText}>Link Cable TV</Text>
             </TouchableOpacity>
           </View>
-        </View>
         </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Save Detected Address Modal */}
