@@ -910,7 +910,6 @@ async def delete_product(product_id: str, user_id: str = Depends(get_current_use
     return {"success": True, "message": "Product deleted"}
 
 # Cart routes are imported from routers/cart.py
-from routers.orders import calculate_spending_tiers_and_rewards
 
 # Redundant local rewards and order routes removed (handled by routers/orders.py)
 
