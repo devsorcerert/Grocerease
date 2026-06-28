@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, Alert, AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GOOGLE_CLIENT_ID_WEB, ADMIN_EMAIL } from '../constants/api';
@@ -20,7 +17,6 @@ const GOOGLE_WEB_CLIENT_ID =
 let googleSigninConfigured = false;
 
 const ensureGoogleSigninConfigured = () => {
-  if (Platform.OS === 'web') return;
   if (googleSigninConfigured) return;
 
   GoogleSignin.configure({
@@ -75,32 +71,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// NOTE: These URLs are used only for the web platform OAuth flow.
-// They should point to GrocerEase's own OAuth proxy, not Emergent's demo backend.
-const EMERGENT_AUTH_URL = process.env.EXPO_PUBLIC_EMERGENT_AUTH_URL || '';
-const EMERGENT_SESSION_URL = process.env.EXPO_PUBLIC_EMERGENT_SESSION_URL || '';
-
-
 // Helper for cross-platform secure storage
 const storage = {
   setItem: async (key: string, value: string) => {
     try {
-      if (Platform.OS === 'web') {
-        await AsyncStorage.setItem(key, value);
-      } else {
-        await SecureStore.setItemAsync(key, value);
-      }
+      await SecureStore.setItemAsync(key, value);
     } catch (error) {
       console.warn('storage.setItem error:', error);
     }
   },
   getItem: async (key: string) => {
     try {
-      if (Platform.OS === 'web') {
-        return await AsyncStorage.getItem(key);
-      } else {
-        return await SecureStore.getItemAsync(key);
-      }
+      return await SecureStore.getItemAsync(key);
     } catch (error) {
       console.warn('storage.getItem error:', error);
       return null;
@@ -108,34 +90,20 @@ const storage = {
   },
   removeItem: async (key: string) => {
     try {
-      if (Platform.OS === 'web') {
-        await AsyncStorage.removeItem(key);
-      } else {
-        await SecureStore.deleteItemAsync(key);
-      }
+      await SecureStore.deleteItemAsync(key);
     } catch (error) {
       console.warn('storage.removeItem error:', error);
     }
   }
 };
 
-// Helper to extract parameters from redirect URLs
-const extractParam = (url: string, paramName: string) => {
-  const regex = new RegExp(`[#?&]${paramName}=([^&]+)`);
-  const match = url.match(regex);
-  return match ? decodeURIComponent(match[1]) : null;
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const sessionProcessingRef = useRef(false);
-  const processedSessionsRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<any>(null);
 
   const registerPushToken = async () => {
     try {
-      if (Platform.OS === 'web') return;
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
       const token = (await Notifications.getExpoPushTokenAsync()).data;
@@ -160,38 +128,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
-  // Mobile deep link listener
-  useEffect(() => {
-    if (Platform.OS !== 'web') {
-      Linking.getInitialURL().then((url) => {
-        if (url) {
-          const sessionId = extractSessionId(url);
-          if (sessionId) processSession(sessionId);
-        }
-      });
-
-      const subscription = Linking.addEventListener('url', (event) => {
-        const sessionId = extractSessionId(event.url);
-        if (sessionId) processSession(sessionId);
-      });
-
-      return () => subscription.remove();
-    }
-  }, []);
-
   const initAuth = async () => {
     log('[BOOT] initAuth started');
     try {
-      // On web, check for session_id in URL first (Google OAuth callback)
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const sessionId = getSessionIdFromUrl();
-        if (sessionId) {
-          await processSession(sessionId);
-          return;
-        }
-      }
-
-      // Normal auth check - look for stored token
       await checkAuth();
     } catch (error) {
       log('Auth init error:', error);
@@ -199,107 +138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const getSessionIdFromUrl = () => {
-    if (typeof window === 'undefined') return null;
-    
-    // Check hash fragment
-    const hash = window.location.hash;
-    if (hash) {
-      const params = new URLSearchParams(hash.substring(1));
-      const sid = params.get('session_id');
-      if (sid) return sid;
-    }
-    
-    // Check query params
-    const search = window.location.search;
-    if (search) {
-      const params = new URLSearchParams(search);
-      const sid = params.get('session_id');
-      if (sid) return sid;
-    }
-    
-    return null;
-  };
-
-  const extractSessionId = (url: string) => {
-    try {
-      const match = url.match(/session_id=([^&]+)/);
-      return match ? match[1] : null;
-    } catch {
-      return null;
-    }
-  };
-
-  // Process session with lock to prevent double calls
-  const processSession = async (sessionId: string) => {
-    if (processedSessionsRef.current.has(sessionId)) {
-      log('Session already processed or in progress, skipping:', sessionId);
-      return;
-    }
-    if (sessionProcessingRef.current) {
-      log('Session already being processed, skipping');
-      return;
-    }
-    
-    processedSessionsRef.current.add(sessionId);
-    sessionProcessingRef.current = true;
-    
-    try {
-      setLoading(true);
-      
-      // Exchange session_id for user data via Emergent
-      const response = await fetch(EMERGENT_SESSION_URL, {
-        method: 'GET',
-        headers: { 'X-Session-ID': sessionId },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to validate session (Status ${response.status})`);
-      }
-      
-      const sessionData = await response.json();
-      
-      if (!sessionData.email) {
-        throw new Error('No email found in session data');
-      }
-      
-      // Send to our backend to create/find user
-      const backendResponse = await api.post('/auth/social', {
-        provider: 'google',
-        email: sessionData.email,
-        name: sessionData.name,
-        photo: sessionData.picture,
-        session_token: sessionData.session_token || sessionId,
-      });
-      
-      if (!backendResponse.data || !backendResponse.data.token) {
-        throw new Error('Backend failed to return authentication tokens');
-      }
-      
-      const { token, refresh_token, user: userData } = backendResponse.data;
-      
-      await storage.setItem('token', token);
-      await storage.setItem('refresh_token', refresh_token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(userData);
-      registerPushToken();
-      startTokenRefreshTimer();
-      
-      log('Google auth completed successfully for:', userData.email);
-    } catch (error: any) {
-      console.error('Session processing failed:', error);
-      const errMsg = error?.response?.data?.detail || error?.message || String(error);
-      Alert.alert(
-        'Login Failed',
-        `Google sign-in session processing failed. Details: ${errMsg}`
-      );
-      // Remove from processed sessions set if it failed, so user can try again
-      processedSessionsRef.current.delete(sessionId);
-    } finally {
-      setLoading(false);
-      sessionProcessingRef.current = false;
-    }
-  };
 
   const checkAuth = async () => {
     try {
@@ -399,12 +237,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
-      if (Platform.OS === 'web') {
-        // Task 48: Web OAuth via Emergent redirect is DEAD for the Android pilot.
-        // The EMERGENT_AUTH_URL endpoint is not live. Web sign-in is disabled.
-        throw new Error('Google Sign-In is not available on web for the pilot. Use the Android app.');
-      }
-
       // Native Direct Google Sign-In Flow
       // Wake up backend first — Render free tier sleeps after inactivity
       try { await api.get('/health', { timeout: 15000 }); } catch { /* ignore */ }
@@ -500,13 +332,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         log('Server logout skipped:', err.message);
       }
       
-      // Sign out from Google if on Native
-      if (Platform.OS !== 'web') {
-        try {
-          await GoogleSignin.signOut();
-        } catch (googleErr) {
-          log('Google Sign-Out error:', googleErr);
-        }
+      try {
+        await GoogleSignin.signOut();
+      } catch (googleErr) {
+        log('Google Sign-Out error:', googleErr);
       }
       
       await clearAuth();

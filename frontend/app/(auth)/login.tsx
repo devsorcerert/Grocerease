@@ -261,8 +261,6 @@ export default function LoginScreen() {
               </View>
             )}
 
-            {/* Task 48: Google Sign-In is Android/iOS only for the pilot.
-                 Web OAuth (Emergent redirect) is disabled — EMERGENT_AUTH_URL is dead. */}
             {Platform.OS !== 'web' && (
               <>
                 {/* Divider */}
