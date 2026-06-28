@@ -30,7 +30,8 @@ from database import (
 )
 from models import (
     UserRegister, ProfileUpdate, UserLogin, GoogleAuthRequest,
-    CableTVLink, CableTVSTBLink, ProductCreate, BulkProductUpload, CartItem,
+    CableTVLink, CableTVSTBLink, ProductCreate, BulkProductUpload,
+    AdminProductCreate, AdminProductUpdate, CartItem,
     OrderCreate, VideoCreate, SendOtpRequest, VerifyOtpRequest,
     CreatePaymentRequest, VerifyPaymentRequest, CouponCreate,
     CouponValidate, CreateOrderRequest, LogoutRequest,
@@ -865,14 +866,17 @@ async def bulk_upload_products(upload: BulkProductUpload, user_id: str = Depends
             "id": str(uuid.uuid4()),
             "name": normalized.get("name", "").strip(),
             "category": normalized.get("category", "General"),
+            "subcategory": normalized.get("subcategory", ""),   # Task 18
+            "brand": normalized.get("brand", ""),
             "price_paise": _to_paise(raw_price) or 0,
             "mrp_paise": _to_paise(raw_offer),
-            "brand": normalized.get("brand", ""),
             "stock": int(raw_stock or 100),
+            "unit": normalized.get("unit", ""),
             "description": normalized.get("description", ""),
             "image_url": image_val.strip() if image_val else "",
-            "unit": normalized.get("unit", ""),
-            "created_at": datetime.utcnow()
+            "is_active": True,                                   # Task 18
+            "store_id": normalized.get("store_id") or None,     # Task 18 / Task 20
+            "created_at": datetime.utcnow(),
         }
         # Upsert on name â avoids duplicates when re-uploading
         result = await db.products.update_one(
@@ -1202,20 +1206,29 @@ async def admin_get_products(admin=Depends(verify_admin), limit: int = 100, skip
     }
 
 @api_router.post("/admin/products")
-async def admin_create_product(product: dict, admin=Depends(verify_admin)):
+async def admin_create_product(product: AdminProductCreate, admin=Depends(verify_admin)):
+    """Create a product using the canonical schema (CONTRACTS.md §7 / Task 18).
+    Pydantic rejects any field not in AdminProductCreate, preventing price/image
+    alias bugs from entering the database."""
     product_dict = {
         "id": str(uuid.uuid4()),
-        **product,
-        "created_at": datetime.utcnow()
+        **product.dict(),
+        "created_at": datetime.utcnow(),
     }
     await db.products.insert_one(product_dict)
     return clean_mongo_doc(product_dict)
 
 @api_router.put("/admin/products/{product_id}")
-async def admin_update_product(product_id: str, product: dict, admin=Depends(verify_admin)):
+async def admin_update_product(product_id: str, product: AdminProductUpdate, admin=Depends(verify_admin)):
+    """Partial update using canonical schema (Task 18).
+    Only provided (non-None) fields are written; unknown fields are rejected."""
+    updates = {k: v for k, v in product.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields provided")
+    updates["updated_at"] = datetime.utcnow()
     result = await db.products.update_one(
         {"id": product_id},
-        {"$set": {**product, "updated_at": datetime.utcnow()}}
+        {"$set": updates}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -1335,13 +1348,16 @@ async def upload_products_excel(file: UploadFile = File(...), admin=Depends(veri
             product_dict = {
                 "name": product_name,
                 "category": str(row['Category']).strip(),
+                "subcategory": str(row.get('Subcategory', '')).strip() if pd.notna(row.get('Subcategory')) else '',  # Task 18
                 "brand": str(row.get('Brand', '')).strip() if pd.notna(row.get('Brand')) else '',
                 "price_paise": _to_paise(row['Price']) or 0,
                 "mrp_paise": _to_paise(row.get('OfferPrice')),
                 "stock": int(row.get('Stock', 0)) if pd.notna(row.get('Stock')) else 0,
+                "unit": str(row.get('Unit', '')).strip() if pd.notna(row.get('Unit')) else '',
                 "description": str(row.get('Description', '')).strip() if pd.notna(row.get('Description')) else '',
                 "image_url": str(row.get('Image', '')).strip() if pd.notna(row.get('Image')) else '',
-                "updated_at": datetime.utcnow()
+                "is_active": True,   # Task 18
+                "updated_at": datetime.utcnow(),
             }
             
             if existing_product:
