@@ -33,8 +33,8 @@ def setup_test_db():
             {
                 "id": "prod-apple",
                 "name": "Fresh Apples",
-                "price": 100.0,
-                "original_price": 120.0,
+                "price_paise": 10000,
+                "mrp_paise": 12000,
                 "stock": 10,
                 "unit": "1 kg",
                 "category": "Fruits & Vegetables",
@@ -43,8 +43,8 @@ def setup_test_db():
             {
                 "id": "prod-milk",
                 "name": "Organic Milk",
-                "price": 50.0,
-                "original_price": 55.0,
+                "price_paise": 5000,
+                "mrp_paise": 5500,
                 "stock": 5,
                 "unit": "1 L",
                 "category": "Dairy & Breakfast",
@@ -53,8 +53,8 @@ def setup_test_db():
             {
                 "id": "prod-out",
                 "name": "Out Of Stock Item",
-                "price": 20.0,
-                "original_price": 20.0,
+                "price_paise": 2000,
+                "mrp_paise": 2000,
                 "stock": 0,
                 "unit": "1 pack",
                 "category": "Munchies",
@@ -661,7 +661,7 @@ def test_offer_price_normalization(client_fixture):
 
 
 def test_image_url_normalization(client_fixture):
-    """Task 18: clean_mongo_doc must map legacy 'image_url' -> 'image' on reads."""
+    """Task 18: image_url is canonical (CONTRACTS §7). API response must contain image_url, never image."""
     import asyncio
 
     # Insert a product with the legacy image_url field
@@ -669,7 +669,7 @@ def test_image_url_normalization(client_fixture):
         await db.products.insert_one({
             "id": "prod-legacy-img",
             "name": "Legacy Image Product",
-            "price": 10.0,
+            "price_paise": 1000,
             "stock": 3,
             "unit": "1 pc",
             "category": "Test",
@@ -680,10 +680,10 @@ def test_image_url_normalization(client_fixture):
     resp = client_fixture.get("/api/products/prod-legacy-img")
     assert resp.status_code == 200
     data = resp.json()
-    assert data.get("image") == "https://example.com/legacy.jpg", (
-        "image_url must be normalized to image on read"
+    assert data.get("image_url") == "https://example.com/legacy.jpg", (
+        "image_url is canonical — must appear as image_url in API response"
     )
-    assert "image_url" not in data, "legacy image_url must not appear in response"
+    assert "image" not in data, "legacy image alias must not appear in response"
 
 
 # ---------------------------------------------------------------------------
@@ -1128,7 +1128,7 @@ async def test_stock_expiry_rolls_back_and_cancels(client, auth_headers, user_id
     # Seed a product with known stock
     prod_id = f"prod-expiry-{uuid.uuid4().hex[:6]}"
     await db.products.insert_one({
-        "id": prod_id, "name": "Expiry Test", "price": 50.0,
+        "id": prod_id, "name": "Expiry Test", "price_paise": 5000,
         "stock": 10, "category": "test", "is_active": True,
     })
 
