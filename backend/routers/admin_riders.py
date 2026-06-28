@@ -104,3 +104,21 @@ async def suspend_rider(rider_id: str, admin=Depends(verify_admin)):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Rider not found")
     return {"success": True, "rider_id": rider_id, "status": "suspended"}
+
+
+@router.post("/{rider_id}/reactivate")
+async def reactivate_rider(rider_id: str, admin=Depends(verify_admin)):
+    """Reactivate a suspended rider — sets status back to offline."""
+    rider = await db.riders.find_one({"id": rider_id})
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    if rider.get("status") != "suspended":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rider is not suspended (current status: {rider.get('status')})"
+        )
+    await db.riders.update_one(
+        {"id": rider_id},
+        {"$set": {"status": "offline", "reactivated_at": datetime.utcnow()}}
+    )
+    return {"success": True, "rider_id": rider_id, "status": "offline"}
