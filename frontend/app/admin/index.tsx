@@ -574,7 +574,7 @@ export default function AdminDashboard() {
             </Text>
             <OffersManager />
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

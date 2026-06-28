@@ -93,7 +93,6 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchFeaturedProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
 
