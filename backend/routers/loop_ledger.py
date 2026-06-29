@@ -467,6 +467,7 @@ async def mso_spend_signal(
         await db.users.update_one(
             {"id": payload.user_id},
             {"$set": {
+              "loop_balance_month":   datetime.utcnow().strftime("%Y-%m"),  # Sprint A.5 Fix 1 — month this balance belongs to; burn uses $lt
                 "loop_last_bill_month": payload.billing_month,
                 "loop_consecutive_no_bill": 0,
                 "loop_suspended": False,
