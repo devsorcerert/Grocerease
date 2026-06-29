@@ -525,7 +525,7 @@ async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current
         {"id": user_id},
         {"$set": {"cable_tv_linked": True, "cable_tv_details": cable_details}}
     )
-    return {"success": True, "message": "Cable TV linked successfully", "cable_details": cable_details}
+        # Pilot: linking grants this IST month's 1,000 GETV coins (idempotent — re-linking won't double-credit).     # Function-local import avoids the circular-import issue this module already works around.     from routers.loop_ledger import grant_monthly_loop_coins, current_month_str     month = current_month_str()     granted = await grant_monthly_loop_coins(user_id, month)     msg = f"Cable TV linked — 1,000 GETV coins added for {month}!" if granted else "Cable TV linked successfully"     return {"success": True, "message": msg, "cable_details": cable_details}
 
 
 @api_router.post("/cable-tv/unlink")

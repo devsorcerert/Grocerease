@@ -269,7 +269,7 @@ async def burn_loop_coins() -> dict:
     call does real work. Safe across hourly loop and server restarts.
     No grace window: burn keys strictly off the month boundary.
     """
-    now = datetime.utcnow()
+    now = datetime.utcnow() + timedelta(hours=5, minutes=30)   # IST (UTC+5:30) — burn keys off the IST month boundary
     current_month = now.strftime("%Y-%m")                           # e.g. "2026-07"
     prior_month   = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")  # e.g. "2026-06"
 
