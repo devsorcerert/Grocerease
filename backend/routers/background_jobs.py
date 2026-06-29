@@ -180,7 +180,8 @@ def start_background_jobs():
     """Launch both background jobs as asyncio tasks."""
     asyncio.create_task(_stock_expiry_loop())
     asyncio.create_task(_recon_loop())
-    logger.info("Background jobs scheduled: stock-expiry + payments-recon")
+  asyncio.create_task(_loop_burn_loop())  # Sprint A.5 Fix 1 — LOOP month-end burn
+        logger.info("Background jobs scheduled: stock-expiry + payments-recon + LOOP-burn")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -240,3 +241,100 @@ async def trigger_recon(_admin=Depends(verify_admin)):
     """Manually trigger the refunds reconciliation job."""
     count = await reconcile_refunds()
     return {"refunds_confirmed": count}
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Sprint A.5 Fix 1 — LOOP month-end coin burn
+# ═══════════════════════════════════════════════════════════════════════════════
+# PILOT SIMPLIFICATION (documented):
+#   A credit arriving before the burn in the same calendar month causes
+#   July leftover coins to merge into the August balance under one field.
+#   Impact bounded by tier ceiling (1,000 coins/month max). Deferred to R3.
+#   loop_balance_month field is SET here and in credit_loop_balance_paise
+#   (loop_ledger.py) — see Fix 3 for the link-trigger credit path.
+# Units: all balances in paise. 1,000 GETV coins = 100,000 paise.
+
+LOOP_BURN_CHECK_INTERVAL_SECONDS = int(
+    os.environ.get("LOOP_BURN_CHECK_INTERVAL_SECONDS", "3600")  # hourly
+)
+
+
+async def burn_loop_coins() -> dict:
+    """
+    Zero out loop_balance_paise for users whose coins belong to a prior
+    calendar month (loop_balance_month < current_month, $lt on YYYY-MM string).
+
+    Idempotent: loop_burn_log keyed on prior_month; only first post-boundary
+    call does real work. Safe across hourly loop and server restarts.
+    No grace window: burn keys strictly off the month boundary.
+    """
+    now = datetime.utcnow()
+    current_month = now.strftime("%Y-%m")                           # e.g. "2026-07"
+    prior_month   = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")  # e.g. "2026-06"
+
+    # ── Idempotency guard ────────────────────────────────────────────────────
+    existing = await db.loop_burn_log.find_one({"billing_month": prior_month})
+    if existing:
+        logger.info("LOOP burn: %s already burned at %s — skipping",
+                    prior_month, existing.get("burned_at"))
+        return {"burned_users": 0, "month": prior_month, "skipped": True}
+
+    # ── Burn: zero balances where loop_balance_month < current_month ─────────
+    # $lt on "YYYY-MM" strings is correct: lexicographic == chronological.
+    # Same-month credit sets loop_balance_month == current_month → $lt fails →
+    # fresh coins are never wiped (race-safe in both orderings).
+    result = await db.users.update_many(
+        {
+            "loop_balance_paise":  {"$gt": 0},
+            "loop_balance_month":  {"$lt": current_month},  # prior-month stale coins
+        },
+        {
+            "$set": {
+                "loop_balance_paise":          0,   # paise — zeroed
+                "loop_monthly_redeemed_paise": 0,   # paise — reset monthly counter
+                "loop_monthly_period":         "",  # reset period string
+            }
+        },
+    )
+    burned = result.modified_count
+
+    # ── Write idempotency log ────────────────────────────────────────────────
+    await db.loop_burn_log.insert_one({
+        "billing_month": prior_month,  # "YYYY-MM" of the month whose coins burned
+        "burned_at":     now,          # UTC
+        "burned_users":  burned,
+        "run_by":        "system",     # "admin" when triggered manually
+    })
+    logger.info("LOOP burn: zeroed %d balance(s) for month %s (paise)",
+                burned, prior_month)
+    return {"burned_users": burned, "month": prior_month}
+
+
+async def _loop_burn_loop():
+    """Hourly infinite loop. Idempotency inside burn_loop_coins() ensures
+    only the first post-boundary call in each month does real work."""
+    logger.info("LOOP burn loop started (interval=%ds)",
+                LOOP_BURN_CHECK_INTERVAL_SECONDS)
+    while True:
+        try:
+            await burn_loop_coins()
+        except Exception as e:
+            logger.error("LOOP burn loop error: %s", e, exc_info=True)
+        await asyncio.sleep(LOOP_BURN_CHECK_INTERVAL_SECONDS)
+
+
+@router.post("/admin/jobs/burn-loop-coins")
+async def trigger_loop_burn(_admin=Depends(verify_admin)):
+    """
+    Manually trigger the LOOP month-end coin burn.
+    Idempotent — safe to call multiple times; second call returns skipped:true.
+    To force re-run in testing: delete db.loop_burn_log entry for that month.
+    """
+    result = await burn_loop_coins()
+    # Record manual trigger in log (update run_by if log was just written)
+    await db.loop_burn_log.update_one(
+        {"billing_month": result.get("month")},
+        {"$set": {"run_by": "admin"}},
+    )
+    return result
