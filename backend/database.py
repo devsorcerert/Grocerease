@@ -328,3 +328,4 @@ async def insert_notification(user_id: str, title: str, message: str, notif_type
     except Exception as e:
         logging.error(f"insert_notification failed: {e}")
 
+
