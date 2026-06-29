@@ -177,11 +177,11 @@ async def _recon_loop():
 
 # ─── Public launcher (called from server.py startup event) ────────────────────
 def start_background_jobs():
-    """Launch both background jobs as asyncio tasks."""
+    """Launch all background jobs as asyncio tasks."""
     asyncio.create_task(_stock_expiry_loop())
     asyncio.create_task(_recon_loop())
-  asyncio.create_task(_loop_burn_loop())  # Sprint A.5 Fix 1 — LOOP month-end burn
-        logger.info("Background jobs scheduled: stock-expiry + payments-recon + LOOP-burn")
+    asyncio.create_task(_loop_burn_loop())  # Sprint A.5 Fix 1 — LOOP month-end burn
+    logger.info("Background jobs scheduled: stock-expiry + payments-recon + LOOP-burn")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
