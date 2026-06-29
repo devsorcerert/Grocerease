@@ -180,8 +180,9 @@ def start_background_jobs():
     """Launch all background jobs as asyncio tasks."""
     asyncio.create_task(_stock_expiry_loop())
     asyncio.create_task(_recon_loop())
-    asyncio.create_task(_loop_burn_loop())  # Sprint A.5 Fix 1 — LOOP month-end burn
-    logger.info("Background jobs scheduled: stock-expiry + payments-recon + LOOP-burn")
+    asyncio.create_task(_loop_burn_loop())    # Sprint A.5 Fix 1  — LOOP month-end burn (00:00 IST)
+    asyncio.create_task(_loop_grant_loop())   # Sprint A.5 Fix 3b — LOOP monthly grant (05:00 IST)
+    logger.info("Background jobs scheduled: stock-expiry + payments-recon + LOOP-burn + LOOP-grant")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -258,6 +259,12 @@ async def trigger_recon(_admin=Depends(verify_admin)):
 LOOP_BURN_CHECK_INTERVAL_SECONDS = int(
     os.environ.get("LOOP_BURN_CHECK_INTERVAL_SECONDS", "3600")  # hourly
 )
+
+# Edit 1 — Sprint A.5 Fix 3b constants
+LOOP_GRANT_CHECK_INTERVAL_SECONDS = int(
+    os.environ.get("LOOP_GRANT_CHECK_INTERVAL_SECONDS", "3600")  # hourly
+)
+PILOT_LAST_GRANT_MONTH = os.environ.get("PILOT_LAST_GRANT_MONTH", "2027-02")  # last month coins are granted
 
 
 async def burn_loop_coins() -> dict:
@@ -337,4 +344,83 @@ async def trigger_loop_burn(_admin=Depends(verify_admin)):
         {"billing_month": result.get("month")},
         {"$set": {"run_by": "admin"}},
     )
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Sprint A.5 Fix 3b — LOOP monthly coin grant
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def grant_loop_coins() -> dict:
+    """
+    Monthly pilot grant — give every STB/NUID-linked, non-suspended user a fresh
+    1,000 GETV coins for the current IST month.
+
+    Fires at/after 05:00 IST on the 1st (the ~5h gap after the 00:00 IST burn is
+    intentional). Idempotent: loop_grant_log keyed on the granted month; only the
+    first post-05:00 call each month does real work. Each user is credited via the
+    shared, per-user-idempotent grant_monthly_loop_coins helper, so a mid-run crash
+    is safe — the next run only tops up users still missing that month's grant.
+
+    Pilot ends 2027-02 — no grants for any month after that.
+    """
+    # Local import avoids the circular-import issue this codebase already works around.
+    from routers.loop_ledger import grant_monthly_loop_coins, ist_now
+
+    now = ist_now()
+    month = now.strftime("%Y-%m")
+
+    if month > PILOT_LAST_GRANT_MONTH:
+        return {"granted_users": 0, "month": month, "skipped": True, "reason": "pilot_ended"}
+
+    # 5am IST gate: on the 1st, the burn runs at 00:00; the grant waits until 05:00.
+    if now.day == 1 and now.hour < 5:
+        return {"granted_users": 0, "month": month, "skipped": True, "reason": "before_0500_ist"}
+
+    if await db.loop_grant_log.find_one({"grant_month": month}):
+        return {"granted_users": 0, "month": month, "skipped": True, "reason": "already_granted"}
+
+    granted = 0
+    async for user in db.users.find({"cable_tv_linked": True, "loop_suspended": {"$ne": True}}):
+        try:
+            if await grant_monthly_loop_coins(user["id"], month):
+                granted += 1
+        except Exception as e:
+            logger.warning("LOOP grant: user %s failed: %s", user.get("id"), e)
+
+    await db.loop_grant_log.insert_one({
+        "grant_month": month,
+        "granted_users": granted,
+        "granted_at": datetime.utcnow(),
+    })
+    logger.info("LOOP grant: %s — granted %d user(s)", month, granted)
+    return {"granted_users": granted, "month": month, "skipped": False}
+
+
+async def _loop_grant_loop():
+    """Hourly infinite loop. Idempotency inside grant_loop_coins() ensures only the
+    first post-05:00-IST call each month does real work."""
+    logger.info("LOOP grant loop started (interval=%ds)", LOOP_GRANT_CHECK_INTERVAL_SECONDS)
+    while True:
+        try:
+            await grant_loop_coins()
+        except Exception as e:
+            logger.error("LOOP grant loop error: %s", e, exc_info=True)
+        await asyncio.sleep(LOOP_GRANT_CHECK_INTERVAL_SECONDS)
+
+
+@router.post("/admin/jobs/grant-loop-coins")
+async def trigger_loop_grant(_admin=Depends(verify_admin)):
+    """
+    Manually trigger the LOOP monthly grant. Respects the 05:00-IST gate, the
+    2027-02 pilot end, and the once-per-month loop_grant_log. To force a re-run in
+    testing: delete the db.loop_grant_log entry for the month AND the
+    loop_grant:{user}:{month} rows in db.loop_ledger for the test users.
+    """
+    result = await grant_loop_coins()
+    if not result.get("skipped"):
+        await db.loop_grant_log.update_one(
+            {"grant_month": result.get("month")},
+            {"$set": {"run_by": "admin"}},
+        )
     return result
