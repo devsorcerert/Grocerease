@@ -348,10 +348,10 @@ async def trigger_loop_burn(_admin=Depends(verify_admin)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Sprint A.5 Fix 3b — LOOP monthly coin grant
+# Sprint A.5 Fix 3c — LOOP monthly coin grant
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def grant_loop_coins() -> dict:
+async def grant_loop_coins(force: bool = False) -> dict:
     """
     Monthly pilot grant — give every STB/NUID-linked, non-suspended user a fresh
     1,000 GETV coins for the current IST month.
@@ -363,23 +363,32 @@ async def grant_loop_coins() -> dict:
     is safe — the next run only tops up users still missing that month's grant.
 
     Pilot ends 2027-02 — no grants for any month after that.
+
+    force=True (admin trigger): bypasses the 05:00-IST schedule gate so admins can
+    run the grant at any time on the 1st. The pilot-end guard and the
+    once-per-month idempotency check still apply regardless of force.
     """
     # Local import avoids the circular-import issue this codebase already works around.
-    from routers.loop_ledger import grant_monthly_loop_coins, ist_now
+    from datetime import timezone, timedelta
+    from routers.loop_ledger import grant_monthly_loop_coins
 
-    now = ist_now()
-    month = now.strftime("%Y-%m")
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now_ist = datetime.now(IST)
+    month = now_ist.strftime("%Y-%m")
 
+    # 1. Pilot-end guard — ALWAYS enforced (force does not bypass)
     if month > PILOT_LAST_GRANT_MONTH:
         return {"granted_users": 0, "month": month, "skipped": True, "reason": "pilot_ended"}
 
-    # 5am IST gate: on the 1st, the burn runs at 00:00; the grant waits until 05:00.
-    if now.day == 1 and now.hour < 5:
+    # 2. Schedule gate — bypassed when force=True (admin trigger)
+    if not force and (now_ist.day == 1 and now_ist.hour < 5):
         return {"granted_users": 0, "month": month, "skipped": True, "reason": "before_0500_ist"}
 
+    # 3. Once-per-month idempotency — ALWAYS enforced (force does not bypass)
     if await db.loop_grant_log.find_one({"grant_month": month}):
         return {"granted_users": 0, "month": month, "skipped": True, "reason": "already_granted"}
 
+    # 4. Perform grant
     granted = 0
     async for user in db.users.find({"cable_tv_linked": True, "loop_suspended": {"$ne": True}}):
         try:
@@ -388,12 +397,10 @@ async def grant_loop_coins() -> dict:
         except Exception as e:
             logger.warning("LOOP grant: user %s failed: %s", user.get("id"), e)
 
-    await db.loop_grant_log.insert_one({
-        "grant_month": month,
-        "granted_users": granted,
-        "granted_at": datetime.utcnow(),
-    })
-    logger.info("LOOP grant: %s — granted %d user(s)", month, granted)
+    log_doc = {"grant_month": month, "granted_users": granted, "granted_at": datetime.utcnow()}
+    log_doc["run_by"] = "admin" if force else "system"
+    await db.loop_grant_log.insert_one(log_doc)
+    logger.info("LOOP grant: %s — granted %d user(s) (run_by=%s)", month, granted, log_doc["run_by"])
     return {"granted_users": granted, "month": month, "skipped": False}
 
 
@@ -412,15 +419,16 @@ async def _loop_grant_loop():
 @router.post("/admin/jobs/grant-loop-coins")
 async def trigger_loop_grant(_admin=Depends(verify_admin)):
     """
-    Manually trigger the LOOP monthly grant. Respects the 05:00-IST gate, the
-    2027-02 pilot end, and the once-per-month loop_grant_log. To force a re-run in
-    testing: delete the db.loop_grant_log entry for the month AND the
-    loop_grant:{user}:{month} rows in db.loop_ledger for the test users.
+    Manually trigger the LOOP monthly grant.
+
+    The 05:00-IST schedule gate is bypassed for admin triggers (force=True),
+    so this endpoint can run the grant at any time on the 1st of the month.
+    The pilot-end guard (PILOT_LAST_GRANT_MONTH) and the once-per-month
+    idempotency check (loop_grant_log) still apply regardless.
+
+    To force a re-run in testing: delete the db.loop_grant_log entry for the
+    month AND the loop_grant:{user}:{month} rows in db.loop_ledger for the
+    test users.
     """
-    result = await grant_loop_coins()
-    if not result.get("skipped"):
-        await db.loop_grant_log.update_one(
-            {"grant_month": result.get("month")},
-            {"$set": {"run_by": "admin"}},
-        )
+    result = await grant_loop_coins(force=True)
     return result
