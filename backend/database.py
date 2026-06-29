@@ -87,9 +87,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict, expires_in: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_in if expires_in is not None else timedelta(minutes=30))
-    to_encode.update({"exp": expire})
+        to_encode = data.copy()
+    now = datetime.utcnow()
+    expire = now + (expires_in if expires_in is not None else timedelta(minutes=30))
+    # iat + a random jti make every issued token unique, even for the same user in the
+    # same second. Without this, HS256 signs identical {user_id, exp} payloads to a
+    # byte-identical token, so blacklisting one (e.g. on logout) silently revokes the
+    # other — which was 401'ing valid sessions and failing test_cart_operations.
+    to_encode.update({"exp": expire, "iat": now, "jti": uuid.uuid4().hex})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
