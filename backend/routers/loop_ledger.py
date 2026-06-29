@@ -274,7 +274,54 @@ async def _insert_row(user_id, txn_type, amount_paise, balance_after_paise,
     })
 
 
-async def grant_monthly_loop_coins(user_id: str, month_str: str) -> bool:     """     Pilot monthly grant — give `user_id` a fresh 1,000 GETV coins for `month_str`     ("YYYY-MM", IST). Idempotent (one grant per user per month, keyed     loop_grant:{user}:{month}) and leak-free against the month-end burn.     Triggered by the link action (3a) and the monthly 5am job (3b).     Returns True if granted, False if already granted this month.     """     ref_id = f"loop_grant:{user_id}:{month_str}"     if await db.loop_ledger.find_one({"reference_id": ref_id, "type": "credit"}):         return False  # already granted this month — no double credit      grant_paise = MONTHLY_COIN_CREDIT * 100   # 1,000 coins × 100 = 100,000 paise = ₹1,000      user = await db.users.find_one({"id": user_id})     if not user:         raise HTTPException(status_code=404, detail="User not found")      if user.get("loop_balance_month") == month_str:         # Already holds current-month coins from another source (e.g. admin credit):         # ADD the grant so a legitimate same-month balance isn't clobbered.         result = await db.users.find_one_and_update(             {"id": user_id},             {"$inc": {"loop_balance_paise": grant_paise}},             return_document=True,         )         new_balance_paise = int(result.get("loop_balance_paise", 0))     else:         # Stale prior-month leftover or empty: REPLACE the balance (overwrites any         # un-burned prior-month coins — pairs with the burn job, no rollover),         # stamp the IST month, reset the monthly redemption counters.         await db.users.update_one(             {"id": user_id},             {"$set": {                 "loop_balance_paise":          grant_paise,                 "loop_balance_month":          month_str,                 "loop_monthly_redeemed_paise": 0,                 "loop_monthly_period":         month_str,             }},         )         new_balance_paise = grant_paise      await _insert_row(         user_id, "credit", grant_paise, new_balance_paise,         "loop_monthly_grant", ref_id,         f"1,000 GETV coins — {month_str} pilot grant",     )     return True   # ── Gadget eligibility helper ─────────────────────────────────────────────────
+async def grant_monthly_loop_coins(user_id: str, month_str: str) -> bool:
+    """
+    Pilot monthly grant — give `user_id` a fresh 1,000 GETV coins for `month_str`
+    ("YYYY-MM", IST). Idempotent (one grant per user per month, keyed
+    loop_grant:{user}:{month}) and leak-free against the month-end burn.
+    Triggered by the link action (3a) and the monthly 5am job (3b).
+    Returns True if granted, False if already granted this month.
+    """
+    ref_id = f"loop_grant:{user_id}:{month_str}"
+    if await db.loop_ledger.find_one({"reference_id": ref_id, "type": "credit"}):
+        return False  # already granted this month — no double credit
+
+    grant_paise = MONTHLY_COIN_CREDIT * 100   # 1,000 coins × 100 = 100,000 paise = ₹1,000
+
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.get("loop_balance_month") == month_str:
+        # Already holds current-month coins from another source (e.g. admin credit):
+        # ADD the grant so a legitimate same-month balance isn't clobbered.
+        result = await db.users.find_one_and_update(
+            {"id": user_id},
+            {"$inc": {"loop_balance_paise": grant_paise}},
+            return_document=True,
+        )
+        new_balance_paise = int(result.get("loop_balance_paise", 0))
+    else:
+        # Stale prior-month leftover or empty: REPLACE the balance (overwrites any
+        # un-burned prior-month coins — pairs with the burn job, no rollover),
+        # stamp the IST month, reset the monthly redemption counters.
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "loop_balance_paise":          grant_paise,
+                "loop_balance_month":          month_str,
+                "loop_monthly_redeemed_paise": 0,
+                "loop_monthly_period":         month_str,
+            }},
+        )
+        new_balance_paise = grant_paise
+
+    await _insert_row(
+        user_id, "credit", grant_paise, new_balance_paise,
+        "loop_monthly_grant", ref_id,
+        f"1,000 GETV coins — {month_str} pilot grant",
+    )
+    return True
 
 async def check_gadget_eligibility(user_id: str):
     """
