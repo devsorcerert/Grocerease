@@ -497,7 +497,9 @@ async def get_user_notifications_legacy(user_id: str = Depends(get_current_user)
 @api_router.post("/cable-tv/link")
 async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current_user)):
     """Link a GTPL cable TV connection via STB number validation."""
-    stb_doc = await db.stb_numbers.find_one({"stb_number": data.stb_number, "network": "gtpl"})
+    # Normalise: strip whitespace + uppercase so hex NUIDs match regardless of case
+    stb = data.stb_number.strip().upper()
+    stb_doc = await db.stb_numbers.find_one({"stb_number": stb, "network": "gtpl"})
     if not stb_doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -510,13 +512,13 @@ async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current
         )
     now = datetime.utcnow()
     cable_details = {
-        "stb_number": data.stb_number,
+        "stb_number": stb,  # store normalised form
         "network": "gtpl",
         "service_provider": "GTPL",
         "linked_at": now.isoformat()
     }
     await db.stb_numbers.update_one(
-        {"stb_number": data.stb_number},
+        {"stb_number": stb},
         {"$set": {"status": "linked", "linked_user_id": user_id, "linked_at": now}}
     )
     await db.users.update_one(
@@ -546,7 +548,9 @@ async def unlink_cable_tv(user_id: str = Depends(get_current_user)):
 @api_router.get("/cable-tv/validate-stb/{stb_number}")
 async def validate_stb_number(stb_number: str, user_id: str = Depends(get_current_user)):
     """Check if a GTPL STB number exists and is available for linking."""
-    stb_doc = await db.stb_numbers.find_one({"stb_number": stb_number, "network": "gtpl"})
+    # Normalise: strip whitespace + uppercase (mirrors link_cable_tv exactly)
+    stb = stb_number.strip().upper()
+    stb_doc = await db.stb_numbers.find_one({"stb_number": stb, "network": "gtpl"})
     if not stb_doc:
         return {"valid": False, "message": "STB number not found in GTPL network"}
     if stb_doc.get("status") == "linked" and stb_doc.get("linked_user_id") != user_id:

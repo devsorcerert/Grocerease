@@ -239,7 +239,7 @@ export default function HomeScreen() {
 
     try {
       await api.post('/cable-tv/link', {
-        stb_number: stbNumber,
+        stb_number: stbNumber.trim().toUpperCase(),
         service_provider: serviceProvider,
       });
       Alert.alert('Success', 'Cable TV linked successfully!');
@@ -507,8 +507,8 @@ export default function HomeScreen() {
                   placeholder="Enter your STB number"
                   placeholderTextColor="#9CA3AF"
                   value={stbNumber}
-                  onChangeText={setStbNumber}
-                  autoCapitalize="none"
+                  onChangeText={t => setStbNumber(t.toUpperCase())}
+                  autoCapitalize="characters"
                   returnKeyType="done"
                 />
 
