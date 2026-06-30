@@ -220,7 +220,7 @@ async def login(user: UserLogin, _=Depends(rate_limit)):
     
     token = create_access_token({"user_id": db_user["id"]})
     refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"}, expires_in=timedelta(days=30))
-    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email")}}
+    return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "email"), "cable_tv_linked": db_user.get("cable_tv_linked", False), "cable_tv_details": db_user.get("cable_tv_details")}}
 
 
 @api_router.post("/auth/logout")
@@ -436,7 +436,7 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
         
         token = create_access_token({"user_id": db_user["id"]})
         refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
-        return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "google")}}
+        return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "google"), "cable_tv_linked": db_user.get("cable_tv_linked", False), "cable_tv_details": db_user.get("cable_tv_details")}}
     
     except HTTPException:
         raise

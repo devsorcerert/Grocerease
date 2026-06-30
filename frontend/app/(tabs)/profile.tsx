@@ -19,7 +19,7 @@ export default function ProfileScreen() {
 
   const fetchOrders = async () => {
     try {
-      const response = await api.get('/user/orders');
+      const response = await api.get('/orders');
       setOrders(response.data.orders || response.data || []);
     } catch (error) {
       console.error('Failed to fetch orders:', error);

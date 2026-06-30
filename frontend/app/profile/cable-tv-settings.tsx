@@ -161,7 +161,7 @@ export default function CableTVSettingsScreen() {
                 {user.cable_tv_details?.service_provider || 'Cable TV'}
               </Text>
               <Text style={styles.providerSub}>
-                NUID: {user.cable_tv_details?.user_id_nuid || 'N/A'}
+                STB: {user.cable_tv_details?.stb_number || 'N/A'}
               </Text>
             </View>
             <View style={styles.activeBadge}>
