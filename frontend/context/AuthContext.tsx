@@ -49,9 +49,10 @@ interface User {
   city?: string;
   pincode?: string;
   cable_tv_details?: {
-    user_id_nuid: string;
-    phone: string;
+    stb_number: string;
     service_provider: string;
+    network?: string;
+    linked_at?: string;
   };
   is_admin?: boolean;
 }
@@ -200,6 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.setItem('refresh_token', refresh_token || '');
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    await refreshUser();
     registerPushToken();
     startTokenRefreshTimer();
       };
@@ -224,6 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.setItem('refresh_token', refresh_token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setUser(user);
+    await refreshUser();
     registerPushToken();
     startTokenRefreshTimer();
   };
