@@ -77,3 +77,4 @@ google-auth==2.29.0
 cachetools==5.3.3
 
 mongomock_motor==0.0.21
+sentry-sdk[fastapi]>=2.0.0
