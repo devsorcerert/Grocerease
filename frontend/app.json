@@ -44,7 +44,13 @@
           "iosUrlScheme": "com.googleusercontent.apps.418665414188-3teeuukmq7m66m5lra36mc6be32i1n2f"
         }
       ],
-      "@sentry/react-native/expo"
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "grocereasetv",
+          "project": "grocerease-android"
+        }
+      ]
     ]
   }
 }

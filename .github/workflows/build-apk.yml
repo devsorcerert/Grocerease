@@ -104,6 +104,7 @@ jobs:
           GOOGLE_CLIENT_ID_IOS: ${{ secrets.GOOGLE_CLIENT_ID_IOS }}
           RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           BACKEND_URL="${API_BASE_URL:-https://api.grocereasetv.com}"
           echo "EXPO_PUBLIC_API_URL=$BACKEND_URL" >> .env
@@ -114,6 +115,7 @@ jobs:
           echo "EXPO_PUBLIC_RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}" >> .env
           echo "FIREBASE_API_KEY=${FIREBASE_API_KEY:-}" >> .env
           echo "EXPO_PUBLIC_ADMIN_EMAIL=grocereasetv@gmail.com" >> .env
+          echo "EXPO_PUBLIC_SENTRY_DSN=${SENTRY_DSN:-}" >> .env
           echo "Backend URL set to: $BACKEND_URL"
 
       - name: Generate google-services.json for Android
@@ -205,6 +207,9 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: grocereasetv
+          SENTRY_PROJECT: grocerease-android
 
       - name: Rename APK
         run: |
