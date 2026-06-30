@@ -141,9 +141,14 @@ def clean_mongo_doc(doc):
         return doc
     doc.pop("_id", None)
 
-    # image_url is canonical (CONTRACTS.md §7). Drop any legacy "image" alias so
-    # API responses always use image_url — never rename it.
-    doc.pop("image", None)
+    # image_url is canonical. Fall back to legacy "image" field so products
+    # uploaded before the DB migration still show images at read time.
+    if not doc.get("image_url"):
+        legacy = doc.pop("image", None)
+        if legacy:
+            doc["image_url"] = legacy
+    else:
+        doc.pop("image", None)
 
     # Guarded helper to safely convert float prices to paise ints
     def _to_paise(val):
