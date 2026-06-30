@@ -14,7 +14,7 @@ import jwt
 from pydantic import BaseModel
 from database import (
     db, hash_password, verify_password, create_access_token,
-    clean_mongo_doc, security, SECRET_KEY, ALGORITHM
+    clean_mongo_doc, security, SECRET_KEY, ALGORITHM, rate_limit
 )
 
 router = APIRouter(prefix="/rider", tags=["Rider"])
@@ -28,10 +28,14 @@ MAX_QUEUE_SIZE = 3  # max orders a single rider can hold (1 active + 2 queued)
 
 async def get_current_rider(credentials=Depends(security)):
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         rider_id = payload.get("rider_id")
         if not rider_id:
             raise HTTPException(status_code=401, detail="Invalid rider token")
+        is_blacklisted = await db.blacklisted_tokens.find_one({"token": token})
+        if is_blacklisted:
+            raise HTTPException(status_code=401, detail="Token has been revoked")
         return rider_id
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid rider token")
@@ -83,7 +87,7 @@ STATUS_TO_ORDER_STATUS = {
 # ---------------------------------------------------------------------------
 
 @router.post("/register")
-async def rider_self_register(data: RiderRegister):
+async def rider_self_register(data: RiderRegister, _=Depends(rate_limit)):
     """
     Task 30 — Rider self-onboarding.
     Creates a rider with status 'pending_approval'; admin must approve before
@@ -115,7 +119,7 @@ async def rider_self_register(data: RiderRegister):
 
 
 @router.post("/login")
-async def rider_login(data: RiderLogin):
+async def rider_login(data: RiderLogin, _=Depends(rate_limit)):
     rider = await db.riders.find_one({"phone": data.phone})
     if not rider or not verify_password(data.password, rider.get("password", "")):
         raise HTTPException(status_code=401, detail="Invalid phone or password")

@@ -41,6 +41,7 @@ User document fields (added by this module):
   total_spend_paise           — cumulative lifetime spend (existing field)
 """
 
+import os
 import uuid
 import logging
 from calendar import monthrange
@@ -71,7 +72,7 @@ SPEND_TIERS = [
 GADGET_THRESHOLD_PAISE      = 70_000_00     # ₹70,000 in 6 months
 GADGET_WINDOW_MONTHS        = 6
 
-MSO_SHARED_SECRET           = "grocerease-mso-pilot-2024"  # TODO: move to env var
+MSO_SHARED_SECRET           = os.environ.get("MSO_SHARED_SECRET", "grocerease-mso-pilot-2024")
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 class AdminCreditRequest(BaseModel):

@@ -11,8 +11,15 @@ export const login = async (email, password) => {
   return response.data;
 };
 
-export const logout = () => {
+export const logout = async () => {
+  const refreshToken = localStorage.getItem('admin_refresh_token');
+  try {
+    await api.post('/auth/logout', { refresh_token: refreshToken || null });
+  } catch (_) {
+    // Best-effort: always clear local state even if backend call fails
+  }
   localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_refresh_token');
   window.location.href = '/login';
 };
 
