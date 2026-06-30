@@ -12,6 +12,7 @@ const ProductModal = ({ product, onClose }) => {
     stock: '',
     description: '',
     image: '',
+    is_featured: false,
   });
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ const ProductModal = ({ product, onClose }) => {
         stock: product.stock || '',
         description: product.description || '',
         image: product.image || '',
+        is_featured: product.is_featured || false,
       });
     }
   }, [product]);
@@ -56,7 +58,7 @@ const ProductModal = ({ product, onClose }) => {
 
     try {
       if (product) {
-        await updateProduct(product._id, formData);
+        await updateProduct(product.id, formData);
       } else {
         await createProduct(formData);
       }

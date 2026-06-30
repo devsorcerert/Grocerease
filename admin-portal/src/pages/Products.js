@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getProducts, deleteProduct, uploadExcel } from '../services/products';
+import { getProducts, deleteProduct, uploadExcel, toggleFeatured } from '../services/products';
 import ProductModal from '../components/ProductModal';
 import '../styles/Products.css';
 
@@ -35,6 +35,17 @@ const Products = () => {
       loadProducts();
     } catch (err) {
       alert('Failed to delete product');
+    }
+  };
+
+  const handleToggleFeatured = async (product) => {
+    try {
+      const result = await toggleFeatured(product.id);
+      setProducts((prev) =>
+        prev.map((p) => p.id === product.id ? { ...p, is_featured: result.is_featured } : p)
+      );
+    } catch (err) {
+      alert('Failed to update featured status');
     }
   };
 
@@ -107,6 +118,7 @@ const Products = () => {
           <table className="products-table">
             <thead>
               <tr>
+                <th>★</th>
                 <th>Image</th>
                 <th>Name</th>
                 <th>Category</th>
@@ -119,10 +131,20 @@ const Products = () => {
             </thead>
             <tbody>
               {products.map((product) => (
-                <tr key={product._id}>
+                <tr key={product.id}>
                   <td>
-                    {product.image ? (
-                      <img src={product.image} alt={product.name} className="product-thumb" />
+                    <button
+                      onClick={() => handleToggleFeatured(product)}
+                      className="star-btn"
+                      title={product.is_featured ? 'Remove from featured' : 'Mark as featured'}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: product.is_featured ? '#f59e0b' : '#d1d5db' }}
+                    >
+                      {product.is_featured ? '★' : '☆'}
+                    </button>
+                  </td>
+                  <td>
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} className="product-thumb" />
                     ) : (
                       <div className="no-image">No Image</div>
                     )}
@@ -131,11 +153,11 @@ const Products = () => {
                   <td>{product.category}</td>
                   <td>{product.brand || '-'}</td>
                   <td>₹{product.price}</td>
-                  <td>{product.offerPrice ? `₹${product.offerPrice}` : '-'}</td>
+                  <td>{product.offer_price ? `₹${product.offer_price}` : '-'}</td>
                   <td>{product.stock || 0}</td>
                   <td>
                     <button onClick={() => handleEdit(product)} className="edit-btn">Edit</button>
-                    <button onClick={() => handleDelete(product._id)} className="delete-btn">Delete</button>
+                    <button onClick={() => handleDelete(product.id)} className="delete-btn">Delete</button>
                   </td>
                 </tr>
               ))}

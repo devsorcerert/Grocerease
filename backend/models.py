@@ -108,6 +108,7 @@ class AdminProductUpdate(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     is_active: Optional[bool] = None
+    is_featured: Optional[bool] = None
     store_id: Optional[str] = None
 
 

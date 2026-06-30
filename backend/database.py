@@ -196,6 +196,8 @@ def clean_mongo_doc(doc):
     if "offer_price" not in doc and "mrp_paise" in doc and doc["mrp_paise"] is not None:
         doc["offer_price"] = round(doc["mrp_paise"] / 100, 2)
 
+    doc.setdefault("is_featured", False)
+
     return doc
 
 def clean_mongo_docs(docs):

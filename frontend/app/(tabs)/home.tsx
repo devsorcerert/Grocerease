@@ -194,15 +194,27 @@ export default function HomeScreen() {
   const fetchFeaturedProducts = async () => {
     try {
       const response = await api.get('/products/featured');
-      const products = response.data.products || response.data;
-      setProducts(Array.isArray(products) ? products : []);
-    } catch {
-      // Fallback to regular products if no featured ones yet
+      const featured = response.data.products || response.data;
+      const list = Array.isArray(featured) ? featured : [];
+      if (list.length > 0) {
+        setProducts(list);
+      } else {
+        // No featured products configured yet — show a sample of regular products
+        // so the home screen is never blank on a fresh store.
+        const fallback = await api.get('/products');
+        const prods = fallback.data.products || fallback.data;
+        setProducts(Array.isArray(prods) ? prods.slice(0, 6) : []);
+      }
+    } catch (err) {
+      console.error('[fetchFeaturedProducts] error:', err);
+      // Network/server error — still try the fallback so the screen isn't broken
       try {
         const fallback = await api.get('/products');
         const prods = fallback.data.products || fallback.data;
         setProducts(Array.isArray(prods) ? prods.slice(0, 6) : []);
-      } catch {}
+      } catch (fallbackErr) {
+        console.error('[fetchFeaturedProducts] fallback also failed:', fallbackErr);
+      }
     }
   };
 

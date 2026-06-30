@@ -32,6 +32,11 @@ export const uploadExcel = async (file) => {
   return response.data;
 };
 
+export const toggleFeatured = async (productId) => {
+  const response = await api.post(`/admin/products/${productId}/toggle-featured`);
+  return response.data;
+};
+
 export const getCategories = async () => {
   const response = await api.get('/admin/categories');
   return response.data;

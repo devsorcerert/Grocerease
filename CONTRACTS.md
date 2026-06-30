@@ -229,10 +229,20 @@ One product shape across seed, bulk upload, Excel upload, and API reads. Canonic
 ```
 id, name, category, subcategory, brand, price_paise (int),
 mrp_paise (int | null), stock (int), unit, description,
-image_url (string URL), is_active (bool), store_id (added in Task 20)
+image_url (string URL), is_active (bool), is_featured (bool, default false),
+store_id (added in Task 20)
 ```
 - ❌ Do not use the variants `price`, `offerPrice`, `original_price`, `offer_price`, or `image` anywhere. Normalize all write paths to the names above (Task 18).
 - API reads always return `image_url` (not `image`).
+- `is_featured` is always present in API reads (defaulted to `false` by `clean_mongo_doc` when absent in the document).
+
+### Featured product endpoints
+| Endpoint | Auth | Use |
+|---|---|---|
+| `GET /api/products/featured` | public | Returns `{ products: [...], total: N }` — only docs where `is_featured == true`. Falls back (client-side) to regular products when the list is empty. |
+| `POST /api/admin/products/{id}/toggle-featured` | admin | Flips `is_featured` on the product keyed by `id` (UUID). Returns `{ id, is_featured }`. |
+
+Products are always addressed by `id` (UUID string). The Mongo `_id` / ObjectId is stripped at serialization and must never appear in any client call.
 
 ---
 
