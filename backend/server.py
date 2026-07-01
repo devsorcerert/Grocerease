@@ -830,6 +830,17 @@ async def get_product_analytics(user_id: str = Depends(get_current_user)):
         "avg_price": round(sum(p.get("price_paise", 0) / 100 for p in all_products) / total_products if total_products > 0 else 0, 2)  # AC-7
     }
 
+@api_router.get("/products/featured")
+async def get_featured_products():
+    """Return all products marked as featured.
+
+    NOTE: must be declared BEFORE /products/{product_id}, otherwise FastAPI
+    matches "featured" as a product_id and returns 404 "Product not found".
+    """
+    products = await db.products.find({"is_featured": True}).to_list(100)
+    products = [clean_mongo_doc(p) for p in products]
+    return {"products": products, "total": len(products)}
+
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
     product = await db.products.find_one({"id": product_id})
@@ -956,9 +967,25 @@ async def delete_product(product_id: str, user_id: str = Depends(get_current_use
 YOUTUBE_CHANNEL_ID = "UCOjJni2DDwFZ6-Zji0Kjphw"
 YOUTUBE_RSS_URL = f"https://www.youtube.com/feeds/videos.xml?channel_id={YOUTUBE_CHANNEL_ID}"
 
+# In-memory cache for the YouTube RSS result. Keeps /videos fast (no live RSS
+# fetch on every request) and, crucially, serves the last good result if a later
+# RSS fetch fails — so a transient YouTube blip never empties the GrocerEase TV tab.
+_YT_CACHE: dict = {"data": [], "ts": 0.0}
+_YT_TTL_SECONDS = 600  # 10 minutes
+
 async def fetch_youtube_videos() -> list:
-    """Fetch latest videos from GrocerEase YouTube channel via RSS (no API key needed)."""
+    """Fetch latest videos from GrocerEase YouTube channel via RSS (no API key needed).
+
+    Result is cached for _YT_TTL_SECONDS; on fetch failure the last cached result
+    is returned instead of an empty list.
+    """
+    import time
     import xml.etree.ElementTree as ET
+
+    now = time.time()
+    if _YT_CACHE["data"] and (now - _YT_CACHE["ts"]) < _YT_TTL_SECONDS:
+        return _YT_CACHE["data"]
+
     ns = {
         "atom":  "http://www.w3.org/2005/Atom",
         "yt":    "http://www.youtube.com/xml/schemas/2015",
@@ -994,10 +1021,12 @@ async def fetch_youtube_videos() -> list:
                 "source": "youtube",
                 "created_at": published,
             })
+        _YT_CACHE["data"] = videos
+        _YT_CACHE["ts"] = now
         return videos
     except Exception as e:
         logging.warning(f"YouTube RSS fetch failed: {e}")
-        return []
+        return _YT_CACHE["data"]  # serve last-good result instead of emptying the tab
 
 @api_router.get("/videos")
 async def get_videos():
@@ -1276,13 +1305,6 @@ async def admin_delete_product(product_id: str, admin=Depends(verify_admin)):
 # Excel import
 from fastapi import File, UploadFile
 
-
-@api_router.get("/products/featured")
-async def get_featured_products():
-    """Return all products marked as featured."""
-    products = await db.products.find({"is_featured": True}).to_list(100)
-    products = [clean_mongo_doc(p) for p in products]
-    return {"products": products, "total": len(products)}
 
 @api_router.post("/admin/products/{product_id}/toggle-featured")
 async def toggle_featured_product(product_id: str, admin=Depends(verify_admin)):
