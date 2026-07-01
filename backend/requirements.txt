@@ -77,3 +77,10 @@ google-auth==2.29.0
 cachetools==5.3.3
 
 mongomock_motor==0.0.21
+
+# Sentry error tracking (Task 8). Plain package — NOT sentry-sdk[fastapi]:
+# the [fastapi] extra forces pip to re-resolve fastapi/starlette against the
+# hard pins above and fails the Render build. FastApiIntegration/StarletteIntegration
+# still load because fastapi+starlette are already pinned above. server.py
+# soft-imports this and only activates when SENTRY_DSN is set in the environment.
+sentry-sdk==2.38.0
