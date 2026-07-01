@@ -45,6 +45,7 @@ interface Video {
 export default function VideosScreen() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [activeVideo, setActiveVideo] = useState<Video | null>(null);
   const [showPlayer, setShowPlayer] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
@@ -53,12 +54,35 @@ export default function VideosScreen() {
 
   useEffect(() => { fetchVideos(); }, []);
 
-  const fetchVideos = async () => {
+  // Render free-tier cold start can exceed the first request's window, so the
+  // first call may time out even though the endpoint is healthy. Retry once
+  // (by which point the instance is warm) before showing an error, and never
+  // swallow the failure silently — a real error must be visible, not disguised
+  // as an empty "No videos yet".
+  const fetchVideos = async (attempt = 1) => {
     try {
       const res = await api.get('/videos');
-      setVideos(res.data);
-    } catch {}
-    finally { setLoading(false); }
+      setVideos(Array.isArray(res.data) ? res.data : []);
+      setError(false);
+      setLoading(false);
+    } catch (e: any) {
+      console.error(
+        `[videos] fetch attempt ${attempt} failed:`,
+        e?.message || e, e?.code, e?.response?.status,
+      );
+      if (attempt < 2) {
+        setTimeout(() => fetchVideos(attempt + 1), 3000);
+      } else {
+        setError(true);
+        setLoading(false);
+      }
+    }
+  };
+
+  const retryVideos = () => {
+    setLoading(true);
+    setError(false);
+    fetchVideos();
   };
 
   const handleAddAllIngredients = async (video: Video) => {
@@ -128,9 +152,17 @@ export default function VideosScreen() {
 
       {videos.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name="videocam-off-outline" size={64} color="#D1D5DB" />
-          <Text style={styles.emptyText}>No videos yet</Text>
-          <Text style={styles.emptySubtext}>Check back soon for cooking shows!</Text>
+          <Ionicons name={error ? 'cloud-offline-outline' : 'videocam-off-outline'} size={64} color="#D1D5DB" />
+          <Text style={styles.emptyText}>{error ? "Couldn't load videos" : 'No videos yet'}</Text>
+          <Text style={styles.emptySubtext}>
+            {error ? 'Check your connection and try again.' : 'Check back soon for cooking shows!'}
+          </Text>
+          {error && (
+            <TouchableOpacity style={styles.retryBtn} onPress={retryVideos}>
+              <Ionicons name="refresh" size={16} color={BRAND} />
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
@@ -210,7 +242,15 @@ export default function VideosScreen() {
             )}
           </View>
           {activeVideo && (
-            <WebView source={{ uri: getEmbedUrl(activeVideo) }} style={styles.webview} allowsFullscreenVideo allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} javaScriptEnabled />
+            <WebView
+              source={{ uri: getEmbedUrl(activeVideo) }}
+              style={styles.webview}
+              allowsFullscreenVideo
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              javaScriptEnabled
+              domStorageEnabled
+            />
           )}
           {activeVideo && activeVideo.ingredients.length > 0 && (
             <View style={styles.playerBottom}>
@@ -266,6 +306,8 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#6B7280', marginTop: 2 },
   emptyText: { fontSize: 18, fontWeight: '600', color: '#6B7280' },
   emptySubtext: { fontSize: 13, color: '#9CA3AF' },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: BRAND },
+  retryBtnText: { color: BRAND, fontSize: 14, fontWeight: '600' },
   card: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#F3F4F6', elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   thumbnailContainer: { position: 'relative', width: '100%', height: 200 },
   thumbnail: { width: '100%', height: '100%' },
