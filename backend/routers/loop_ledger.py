@@ -103,6 +103,13 @@ def get_tier(monthly_spend_paise: int) -> dict:
     return {"tier_name": "Base", "min_spend": 0, "max_redeemable_paise": 0, "max_redeemable": 0}
 
 
+def ist_now() -> datetime:
+    """Current time in IST (UTC+5:30). The LOOP grant/burn logic keys off the IST
+    calendar month. background_jobs.grant_loop_coins imports this — its absence
+    was raising ImportError every iteration and silently killing the monthly grant."""
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
+
 def current_month_str() -> str:
     return datetime.utcnow().strftime("%Y-%m")
 
