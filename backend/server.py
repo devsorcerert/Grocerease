@@ -546,8 +546,15 @@ async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current
     # Pilot: linking grants this IST month's 1,000 GETV coins (idempotent — re-linking won't double-credit).
     # Function-local import avoids the circular-import issue this module already works around.
     from routers.loop_ledger import grant_monthly_loop_coins, current_month_str
-    month = current_month_str()
-    granted = await grant_monthly_loop_coins(user_id, month)
+    granted = False
+    month = None
+    try:
+        month = current_month_str()
+        granted = await grant_monthly_loop_coins(user_id, month)
+    except Exception as e:
+        # The link itself already succeeded above — never let a coin-grant hiccup
+        # 500 the request and make the app show "Failed to link".
+        logging.warning(f"cable-tv link: monthly coin grant failed for user {user_id}: {e}")
     msg = f"Cable TV linked — 1,000 GETV coins added for {month}!" if granted else "Cable TV linked successfully"
     return {"success": True, "message": msg, "cable_details": cable_details}
 
@@ -1359,8 +1366,19 @@ async def update_offer(offer_id: str, offer_data: dict, admin=Depends(verify_adm
 @api_router.get("/offers")
 async def get_active_offers():
     offers = await db.offers.find({"is_active": True}).sort("created_at", -1).to_list(100)
+    # Offers store product_id but no image — join each offer's product so the
+    # customer home screen can render an image + unit alongside the offer price.
+    product_ids = [o.get("product_id") for o in offers if o.get("product_id")]
+    products: dict = {}
+    if product_ids:
+        async for p in db.products.find({"id": {"$in": product_ids}}):
+            products[p["id"]] = clean_mongo_doc(p)
     for o in offers:
         o.pop("_id", None)
+        prod = products.get(o.get("product_id"))
+        if prod:
+            o.setdefault("image_url", prod.get("image_url") or "")
+            o.setdefault("unit", prod.get("unit") or "")
     return {"offers": offers}
 
 
