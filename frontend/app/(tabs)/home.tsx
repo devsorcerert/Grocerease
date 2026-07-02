@@ -61,6 +61,7 @@ export default function HomeScreen() {
   const [stbNumber, setStbNumber] = useState('');
   const [serviceProvider, setServiceProvider] = useState('');
   const [providers, setProviders] = useState<any[]>([]);
+  const [offers, setOffers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
@@ -81,6 +82,7 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchProviders();
     fetchFeaturedProducts();
+    fetchOffers();
     fetchCategories();
     fetchVideos();
     detectLocation();
@@ -92,6 +94,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchFeaturedProducts();
+      fetchOffers();
     }, [])
   );
 
@@ -191,6 +194,16 @@ export default function HomeScreen() {
     }
   };
 
+  const fetchOffers = async () => {
+    try {
+      const res = await api.get('/offers');
+      const list = res.data?.offers ?? res.data;
+      setOffers(Array.isArray(list) ? list : []);
+    } catch {
+      // Offers are promotional -- non-fatal if they fail to load.
+    }
+  };
+
   const fetchFeaturedProducts = async () => {
     try {
       const response = await api.get('/products/featured');
@@ -250,15 +263,23 @@ export default function HomeScreen() {
     }
 
     try {
-      await api.post('/cable-tv/link', {
+      const res = await api.post('/cable-tv/link', {
         stb_number: stbNumber.trim().toUpperCase(),
         service_provider: serviceProvider,
       });
-      Alert.alert('Success', 'Cable TV linked successfully!');
+      Alert.alert('Success', res.data?.message || 'Cable TV linked successfully!');
       setShowCableTVModal(false);
-      refreshUser();
-    } catch {
-      Alert.alert('Error', 'Failed to link Cable TV');
+      await refreshUser();
+    } catch (e: any) {
+      // Surface the real reason instead of a generic failure: 404 = number not
+      // found, 409 = already linked, 401 = session expired, timeout = cold start.
+      console.error('[cable-tv] link failed:', e?.message, e?.code, e?.response?.status, e?.response?.data);
+      const detail =
+        e?.response?.data?.detail ||
+        (e?.code === 'ECONNABORTED'
+          ? 'The server is waking up. Please try again in a moment.'
+          : 'Could not reach the server. Check your connection and try again.');
+      Alert.alert('Could not link Cable TV', detail);
     }
   };
 
@@ -450,6 +471,46 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Special Offers */}
+        {offers.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Special Offers</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+              {offers.map((offer) => (
+                <TouchableOpacity
+                  key={offer.id}
+                  style={styles.offerCard}
+                  onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: offer.product_id } })}
+                >
+                  <View style={styles.offerImageWrap}>
+                    <ProductImage uri={offer.image_url} style={styles.offerImage} />
+                    {!!offer.label && (
+                      <View style={styles.offerBadge}>
+                        <Text style={styles.offerBadgeText} numberOfLines={1}>{offer.label}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.offerBody}>
+                    <Text style={styles.offerName} numberOfLines={2}>{offer.product_name}</Text>
+                    {!!offer.unit && <Text style={styles.productUnit}>{offer.unit}</Text>}
+                    <View style={styles.productFooter}>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.productPrice}>₹{Math.ceil(offer.offer_price || 0)}</Text>
+                        {offer.original_price > offer.offer_price && (
+                          <Text style={styles.originalPrice}>₹{Math.ceil(offer.original_price)}</Text>
+                        )}
+                      </View>
+                      <QuantitySelector productId={offer.product_id} size="small" color="#FF8C42" />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* GrocerEase TV Section */}
         <View style={styles.section}>
           <View style={styles.tvSectionHeader}>
@@ -617,6 +678,13 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  offerCard: { width: 160, marginLeft: 16, backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F3F4F6', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  offerImageWrap: { position: 'relative', width: '100%', height: 110, backgroundColor: '#F9FAFB' },
+  offerImage: { width: '100%', height: '100%' },
+  offerBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, maxWidth: '85%' },
+  offerBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  offerBody: { padding: 10 },
+  offerName: { fontSize: 13, fontWeight: '600', color: '#111', marginBottom: 2 },
   container: { flex: 1, backgroundColor: '#fff' },
   topBanner: { backgroundColor: '#2D8B47' },
   scrollContainer: { flex: 1 },
