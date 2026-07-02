@@ -173,8 +173,12 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         product = await db.products.find_one({"id": item["product_id"]})
         if not product:
             raise HTTPException(status_code=400, detail=f"Product not found: {item['product_id']}")
-            
-        item_price = round(product.get("price_paise", 0) / 100, 2)
+
+        # Most products still carry a legacy rupee `price` (not `price_paise`).
+        # clean_mongo_doc synthesizes price_paise from it, so the total is never 0
+        # for those — without this, subtotal collapses to just the delivery fee.
+        product = clean_mongo_doc(product)
+        item_price = round((product.get("price_paise") or 0) / 100, 2)
         subtotal += item_price * item["quantity"]
         
         items_to_save.append({
@@ -634,7 +638,8 @@ async def get_checkout_summary(coupon_code: Optional[str] = None, user_id: str =
     for item in cart_items:
         product = await db.products.find_one({"id": item["product_id"]})
         if product:
-            item_price = round(product.get("price_paise", 0) / 100, 2)
+            product = clean_mongo_doc(product)
+            item_price = round((product.get("price_paise") or 0) / 100, 2)
             subtotal += item_price * item["quantity"]
             
     delivery_fee = 0.0 if subtotal >= 299.0 else 30.0
