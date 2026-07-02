@@ -116,11 +116,22 @@ export default function VideosScreen() {
     } finally { setAddingCart(false); }
   };
 
-  const getEmbedUrl = (video: Video): string => {
-    if (!video.stream_url) return '';
+  // A bare youtube.com/embed URI loaded in an Android WebView has no valid HTTP
+  // origin/referrer, which YouTube rejects as playback error 150/153. Serving the
+  // iframe inside an HTML document with a real youtube.com baseUrl gives it a
+  // valid origin and fixes the error.
+  const getPlayerSource = (video: Video): any => {
+    if (!video.stream_url) return { uri: '' };
     const ytId = getYouTubeId(video.stream_url);
-    if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1&playsinline=1&rel=0`;
-    return video.stream_url;
+    if (!ytId) return { uri: video.stream_url };
+    const html = `<!DOCTYPE html><html><head>`
+      + `<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">`
+      + `<style>*{margin:0;padding:0}html,body{height:100%;background:#000;overflow:hidden}`
+      + `iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style></head><body>`
+      + `<iframe src="https://www.youtube.com/embed/${ytId}?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1"`
+      + ` allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`
+      + `</body></html>`;
+    return { html, baseUrl: 'https://www.youtube.com' };
   };
 
   const getThumbnail = (video: Video): string => {
@@ -243,8 +254,9 @@ export default function VideosScreen() {
           </View>
           {activeVideo && (
             <WebView
-              source={{ uri: getEmbedUrl(activeVideo) }}
+              source={getPlayerSource(activeVideo)}
               style={styles.webview}
+              originWhitelist={['*']}
               allowsFullscreenVideo
               allowsInlineMediaPlayback
               mediaPlaybackRequiresUserAction={false}
