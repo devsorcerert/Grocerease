@@ -530,6 +530,9 @@ export default function HomeScreen() {
             {videos.map((video) => (
               <TouchableOpacity key={video.id} style={styles.videoCard} onPress={() => router.push('/(tabs)/videos')}>
                 <View style={styles.videoThumbnail}>
+                  {video.thumbnail ? (
+                    <Image source={{ uri: video.thumbnail }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                  ) : null}
                   <Ionicons name="play-circle" size={40} color="#fff" />
                   {video.is_live && (
                     <View style={styles.liveBadge}>
