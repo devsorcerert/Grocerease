@@ -105,6 +105,11 @@ async def startup_db_client():
 
         # Admin login failure tracking (Fix 5)
         await db.admin_login_fails.create_index("email", unique=True)
+
+        # OTP send-log TTL (Fix 6): docs auto-expire after 1h so the count query
+        # in /auth/send-otp stays fast without a housekeeping cron.
+        await db.otp_send_log.create_index("phone")
+        await db.otp_send_log.create_index("created_at", expireAfterSeconds=3600)
         
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})
@@ -1846,12 +1851,20 @@ async def send_support_message(msg: SupportMessage, user_id: str = Depends(get_c
 # SMS OTP Utilities & Routes
 FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 
+# Fix 6: OTP abuse controls
+OTP_SEND_MAX_PER_HOUR   = 3   # per phone
+OTP_VERIFY_MAX_ATTEMPTS = 5   # per OTP
+
+
 async def send_sms_fast2sms(phone: str, otp: str):
     if not FAST2SMS_API_KEY:
-        if DEBUG_MODE:
-            logger.info("[DEV MODE] OTP for %s: %s", phone, otp)
-        else:
-            logger.info("[OTP] OTP requested for %s (hidden in production)", phone)
+        # Hard-fail in production. Previous behaviour returned True and logged,
+        # so /auth/send-otp responded "OTP sent successfully" while no SMS was
+        # ever transmitted — a silent total failure of phone login.
+        if IS_PRODUCTION:
+            logger.error("SMS provider not configured (FAST2SMS_API_KEY unset) in production")
+            raise HTTPException(status_code=500, detail="SMS service is temporarily unavailable. Please try again later.")
+        logger.info("[DEV MODE] OTP for %s: %s", phone, otp)
         return True
     try:
         async with httpx.AsyncClient() as client:
@@ -1884,12 +1897,27 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
     if not phone.startswith("+91") or len(phone) != 13:
         raise HTTPException(status_code=422, detail="Invalid Indian phone number. Format: +91XXXXXXXXXX")
-        
+
+    # Per-phone send cap: the global IP rate limit is 30/min so a bot with rotating
+    # IPs could still SMS-bomb one number. Cap at OTP_SEND_MAX_PER_HOUR / phone.
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent = await db.otp_send_log.count_documents({"phone": phone, "created_at": {"$gt": one_hour_ago}})
+    if recent >= OTP_SEND_MAX_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail=f"You have requested too many OTPs. Please wait an hour before requesting another.",
+        )
+
     otp = str(random.randint(100000, 999999))
     await set_otp(phone, otp)
+    # Reset verify-attempt counter for this OTP window
+    await db.otps.update_one({"key": phone}, {"$set": {"attempts": 0}})
 
     await send_sms_fast2sms(phone, otp)
-    
+
+    # Log the send AFTER the SMS attempt so a failed send does not consume the quota.
+    await db.otp_send_log.insert_one({"phone": phone, "created_at": datetime.utcnow()})
+
     existing_user = await db.users.find_one({"phone": phone})
     return {"is_new_user": existing_user is None, "message": "OTP sent successfully"}
 
@@ -1910,7 +1938,21 @@ async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
 async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
 
+    # Per-OTP attempt cap: 6-digit OTP has 10^6 space, but with 5m TTL and 30/min
+    # IP limit an attacker with distributed IPs could still guess. Cap attempts.
+    otp_doc = await db.otps.find_one({"key": phone})
+    if not otp_doc:
+        raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new one.")
+    attempts = int(otp_doc.get("attempts", 0))
+    if attempts >= OTP_VERIFY_MAX_ATTEMPTS:
+        await db.otps.delete_one({"key": phone})
+        raise HTTPException(
+            status_code=429,
+            detail="Too many incorrect OTP attempts. Please request a new OTP.",
+        )
+
     if not await verify_and_clear_otp(phone, payload.otp):
+        await db.otps.update_one({"key": phone}, {"$inc": {"attempts": 1}})
         raise HTTPException(status_code=400, detail="Incorrect or expired OTP. Please request a new one.")
         
     user = await db.users.find_one({"phone": phone})
