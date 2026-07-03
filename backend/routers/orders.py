@@ -150,10 +150,24 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     address = await db.addresses.find_one({"id": payload.address_id, "user_id": user_id})
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
-        
+
+    # 2a. Fix 11 — server-side Tirupati pincode geofence (fail-closed).
+    # The client already enforces this at checkout.tsx:PILOT_PINCODES, but a
+    # direct API call could ship an order to any pincode. The server must not
+    # trust the client. Deliberately kept as a literal set for the pilot so
+    # ops can widen it in one place when we expand beyond Tirupati.
+    PILOT_PINCODES = {"517501", "517502", "517503", "517504", "517505", "517506", "517507"}
+    addr_pincode = (address.get("pincode") or "").strip()
+    if addr_pincode not in PILOT_PINCODES:
+        raise HTTPException(
+            status_code=400,
+            detail="We currently deliver only within Tirupati (pincodes 517501–517507). "
+                   "Please add a delivery address in the service area.",
+        )
+
     subtotal = 0.0
     items_to_save = []
-    
+
     # 2b. Serviceability check (Task 20)
     # If the saved address carries lat/lng, verify a store can reach it.
     # Addresses without coordinates skip the check (fail-open for pilot).
