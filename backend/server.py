@@ -435,7 +435,12 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
                 )
         
         token = create_access_token({"user_id": db_user["id"]})
-        refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+        # 30-day refresh token — without expires_in it inherits the 30-min access-token
+        # default and the client's 14-min refresh loop force-logs-out Google users.
+        refresh_token = create_access_token(
+            {"user_id": db_user["id"], "type": "refresh"},
+            expires_in=timedelta(days=30),
+        )
         return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "google"), "cable_tv_linked": db_user.get("cable_tv_linked", False), "cable_tv_details": db_user.get("cable_tv_details")}}
     
     except HTTPException:
@@ -1885,8 +1890,12 @@ async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
         user_id = user["id"]
         
     token = create_access_token({"user_id": user_id})
-    refresh_token = create_access_token({"user_id": user_id, "type": "refresh"})
-    
+    # 30-day refresh token — see /auth/google note.
+    refresh_token = create_access_token(
+        {"user_id": user_id, "type": "refresh"},
+        expires_in=timedelta(days=30),
+    )
+
     return {
         "token": token,
         "access_token": token,
