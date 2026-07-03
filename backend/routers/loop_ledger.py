@@ -42,6 +42,7 @@ User document fields (added by this module):
 """
 
 import os
+import hmac
 import uuid
 import logging
 from calendar import monthrange
@@ -72,7 +73,24 @@ SPEND_TIERS = [
 GADGET_THRESHOLD_PAISE      = 70_000_00     # ₹70,000 in 6 months
 GADGET_WINDOW_MONTHS        = 6
 
-MSO_SHARED_SECRET           = os.environ.get("MSO_SHARED_SECRET", "grocerease-mso-pilot-2024")
+# Fix 9: no fallback — the previous default was committed to a public repo and
+# effectively gave anyone the ability to credit 1,000 GETV coins to any user_id.
+# Server refuses to start if this is unset in production; dev tests set a value
+# via conftest / setdefault.
+MSO_SHARED_SECRET = os.environ.get("MSO_SHARED_SECRET")
+if not MSO_SHARED_SECRET:
+    from database import IS_PRODUCTION as _IS_PROD
+    if _IS_PROD:
+        raise RuntimeError(
+            "FATAL: MSO_SHARED_SECRET must be set in production. The public-repo "
+            "fallback secret allowed unlimited GETV coin crediting to any user."
+        )
+    # Dev/test only — safe because IS_PRODUCTION check above guards prod.
+    MSO_SHARED_SECRET = "dev-only-mso-secret-not-for-production"
+
+# Allowlist of MSO ids. Prevents the attacker-controlled `mso_id` field from
+# being used to bypass the per-user-per-month idempotency key (Fix 9).
+MSO_ALLOWED_IDS = {"gtpl"}
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 class AdminCreditRequest(BaseModel):
@@ -490,15 +508,25 @@ async def mso_spend_signal(
     Idempotent — one credit per user per billing_month.
     Resets suspension counter on each successful bill.
     """
-    if x_mso_secret != MSO_SHARED_SECRET:
+    if not x_mso_secret or not hmac.compare_digest(x_mso_secret, MSO_SHARED_SECRET):
         raise HTTPException(status_code=401, detail="Invalid MSO secret")
+
+    # Fix 9: validate mso_id against an allowlist. The idempotency key no longer
+    # includes mso_id, but rejecting unknown MSOs prevents forged bills from
+    # unrelated networks appearing in the ledger and confusing reconciliation.
+    mso_id_normalised = (payload.mso_id or "").strip().lower()
+    if mso_id_normalised not in MSO_ALLOWED_IDS:
+        raise HTTPException(status_code=400, detail=f"Unknown MSO id: {payload.mso_id}")
 
     total_bill_paise = int(round((payload.cable_spend + payload.broadband_spend) * 100))
     if total_bill_paise <= 0:
         raise HTTPException(status_code=400, detail="Cable spend must be positive")
 
-    # Idempotency: one credit per user per billing month
-    ref_id = f"{payload.user_id}:{payload.mso_id}:{payload.billing_month}"
+    # Idempotency: one credit per user per billing month.
+    # Fix 9: mso_id REMOVED from the key. Before, `mso_id` was attacker-supplied
+    # free text — flipping it to any new value bypassed the idempotency check and
+    # let the same user be credited 1,000 coins an unlimited number of times.
+    ref_id = f"{payload.user_id}:{payload.billing_month}"
     existing = await db.loop_ledger.find_one({"reference_id": ref_id, "type": "credit"})
     if existing:
         return {
