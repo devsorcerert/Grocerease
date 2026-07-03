@@ -83,7 +83,16 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
     if not client:
         raise HTTPException(status_code=500, detail="Razorpay integration not configured")
         
-    # 2. Verify signature
+    # 2. Bind payment to *this* order — without this an attacker can pay ₹1 on
+    # order A and use A's signature triplet to mark a ₹5,000 order B "paid".
+    if order.get("razorpay_order_id") != payload.razorpay_order_id:
+        logging.warning(
+            "Razorpay order-id mismatch: local order %s has rzp_order_id=%s, request sent %s",
+            order["id"], order.get("razorpay_order_id"), payload.razorpay_order_id,
+        )
+        raise HTTPException(status_code=400, detail="Payment does not belong to this order")
+
+    # 3. Verify signature
     is_dev = os.environ.get("ENV", "development") != "production"
     is_mock_order = payload.razorpay_order_id.startswith("rzp_mock_")
 
@@ -100,8 +109,54 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
         except Exception as e:
             logging.error(f"Razorpay signature verification failed: {e}")
             raise HTTPException(status_code=400, detail="Invalid payment signature")
-        
-    # 3. Handle successful capture actions: transition status, award rewards, clear cart
+
+        # 4. Fetch the payment entity from Razorpay and confirm amount + captured state.
+        # Signature verification alone proves the triplet is well-formed — it does NOT
+        # prove the money for *this* order arrived. We must call the API.
+        try:
+            payment = client.payment.fetch(payload.razorpay_payment_id)
+        except Exception as e:
+            logging.error(f"Razorpay payment fetch failed: {e}")
+            raise HTTPException(status_code=502, detail="Could not verify payment with Razorpay")
+
+        rzp_status = payment.get("status")
+        if rzp_status != "captured":
+            logging.warning("Razorpay payment %s not captured (status=%s) for order %s",
+                            payload.razorpay_payment_id, rzp_status, order["id"])
+            raise HTTPException(status_code=400, detail=f"Payment not captured (status={rzp_status})")
+
+        expected_paise = int(round(float(order["total"]) * 100))
+        rzp_amount = int(payment.get("amount", 0))
+        if rzp_amount != expected_paise:
+            logging.error("Payment amount mismatch: order %s expected %d paise, Razorpay reports %d",
+                          order["id"], expected_paise, rzp_amount)
+            raise HTTPException(status_code=400, detail="Payment amount mismatch")
+
+        # Confirm the payment entity's order_id matches (belt-and-braces vs. signature check)
+        rzp_order_id_from_payment = payment.get("order_id")
+        if rzp_order_id_from_payment and rzp_order_id_from_payment != payload.razorpay_order_id:
+            raise HTTPException(status_code=400, detail="Payment does not belong to this order")
+
+    # 5. Prevent payment-id reuse — same payment_id can't settle two orders
+    already_used = await db.orders.find_one({
+        "razorpay_payment_id": payload.razorpay_payment_id,
+        "id": {"$ne": order["id"]},
+    })
+    if already_used:
+        logging.error("Razorpay payment %s already consumed by order %s (attempted reuse on %s)",
+                      payload.razorpay_payment_id, already_used["id"], order["id"])
+        raise HTTPException(status_code=400, detail="Payment already consumed by another order")
+
+    # Bind the payment id onto the order so reuse is blocked and reconciliation has a handle
+    await db.orders.update_one(
+        {"id": order["id"]},
+        {"$set": {
+            "razorpay_payment_id": payload.razorpay_payment_id,
+            "razorpay_payment_verified_at": datetime.utcnow(),
+        }},
+    )
+
+    # 6. Handle successful capture actions: transition status, award rewards, clear cart
     await transition_order_status(order["id"], "paid", user_id, "Razorpay payment verified")
     
     # Update user rewards and monthly spend
