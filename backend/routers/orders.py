@@ -19,15 +19,59 @@ def _get_display_tier(monthly_spend: float) -> str:
     if monthly_spend >= 7000:  return "Silver"
     return "Base"
 
+# Fix 14 — order state machine.
+# Whitelist of transitions allowed from each state. "system" is a special caller
+# permitted to make any transition (background jobs, rollback path).
+ALLOWED_TRANSITIONS: dict = {
+    "created":         {"pending_payment", "cod_confirmed", "cancelled"},
+    "pending_payment": {"paid", "cancelled"},                            # payment gate
+    "cod_confirmed":   {"preparing", "packed", "cancelled"},
+    "paid":            {"preparing", "packed", "cancelled", "refund_pending"},
+    "preparing":       {"packed", "cancelled"},
+    "packed":          {"reached_store", "picked_up", "out_for_delivery", "cancelled"},
+    "reached_store":   {"picked_up", "out_for_delivery", "cancelled"},
+    "picked_up":       {"out_for_delivery", "delivered"},
+    "out_for_delivery":{"delivered"},
+    "delivered":       {"refund_pending"},   # goods returned → refund flow
+    "refund_pending":  {"refunded"},
+    "refunded":        set(),                # terminal
+    "cancelled":       set(),                # terminal
+}
+
+
+# Which transitions the CUSTOMER (as opposed to admin/system/rider) is allowed
+# to initiate. Everything else 403s. Rider status updates come through
+# rider endpoints — this list is only for /orders/{id}/cancel today.
+CUSTOMER_ALLOWED_TRANSITIONS: dict = {
+    "created":         {"cancelled"},
+    "pending_payment": {"cancelled"},
+    "cod_confirmed":   {"cancelled"},
+    "paid":            {"cancelled"},   # up to (but not after) picking
+    "preparing":       {"cancelled"},
+}
+
+
 # Unified state machine transition function
 async def transition_order_status(order_id: str, to_status: str, changed_by: str, reason: Optional[str] = None):
     order = await db.orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-        
+
     old_status = order.get("status", "created")
     if old_status == to_status:
         return
+
+    # Fix 14: validate the transition. "system" bypass covers background jobs
+    # (expiry, refund recon, month-end burn) and the compensating rollback in
+    # create_order_core. Admins and riders go through their own endpoints which
+    # call this helper with their user_id / rider_id.
+    if changed_by != "system":
+        allowed_next = ALLOWED_TRANSITIONS.get(old_status, set())
+        if to_status not in allowed_next:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status transition: {old_status} → {to_status}",
+            )
         
     # Updates to apply
     tracking_message = f"Order status updated from {old_status} to {to_status}."
@@ -465,10 +509,24 @@ async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
     order = await db.orders.find_one({"id": order_id, "user_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-        
-    if order.get("status") in ["delivered", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Cannot cancel this order in its current status")
-        
+
+    # Fix 14: use the customer transition whitelist. Prior code let a customer
+    # cancel an order that was already picked_up / out_for_delivery, restoring
+    # stock while the rider was en route with the goods.
+    current = order.get("status", "created")
+    allowed = CUSTOMER_ALLOWED_TRANSITIONS.get(current, set())
+    if "cancelled" not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This order can no longer be cancelled — it has already been "
+                "picked up by our delivery partner. Please contact support if "
+                "you need help."
+                if current in {"packed", "reached_store", "picked_up", "out_for_delivery"}
+                else f"Cannot cancel an order in status: {current}"
+            ),
+        )
+
     await transition_order_status(order_id, "cancelled", user_id, "Order cancelled by customer")
     return {"message": "Order cancelled successfully", "success": True}
 
@@ -686,8 +744,12 @@ async def admin_update_order_status(order_id: str, payload: dict, admin=Depends(
     new_status = payload.get("status")
     if not new_status:
         raise HTTPException(status_code=400, detail="Status is required")
-        
-    # Make sure transition_order_status is called
+
+    # Fix 14: reject arbitrary strings — must be a known status name.
+    if new_status not in ALLOWED_TRANSITIONS and new_status not in {"paid", "cancelled", "refunded"}:
+        raise HTTPException(status_code=400, detail=f"Unknown status: {new_status}")
+
+    # transition_order_status enforces the whitelist for non-'system' callers.
     await transition_order_status(order_id, new_status, admin.get("user_id", "admin"), "Status updated by admin")
     return {"message": "Order status updated successfully"}
 
