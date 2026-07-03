@@ -38,6 +38,13 @@ class CableTVLink(BaseModel):
 class CableTVSTBLink(BaseModel):
     stb_number: str
     service_provider: str = "GTPL"
+    # Fix 8: OTP verifying the user owns the phone attached to their account.
+    # /cable-tv/link-init sends the OTP; /cable-tv/link requires it.
+    otp: Optional[str] = None
+
+
+class CableTVLinkInit(BaseModel):
+    stb_number: str
 
 class ProductCreate(BaseModel):
     name: str
