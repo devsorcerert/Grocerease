@@ -773,12 +773,17 @@ async def get_products(
         import re as _re_cat
         query["category"] = {"$regex": f"^{_re_cat.escape(category)}$", "$options": "i"}
     
-    # Search filter (searches in name, description, brand)
+    # Search filter (searches in name, description, brand).
+    # Fix 15: re.escape user input before dropping it into $regex — otherwise
+    # a query like ".*" scans the full index, and a pathological regex would
+    # take the search endpoint down (ReDoS). Cap length to prevent giant patterns.
     if search:
+        import re as _re_search
+        search_safe = _re_search.escape((search or "")[:64])
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"brand": {"$regex": search, "$options": "i"}}
+            {"name": {"$regex": search_safe, "$options": "i"}},
+            {"description": {"$regex": search_safe, "$options": "i"}},
+            {"brand": {"$regex": search_safe, "$options": "i"}},
         ]
     
     # Price range filter — params are in rupees (float); price_paise is stored in paise (int)
@@ -2214,9 +2219,12 @@ async def admin_update_user_name(email: str, name: str, admin=Depends(verify_adm
 
 @api_router.get("/admin/users/find")
 async def admin_find_user(q: str, admin=Depends(verify_admin)):
-    """Admin endpoint: find users matching a string (for debugging)."""
+    """Admin endpoint: find users matching a string (for debugging).
+    Fix 15: escape user input before $regex."""
+    import re as _re_find
+    q_safe = _re_find.escape((q or "")[:64])
     users = await db.users.find(
-        {"$or": [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]},
+        {"$or": [{"email": {"$regex": q_safe, "$options": "i"}}, {"name": {"$regex": q_safe, "$options": "i"}}]},
         {"_id": 0, "email": 1, "name": 1, "google_email": 1, "created_at": 1}
     ).limit(5).to_list(5)
     return users
