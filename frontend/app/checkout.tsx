@@ -228,13 +228,18 @@ export default function CheckoutScreen() {
   };
 
   // ── GETV toggle ────────────────────────────────────────────────────────────
-  const handleGetvToggle = (on: boolean) => {
-    setGetvApply(on);
-    if (on && getvEligibility) {
-      setGetvAmount(getvEligibility.available_to_redeem);
-    } else {
-      setGetvAmount(0);
-    }
+  const handleGetvAmountChange = (text: string) => {
+    const max = getvEligibility?.available_to_redeem ?? 0;
+    const n = Math.floor(Number(text.replace(/[^0-9]/g, '')) || 0);
+    const clamped = Math.max(0, Math.min(n, max));
+    setGetvAmount(clamped);
+    setGetvApply(clamped > 0);
+  };
+
+  const handleGetvMax = () => {
+    const max = getvEligibility?.available_to_redeem ?? 0;
+    setGetvAmount(max);
+    setGetvApply(max > 0);
   };
 
   // ── FIX [1]: Place order — for Razorpay, only create order (not confirm) ─
@@ -598,17 +603,21 @@ export default function CheckoutScreen() {
                       Available: ₹{getvEligibility.available_to_redeem.toFixed(0)}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.getvToggle, getvApply && styles.getvToggleActive]}
-                    onPress={() => handleGetvToggle(!getvApply)}
-                  >
-                    <Text style={[styles.getvToggleText, getvApply && styles.getvToggleTextActive]}>
-                      {getvApply
-                        ? `✅ Using ₹${getvAmount.toFixed(0)} GETV coins`
-                        : `Apply ₹${getvEligibility.available_to_redeem.toFixed(0)} GETV coins`}
-                    </Text>
-                  </TouchableOpacity>
-                  {getvApply && (
+                  <View style={styles.getvInputRow}>
+                    <TextInput
+                      style={styles.getvInput}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor="#9CA3AF"
+                      value={getvAmount > 0 ? String(Math.round(getvAmount)) : ''}
+                      onChangeText={handleGetvAmountChange}
+                    />
+                    <Text style={styles.getvInputSuffix}>coins</Text>
+                    <TouchableOpacity style={styles.getvMaxBtn} onPress={handleGetvMax}>
+                      <Text style={styles.getvMaxBtnText}>Max</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {getvAmount > 0 && (
                     <View style={styles.getvSavingRow}>
                       <Text style={styles.getvSavingText}>
                         You save ₹{getvAmount.toFixed(0)} · Pay ₹{Math.max(0, (summary?.total ?? 0) - getvAmount).toFixed(0)}
@@ -944,6 +953,11 @@ const styles = StyleSheet.create({
   getvTierText:{ fontSize:12, color:'#78716C' },
   getvAvailable:{ fontSize:12, color:'#92400E', fontWeight:'600' },
   getvToggle:{ borderWidth:1, borderColor:'#FCD34D', borderRadius:8, paddingVertical:10, alignItems:'center', backgroundColor:'#FEF3C7' },
+  getvInputRow:{ flexDirection:'row', alignItems:'center', gap:8, marginTop:4 },
+  getvInput:{ flex:1, borderWidth:1, borderColor:'#FCD34D', borderRadius:8, paddingVertical:8, paddingHorizontal:12, fontSize:16, fontWeight:'600', color:'#111', backgroundColor:'#fff' },
+  getvInputSuffix:{ fontSize:13, color:'#92400E' },
+  getvMaxBtn:{ borderWidth:1, borderColor:'#F59E0B', borderRadius:8, paddingVertical:8, paddingHorizontal:14, backgroundColor:'#FDE68A' },
+  getvMaxBtnText:{ fontSize:13, fontWeight:'700', color:'#92400E' },
   getvToggleActive:{ backgroundColor:'#F59E0B', borderColor:'#D97706' },
   getvToggleText:{ fontSize:13, fontWeight:'600', color:'#92400E' },
   getvToggleTextActive:{ color:'#fff' },

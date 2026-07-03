@@ -85,11 +85,15 @@ export default function SearchResultsPage() {
           <View style={styles.productsGrid}>
             {products.map((product) => (
               <View key={product.id} style={styles.productCard}>
-                <ProductImage uri={product.image_url} style={styles.productImage} iconSize={32} />
+                <TouchableOpacity onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: product.id } })} activeOpacity={0.7}>
+                  <ProductImage uri={product.image_url} style={styles.productImage} iconSize={32} />
+                </TouchableOpacity>
                 
                 <View style={styles.productInfo}>
-                  <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
-                  <Text style={styles.productCategory}>{product.category}</Text>
+                  <TouchableOpacity onPress={() => router.push({ pathname: '/product/[productId]', params: { productId: product.id } })} activeOpacity={0.7}>
+                    <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
+                    <Text style={styles.productCategory}>{product.category}</Text>
+                  </TouchableOpacity>
                   
                   <View style={styles.productFooter}>
                     <View style={styles.priceContainer}>
