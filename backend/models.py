@@ -166,6 +166,9 @@ class CouponCreate(BaseModel):
     max_discount: Optional[float] = None
     valid_until: datetime
     is_active: bool = True
+    # Fix 12: usage caps.
+    usage_limit: Optional[int] = None   # None = unlimited global uses
+    per_user_limit: int = 1             # default: each user can use once
 
 class CouponValidate(BaseModel):
     code: str

@@ -205,17 +205,49 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         
     delivery_fee = 0.0 if subtotal >= 299.0 else 30.0
     discount = 0.0
-    
-    # 4. Process coupon
+    coupon_applied = None  # set when a coupon is actually applied — used for usage tracking below
+
+    # 4. Process coupon (Fix 12 — usage limits enforced)
     if payload.coupon_code:
-        coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True})
-        if coupon and datetime.utcnow() <= coupon["valid_until"] and subtotal >= coupon.get("min_order_value", 0):
-            if coupon.get("discount_percentage", 0) > 0:
-                discount = (subtotal * coupon["discount_percentage"]) / 100.0
-                if coupon.get("max_discount") and discount > coupon["max_discount"]:
-                    discount = coupon["max_discount"]
-            elif coupon.get("discount_amount", 0) > 0:
-                discount = coupon["discount_amount"]
+        code = payload.coupon_code.upper()
+        coupon = await db.coupons.find_one({"code": code, "is_active": True})
+        if not coupon:
+            raise HTTPException(status_code=400, detail="Invalid or inactive coupon code")
+        if datetime.utcnow() > coupon["valid_until"]:
+            raise HTTPException(status_code=400, detail="Coupon has expired")
+        if subtotal < coupon.get("min_order_value", 0):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum order value for this coupon is ₹{coupon['min_order_value']}",
+            )
+
+        # Global usage cap: usage_limit is optional; if set, block once used_count
+        # reaches it. Cancelled orders should NOT consume the quota so we tick
+        # used_count only after the order is safely inserted (see below).
+        global_limit = coupon.get("usage_limit")
+        if global_limit is not None and int(coupon.get("used_count", 0)) >= int(global_limit):
+            raise HTTPException(status_code=400, detail="This coupon has reached its usage limit.")
+
+        # Per-user cap: default 1 (prevents "USE10 forever" abuse).
+        per_user_limit = int(coupon.get("per_user_limit", 1))
+        user_uses = await db.orders.count_documents({
+            "user_id": user_id,
+            "coupon_code": code,
+            "status": {"$nin": ["cancelled", "refunded"]},
+        })
+        if user_uses >= per_user_limit:
+            raise HTTPException(
+                status_code=400,
+                detail="You have already used this coupon.",
+            )
+
+        if coupon.get("discount_percentage", 0) > 0:
+            discount = (subtotal * coupon["discount_percentage"]) / 100.0
+            if coupon.get("max_discount") and discount > coupon["max_discount"]:
+                discount = coupon["max_discount"]
+        elif coupon.get("discount_amount", 0) > 0:
+            discount = coupon["discount_amount"]
+        coupon_applied = coupon
                 
     total = subtotal + delivery_fee - discount
     if total < 0:
@@ -274,10 +306,22 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     user_updated = False
     loop_credited = False
 
+    coupon_incremented = False
     try:
         reserved_items = await try_reserve_stock(items_to_save)
         await db.orders.insert_one(order_dict)
         order_inserted = True
+
+        # Fix 12: bump coupon.used_count now that the order exists. Rolled back
+        # below on any failure. Cancel/refund does NOT decrement — the per-user
+        # count query filters out cancelled/refunded, and global usage_limit is
+        # a hard cap by intent.
+        if coupon_applied is not None:
+            await db.coupons.update_one(
+                {"code": coupon_applied["code"]},
+                {"$inc": {"used_count": 1}},
+            )
+            coupon_incremented = True
 
         # Debit GETV coins from wallet (tier/monthly-limit validated inside debit_loop_balance)
         if loop_credits_used > 0:
@@ -350,6 +394,11 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             await transition_order_status(order_dict["id"], "cancelled", "system", "Rollback order")
         if order_inserted:
             await db.orders.delete_one({"id": order_dict["id"]})
+        if coupon_incremented and coupon_applied is not None:
+            await db.coupons.update_one(
+                {"code": coupon_applied["code"]},
+                {"$inc": {"used_count": -1}},
+            )
         if reserved_items:
             for item in reserved_items:
                 await db.products.update_one(
