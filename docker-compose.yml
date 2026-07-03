@@ -39,7 +39,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-grocereasetv@gmail.com}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ENV=${ENV:-development}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081,http://localhost:19006,https://api.grocereasetv.com}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081,http://localhost:19006,https://grocerease-backend-0uip.onrender.com}
     restart: unless-stopped
     depends_on:
       mongodb:
