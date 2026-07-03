@@ -5,7 +5,7 @@ import os
 import logging
 import uuid
 from typing import Optional
-from database import db, get_current_user, verify_admin, clean_mongo_doc
+from database import db, get_current_user, verify_admin, clean_mongo_doc, IS_PRODUCTION
 from models import CreatePaymentRequest, VerifyPaymentRequest, RefundRequest
 from routers.orders import transition_order_status
 
@@ -92,8 +92,9 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
         )
         raise HTTPException(status_code=400, detail="Payment does not belong to this order")
 
-    # 3. Verify signature
-    is_dev = os.environ.get("ENV", "development") != "production"
+    # 3. Verify signature. Mock-order bypass is DEV ONLY; IS_PRODUCTION is the
+    # single source of truth (Fix 4) so a missing ENV var can't open this gate.
+    is_dev = not IS_PRODUCTION
     is_mock_order = payload.razorpay_order_id.startswith("rzp_mock_")
 
     if is_mock_order and is_dev:
@@ -188,12 +189,13 @@ async def razorpay_webhook(request: Request):
     if not signature:
         raise HTTPException(status_code=400, detail="Signature missing")
         
-    # Force webhook verification in production mode
-    is_prod = os.environ.get("ENV", "development").lower() == "production"
-    if is_prod and not RAZORPAY_WEBHOOK_SECRET:
-        logging.error("FATAL: Webhook secret missing in production mode.")
+    # Force webhook verification in production mode. In production, refusing to
+    # start is the right posture — but if RAZORPAY_WEBHOOK_SECRET was unset at
+    # deploy time this route would otherwise silently accept forged webhooks.
+    if IS_PRODUCTION and not RAZORPAY_WEBHOOK_SECRET:
+        logging.error("FATAL: RAZORPAY_WEBHOOK_SECRET missing in production — rejecting webhook.")
         raise HTTPException(status_code=500, detail="Webhook misconfigured")
-        
+
     if RAZORPAY_WEBHOOK_SECRET:
         client = get_razorpay_client()
         if not client:
@@ -254,7 +256,7 @@ async def initiate_refund(payload: RefundRequest, admin=Depends(verify_admin)):
         raise HTTPException(status_code=400, detail="Only paid orders can be refunded")
         
     client = get_razorpay_client()
-    is_prod = os.environ.get("ENV", "development").lower() == "production"
+    is_prod = IS_PRODUCTION
     razorpay_order_id = order.get("razorpay_order_id", "")
     is_mock_order = razorpay_order_id.startswith("rzp_mock_") or razorpay_order_id.startswith("mock")
 

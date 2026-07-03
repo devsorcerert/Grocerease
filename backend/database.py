@@ -72,6 +72,26 @@ db_name = os.environ.get('DB_NAME') or 'grocerease'
 db = MotorDatabaseProxy(client, db_name)
 
 DEBUG_MODE = os.environ.get("DEBUG", "false").lower() == "true"
+
+# Central production-mode gate. Every ENV-based security decision reads this so
+# a typo in one file cannot silently disable payment signature checking,
+# webhook signature checking, admin password requirements, or CORS.
+# Tests set DB_NAME=grocerease_test and don't set ENV — allow that too.
+_ENV_RAW = os.environ.get("ENV")
+_IS_TEST = os.environ.get("DB_NAME") == "grocerease_test"
+if _ENV_RAW is None and not _IS_TEST:
+    raise RuntimeError(
+        "FATAL: ENV environment variable must be set to 'development' or 'production'. "
+        "Refusing to start with ambiguous mode — a missing value used to default to "
+        "development and silently opened payment/webhook/admin backdoors."
+    )
+if _ENV_RAW is not None and _ENV_RAW.lower() not in ("development", "production"):
+    raise RuntimeError(
+        f"FATAL: ENV='{_ENV_RAW}' is not a valid mode. Must be 'development' or 'production'."
+    )
+IS_PRODUCTION = (_ENV_RAW or "").lower() == "production"
+IS_DEVELOPMENT = not IS_PRODUCTION  # includes tests
+
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET")
 if not SECRET_KEY:
     raise RuntimeError("FATAL: JWT_SECRET_KEY environment variable is not set. Refusing to start with insecure fallback.")

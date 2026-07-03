@@ -48,7 +48,7 @@ from database import (
     hash_password, verify_password, create_access_token,
     get_current_user, verify_admin, clean_mongo_doc,
     clean_mongo_docs, rate_limit, set_otp, verify_and_clear_otp,
-    send_sms_twilio, DEBUG_MODE
+    send_sms_twilio, DEBUG_MODE, IS_PRODUCTION
 )
 from models import (
     UserRegister, ProfileUpdate, UserLogin, GoogleAuthRequest,
@@ -109,7 +109,7 @@ async def startup_db_client():
             admin_email = os.environ.get("ADMIN_EMAIL", "grocereasetv@gmail.com")
             admin_password = os.environ.get("ADMIN_PASSWORD")
             if not admin_password:
-                if os.environ.get("ENV") == "production":
+                if IS_PRODUCTION:
                     raise RuntimeError("FATAL: ADMIN_PASSWORD environment variable is not set. Refusing to start in production without it.")
                 admin_password = ""
             
@@ -1191,7 +1191,7 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 ADMIN_PASSWORD_RAW = os.environ.get("ADMIN_PASSWORD", "")
 
-if os.environ.get("ENV", "development") != "development":
+if IS_PRODUCTION:
     if not ADMIN_EMAIL or (not ADMIN_PASSWORD_HASH and not ADMIN_PASSWORD_RAW):
         raise RuntimeError("FATAL: ADMIN_EMAIL and either ADMIN_PASSWORD or ADMIN_PASSWORD_HASH must be configured via environment variables in production mode.")
 else:
@@ -2044,7 +2044,7 @@ app.include_router(stores_router, prefix="/api")
 
 
 env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
-if os.environ.get("ENV", "development") != "development":
+if IS_PRODUCTION:
     if not env_origins:
         raise RuntimeError("FATAL: ALLOWED_ORIGINS environment variable must be configured in production mode.")
     origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
