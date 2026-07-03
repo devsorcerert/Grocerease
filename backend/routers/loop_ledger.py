@@ -244,18 +244,59 @@ async def debit_loop_balance_paise(
                    f"Remaining: ₹{remaining_allowance/100:.2f}",
         )
 
-    # All checks pass — deduct from wallet
+    # Fix 13 — atomic debit. The check-then-decrement above is not enough on its
+    # own: two concurrent checkouts by the same user can both pass the balance
+    # and monthly-limit checks, then both decrement, driving the wallet negative
+    # or exceeding the tier cap.
+    #
+    # The atomic filter re-asserts both invariants at the moment of the write:
+    #   * loop_balance_paise still >= amount_paise, AND
+    #   * this month's redemption (if we're in this month) still fits under
+    #     tier_max after adding amount_paise.
+    # A "wrong month" match branch resets loop_monthly_redeemed_paise to 0 first
+    # (same case the counter-reset in _get_monthly_redeemed_paise handles).
+    this_month = current_month_str()
     result = await db.users.find_one_and_update(
-        {"id": user_id},
         {
-            "$inc": {
-                "loop_balance_paise": -amount_paise,
-                "loop_monthly_redeemed_paise": amount_paise,
-            },
-            "$set": {"loop_monthly_period": current_month_str()},
+            "id": user_id,
+            "loop_balance_paise": {"$gte": amount_paise},
+            "$or": [
+                # Wrong month → previous redemption doesn't count; overwrite it.
+                {"loop_monthly_period": {"$ne": this_month}},
+                # Same month → tier cap must still hold after this debit.
+                {
+                    "loop_monthly_period": this_month,
+                    "loop_monthly_redeemed_paise": {"$lte": tier_max - amount_paise},
+                },
+            ],
         },
+        [
+            # Pipeline update so we can compute new redeemed atomically depending
+            # on whether the period rolled over.
+            {
+                "$set": {
+                    "loop_balance_paise": {"$subtract": ["$loop_balance_paise", amount_paise]},
+                    "loop_monthly_period": this_month,
+                    "loop_monthly_redeemed_paise": {
+                        "$cond": [
+                            {"$eq": [{"$ifNull": ["$loop_monthly_period", ""]}, this_month]},
+                            {"$add": [{"$ifNull": ["$loop_monthly_redeemed_paise", 0]}, amount_paise]},
+                            amount_paise,
+                        ]
+                    },
+                }
+            }
+        ],
         return_document=True,
     )
+    if result is None:
+        # Filter didn't match — a concurrent debit consumed the balance or
+        # exhausted the tier cap between our checks and this write.
+        raise HTTPException(
+            status_code=400,
+            detail="GETV balance or monthly limit was consumed by a concurrent order. Please retry.",
+        )
+
     new_balance_paise = int(result.get("loop_balance_paise", 0))
     await _insert_row(user_id, "debit", amount_paise, new_balance_paise,
                       reference_type, reference_id, description)
