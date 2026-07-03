@@ -102,6 +102,9 @@ async def startup_db_client():
         await db.riders.create_index("id", unique=True)
         await db.riders.create_index("phone", unique=True)
         await db.riders.create_index("status")
+
+        # Admin login failure tracking (Fix 5)
+        await db.admin_login_fails.create_index("email", unique=True)
         
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})
@@ -1208,11 +1211,34 @@ else:
         logger.info("=" * 50)
 
 # Admin login
+ADMIN_LOGIN_MAX_FAILS = 5
+ADMIN_LOGIN_LOCKOUT_MINUTES = 15
+
+
 @api_router.post("/admin/login")
-async def admin_login(login_data: UserLogin):
+async def admin_login(login_data: UserLogin, _=Depends(rate_limit)):
     email = login_data.email.lower().strip()
+
+    # Per-account lockout: an IP-only limit (rate_limit above) is bypassed by
+    # attacker rotating IPs. Track failures per admin email and lock the account
+    # after ADMIN_LOGIN_MAX_FAILS bad attempts within ADMIN_LOGIN_LOCKOUT_MINUTES.
+    fail_doc = await db.admin_login_fails.find_one({"email": email})
+    now = datetime.utcnow()
+    if fail_doc:
+        locked_until = fail_doc.get("locked_until")
+        if isinstance(locked_until, str):
+            try:
+                locked_until = datetime.fromisoformat(locked_until)
+            except Exception:
+                locked_until = None
+        if locked_until and locked_until > now:
+            wait_min = int((locked_until - now).total_seconds() / 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed login attempts. Account locked. Try again in {wait_min} minute(s).",
+            )
+
     db_admin = await db.admins.find_one({"email": email})
-    
     password_ok = False
     admin_id = "admin"
     admin_name = "Admin"
@@ -1250,8 +1276,35 @@ async def admin_login(login_data: UserLogin):
                 admin_role = "super-admin"
                 
     if not password_ok:
+        # Track failure. Only *lock* once the count reaches ADMIN_LOGIN_MAX_FAILS —
+        # a single typo must not lock the admin out for 15 minutes.
+        updated = await db.admin_login_fails.find_one_and_update(
+            {"email": email},
+            {
+                "$inc": {"count": 1},
+                "$set": {"last_attempt": now},
+                "$setOnInsert": {"email": email, "first_attempt": now},
+            },
+            upsert=True,
+            return_document=True,
+        )
+        new_count = int((updated or {}).get("count", 1))
+        if new_count >= ADMIN_LOGIN_MAX_FAILS:
+            await db.admin_login_fails.update_one(
+                {"email": email},
+                {"$set": {"locked_until": now + timedelta(minutes=ADMIN_LOGIN_LOCKOUT_MINUTES)}},
+            )
+            logger.warning("Admin account %s locked for %d min after %d failed attempts",
+                           email, ADMIN_LOGIN_LOCKOUT_MINUTES, new_count)
+        else:
+            logger.warning("Admin login failed for %s (attempt %d/%d)",
+                           email, new_count, ADMIN_LOGIN_MAX_FAILS)
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
-        
+
+    # Successful login — clear failure counter
+    if fail_doc:
+        await db.admin_login_fails.delete_one({"email": email})
+
     token = create_access_token({"user_id": admin_id, "role": admin_role, "is_admin": True})
     refresh_token_val = create_access_token({"user_id": admin_id, "role": admin_role, "is_admin": True, "type": "refresh"}, expires_in=timedelta(days=30))
     return {
