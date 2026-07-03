@@ -41,3 +41,7 @@ app-example
 # Metro Cache & Android Keystores
 .metro-cache/
 *.keystore
+
+# Firebase — google-services.json must be injected via CI/CD secrets. Do NOT commit.
+google-services.json
+GoogleService-Info.plist
