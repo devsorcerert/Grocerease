@@ -47,8 +47,9 @@ export default function SearchBar({ placeholder = 'Search products...' }: Search
   const handleSelectResult = (product: any) => {
     setQuery('');
     setShowResults(false);
-    // Navigate to categories page filtered by the product's category
-    router.push(`/(tabs)/categories?category=${encodeURIComponent(product.category)}`);
+    // Open the selected product's detail page (was wrongly routing to the
+    // category-filtered listing).
+    router.push({ pathname: '/product/[productId]', params: { productId: product.id } });
   };
 
   const handleSearchSubmit = () => {
