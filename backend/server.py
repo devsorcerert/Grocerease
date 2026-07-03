@@ -58,7 +58,8 @@ from models import (
     CreatePaymentRequest, VerifyPaymentRequest, CouponCreate,
     CouponValidate, CreateOrderRequest, LogoutRequest,
     SocialAuthRequest, RefundRequest, NearestAddressRequest,
-    SupportMessage, SendEmailOtpRequest
+    SupportMessage, SendEmailOtpRequest,
+    AddressCreate, AddressUpdate, PaymentMethodCreate, NotificationPreferences,
 )
 
 # Create the main app
@@ -1633,13 +1634,18 @@ async def get_addresses(user_id: str = Depends(get_current_user)):
     return {"addresses": clean_mongo_docs(addresses)}
 
 @api_router.post("/user/addresses")
-async def add_address(address_data: dict, user_id: str = Depends(get_current_user)):
-    """Add new address"""
+async def add_address(payload: AddressCreate, user_id: str = Depends(get_current_user)):
+    """Add new address. Fix 7: typed payload — client cannot inject user_id or id.
+
+    If is_default=True is requested, unset default on the user's other addresses.
+    """
+    if payload.is_default:
+        await db.addresses.update_many({"user_id": user_id}, {"$set": {"is_default": False}})
     address_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        **address_data,
-        "created_at": datetime.utcnow()
+        **payload.dict(exclude_unset=True),
+        "created_at": datetime.utcnow(),
     }
     await db.addresses.insert_one(address_dict)
     return clean_mongo_doc(address_dict)
@@ -1647,13 +1653,19 @@ async def add_address(address_data: dict, user_id: str = Depends(get_current_use
 @api_router.put("/user/addresses/{address_id}")
 async def update_address(
     address_id: str,
-    address_data: dict,
-    user_id: str = Depends(get_current_user)
+    payload: AddressUpdate,
+    user_id: str = Depends(get_current_user),
 ):
-    """Update existing address"""
+    """Update existing address. Fix 7: extra fields (user_id/id/created_at) rejected."""
+    updates = payload.dict(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields to update")
+    if updates.get("is_default") is True:
+        await db.addresses.update_many({"user_id": user_id}, {"$set": {"is_default": False}})
+    updates["updated_at"] = datetime.utcnow()
     result = await db.addresses.update_one(
         {"id": address_id, "user_id": user_id},
-        {"$set": {**address_data, "updated_at": datetime.utcnow()}}
+        {"$set": updates},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Address not found")
@@ -1696,13 +1708,15 @@ async def get_payment_methods(user_id: str = Depends(get_current_user)):
     return {"payment_methods": clean_mongo_docs(methods)}
 
 @api_router.post("/user/payment-methods")
-async def add_payment_method(method_data: dict, user_id: str = Depends(get_current_user)):
-    """Add new payment method"""
+async def add_payment_method(payload: PaymentMethodCreate, user_id: str = Depends(get_current_user)):
+    """Add new payment method. Fix 7: typed payload blocks PAN/CVV storage
+    (schema exposes only last-4 / UPI id / method type) and blocks mass
+    assignment of user_id."""
     method_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        **method_data,
-        "created_at": datetime.utcnow()
+        **payload.dict(exclude_unset=True),
+        "created_at": datetime.utcnow(),
     }
     await db.payment_methods.insert_one(method_dict)
     return clean_mongo_doc(method_dict)
@@ -1719,15 +1733,16 @@ async def delete_payment_method(method_id: str, user_id: str = Depends(get_curre
 
 @api_router.post("/user/notification-preferences")
 async def update_notification_preferences(
-    preferences: dict,
-    user_id: str = Depends(get_current_user)
+    payload: NotificationPreferences,
+    user_id: str = Depends(get_current_user),
 ):
-    """Update notification preferences"""
+    """Update notification preferences. Fix 7: typed schema — only known
+    preference keys accepted; client cannot inject arbitrary user fields."""
     await db.users.update_one(
         {"id": user_id},
         {"$set": {
-            "notification_preferences": preferences,
-            "updated_at": datetime.utcnow()
+            "notification_preferences": payload.dict(exclude_unset=True),
+            "updated_at": datetime.utcnow(),
         }}
     )
     return {"message": "Notification preferences updated", "success": True}
