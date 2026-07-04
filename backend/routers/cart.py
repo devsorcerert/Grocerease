@@ -12,27 +12,36 @@ async def get_cart(user_id: str = Depends(get_current_user)):
     items_cursor = db.cart_items.find({"user_id": user_id})
     items = await items_cursor.to_list(1000)
     
-    # Map the stored fields to match the expected schema
+    # Map the stored fields to match the expected schema.
+    # Fix 16: canonical products only have price_paise / image_url — the raw
+    # .get("price") / .get("image") reads used to return None on those, so the
+    # cart rendered as "₹0" with no image. clean_mongo_doc synthesises the
+    # legacy `price` (rupees) and `image_url` keys the client expects.
     formatted_items = []
     for item in items:
-        # Resolve product details to include name, image, price, brand, weight, unit, etc.
-        # to ensure frontend renders it with correct product info
         product = await db.products.find_one({"id": item["product_id"]})
         product_info = {}
         if product:
+            product = clean_mongo_doc(product)
             product_info = {
                 "name": product.get("name"),
-                "image": product.get("image"),
-                "price": product.get("price"),
+                # Prefer canonical image_url; fall back to legacy 'image' if a
+                # very old doc still has it.
+                "image": product.get("image_url") or product.get("image"),
+                "image_url": product.get("image_url") or product.get("image"),
+                "price": product.get("price"),         # rupees (float), synthesised
+                "price_paise": product.get("price_paise"),
+                "mrp_paise": product.get("mrp_paise"),
+                "offer_price": product.get("offer_price"),
                 "brand": product.get("brand"),
                 "weight": product.get("weight"),
-                "unit": product.get("unit")
+                "unit": product.get("unit"),
             }
-        
+
         formatted_items.append({
             "product_id": item["product_id"],
             "quantity": item["quantity"],
-            **product_info
+            **product_info,
         })
         
     return {

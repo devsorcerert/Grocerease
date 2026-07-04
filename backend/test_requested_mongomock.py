@@ -13,7 +13,8 @@ async def test_atomic_rollback():
     
     mock_db = AsyncMongoMockClient().grocerease
     await mock_db.cart_items.insert_one({"user_id": "u1", "product_id": "p1", "quantity": 2})
-    await mock_db.addresses.insert_one({"id": "a1", "user_id": "u1", "lat": 10.0, "lng": 20.0, "full_address": "Test Addr"})
+    # Address needs a Tirupati pincode after Fix 11 (server-side geofence).
+    await mock_db.addresses.insert_one({"id": "a1", "user_id": "u1", "lat": 13.63, "lng": 79.42, "pincode": "517501", "full_address": "Test Addr, Tirupati"})
     await mock_db.products.insert_one({"id": "p1", "name": "Apple", "price": 100.0, "stock": 5})
     await mock_db.users.insert_one({"id": "u1", "monthly_spend": 0.0, "total_spend": 0.0, "current_reward": 0.0})
 
@@ -88,10 +89,19 @@ async def test_stock_expiry_releases_only_pending_payment():
 async def test_plain_ledger_earn_balance_math():
     from routers.loop_ledger import credit_loop_balance_paise, debit_loop_balance_paise
     from mongomock_motor import AsyncMongoMockClient
-    
+
     mock_db = AsyncMongoMockClient().grocerease
     await mock_db.users.insert_one({"id": "u1", "loop_balance_paise": 0})
-    
+    # Debit requires tier unlock (Silver = ₹7,000 monthly spend). Seed a paid
+    # order in the current month so the debit passes.
+    await mock_db.orders.insert_one({
+        "id": "seed-o",
+        "user_id": "u1",
+        "payment_status": "paid",
+        "total": 7500.0,
+        "created_at": datetime.utcnow(),
+    })
+
     with patch("routers.loop_ledger.db", mock_db):
         await credit_loop_balance_paise("u1", 1000, "earn", "r1", "Earned 1000")
         user = await mock_db.users.find_one({"id": "u1"})

@@ -159,6 +159,9 @@ class CouponCreate(BaseModel):
     max_discount: Optional[float] = None
     valid_until: datetime
     is_active: bool = True
+    # Fix 12: usage caps.
+    usage_limit: Optional[int] = None   # None = unlimited global uses
+    per_user_limit: int = 1             # default: each user can use once
 
 class CouponValidate(BaseModel):
     code: str
@@ -195,3 +198,49 @@ class SupportMessage(BaseModel):
 
 class SendEmailOtpRequest(BaseModel):
     email: EmailStr
+
+
+# ── Fix 7: address + payment-method models (block mass assignment) ─────────────
+# The old raw-dict endpoints spread request bodies into $set, so a client-sent
+# {"user_id": "<victim-id>"} would rewrite the trusted user_id. These models
+# forbid unknown fields and drop user_id/id from the schema entirely.
+
+class AddressCreate(BaseModel):
+    model_config = {"extra": "forbid"}
+    label: str = "Home"
+    full_address: str
+    landmark: Optional[str] = None
+    pincode: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    is_default: Optional[bool] = False
+
+
+class AddressUpdate(BaseModel):
+    model_config = {"extra": "forbid"}
+    label: Optional[str] = None
+    full_address: Optional[str] = None
+    landmark: Optional[str] = None
+    pincode: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    is_default: Optional[bool] = None
+
+
+class PaymentMethodCreate(BaseModel):
+    """We never store PAN/CVV — only the last-4 or a tokenised identifier.
+    Any 'save card' feature must go through Razorpay's vault, not our DB."""
+    model_config = {"extra": "forbid"}
+    type: str  # "upi" | "card_last4" | "netbanking" | "cod"
+    label: str
+    upi_id: Optional[str] = None
+    card_last4: Optional[str] = None
+    is_default: Optional[bool] = False
+
+
+class NotificationPreferences(BaseModel):
+    model_config = {"extra": "forbid"}
+    order_updates: Optional[bool] = True
+    promotions: Optional[bool] = True
+    new_arrivals: Optional[bool] = False
+    price_drops: Optional[bool] = True

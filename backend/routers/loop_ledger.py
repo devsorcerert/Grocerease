@@ -42,6 +42,7 @@ User document fields (added by this module):
 """
 
 import os
+import hmac
 import uuid
 import logging
 from calendar import monthrange
@@ -72,7 +73,24 @@ SPEND_TIERS = [
 GADGET_THRESHOLD_PAISE      = 70_000_00     # ₹70,000 in 6 months
 GADGET_WINDOW_MONTHS        = 6
 
-MSO_SHARED_SECRET           = os.environ.get("MSO_SHARED_SECRET", "grocerease-mso-pilot-2024")
+# Fix 9: no fallback — the previous default was committed to a public repo and
+# effectively gave anyone the ability to credit 1,000 GETV coins to any user_id.
+# Server refuses to start if this is unset in production; dev tests set a value
+# via conftest / setdefault.
+MSO_SHARED_SECRET = os.environ.get("MSO_SHARED_SECRET")
+if not MSO_SHARED_SECRET:
+    from database import IS_PRODUCTION as _IS_PROD
+    if _IS_PROD:
+        raise RuntimeError(
+            "FATAL: MSO_SHARED_SECRET must be set in production. The public-repo "
+            "fallback secret allowed unlimited GETV coin crediting to any user."
+        )
+    # Dev/test only — safe because IS_PRODUCTION check above guards prod.
+    MSO_SHARED_SECRET = "dev-only-mso-secret-not-for-production"
+
+# Allowlist of MSO ids. Prevents the attacker-controlled `mso_id` field from
+# being used to bypass the per-user-per-month idempotency key (Fix 9).
+MSO_ALLOWED_IDS = {"gtpl"}
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 class AdminCreditRequest(BaseModel):
@@ -226,18 +244,59 @@ async def debit_loop_balance_paise(
                    f"Remaining: ₹{remaining_allowance/100:.2f}",
         )
 
-    # All checks pass — deduct from wallet
+    # Fix 13 — atomic debit. The check-then-decrement above is not enough on its
+    # own: two concurrent checkouts by the same user can both pass the balance
+    # and monthly-limit checks, then both decrement, driving the wallet negative
+    # or exceeding the tier cap.
+    #
+    # The atomic filter re-asserts both invariants at the moment of the write:
+    #   * loop_balance_paise still >= amount_paise, AND
+    #   * this month's redemption (if we're in this month) still fits under
+    #     tier_max after adding amount_paise.
+    # A "wrong month" match branch resets loop_monthly_redeemed_paise to 0 first
+    # (same case the counter-reset in _get_monthly_redeemed_paise handles).
+    this_month = current_month_str()
     result = await db.users.find_one_and_update(
-        {"id": user_id},
         {
-            "$inc": {
-                "loop_balance_paise": -amount_paise,
-                "loop_monthly_redeemed_paise": amount_paise,
-            },
-            "$set": {"loop_monthly_period": current_month_str()},
+            "id": user_id,
+            "loop_balance_paise": {"$gte": amount_paise},
+            "$or": [
+                # Wrong month → previous redemption doesn't count; overwrite it.
+                {"loop_monthly_period": {"$ne": this_month}},
+                # Same month → tier cap must still hold after this debit.
+                {
+                    "loop_monthly_period": this_month,
+                    "loop_monthly_redeemed_paise": {"$lte": tier_max - amount_paise},
+                },
+            ],
         },
+        [
+            # Pipeline update so we can compute new redeemed atomically depending
+            # on whether the period rolled over.
+            {
+                "$set": {
+                    "loop_balance_paise": {"$subtract": ["$loop_balance_paise", amount_paise]},
+                    "loop_monthly_period": this_month,
+                    "loop_monthly_redeemed_paise": {
+                        "$cond": [
+                            {"$eq": [{"$ifNull": ["$loop_monthly_period", ""]}, this_month]},
+                            {"$add": [{"$ifNull": ["$loop_monthly_redeemed_paise", 0]}, amount_paise]},
+                            amount_paise,
+                        ]
+                    },
+                }
+            }
+        ],
         return_document=True,
     )
+    if result is None:
+        # Filter didn't match — a concurrent debit consumed the balance or
+        # exhausted the tier cap between our checks and this write.
+        raise HTTPException(
+            status_code=400,
+            detail="GETV balance or monthly limit was consumed by a concurrent order. Please retry.",
+        )
+
     new_balance_paise = int(result.get("loop_balance_paise", 0))
     await _insert_row(user_id, "debit", amount_paise, new_balance_paise,
                       reference_type, reference_id, description)
@@ -490,15 +549,25 @@ async def mso_spend_signal(
     Idempotent — one credit per user per billing_month.
     Resets suspension counter on each successful bill.
     """
-    if x_mso_secret != MSO_SHARED_SECRET:
+    if not x_mso_secret or not hmac.compare_digest(x_mso_secret, MSO_SHARED_SECRET):
         raise HTTPException(status_code=401, detail="Invalid MSO secret")
+
+    # Fix 9: validate mso_id against an allowlist. The idempotency key no longer
+    # includes mso_id, but rejecting unknown MSOs prevents forged bills from
+    # unrelated networks appearing in the ledger and confusing reconciliation.
+    mso_id_normalised = (payload.mso_id or "").strip().lower()
+    if mso_id_normalised not in MSO_ALLOWED_IDS:
+        raise HTTPException(status_code=400, detail=f"Unknown MSO id: {payload.mso_id}")
 
     total_bill_paise = int(round((payload.cable_spend + payload.broadband_spend) * 100))
     if total_bill_paise <= 0:
         raise HTTPException(status_code=400, detail="Cable spend must be positive")
 
-    # Idempotency: one credit per user per billing month
-    ref_id = f"{payload.user_id}:{payload.mso_id}:{payload.billing_month}"
+    # Idempotency: one credit per user per billing month.
+    # Fix 9: mso_id REMOVED from the key. Before, `mso_id` was attacker-supplied
+    # free text — flipping it to any new value bypassed the idempotency check and
+    # let the same user be credited 1,000 coins an unlimited number of times.
+    ref_id = f"{payload.user_id}:{payload.billing_month}"
     existing = await db.loop_ledger.find_one({"reference_id": ref_id, "type": "credit"})
     if existing:
         return {

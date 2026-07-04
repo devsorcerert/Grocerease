@@ -48,7 +48,7 @@ from database import (
     hash_password, verify_password, create_access_token,
     get_current_user, verify_admin, clean_mongo_doc,
     clean_mongo_docs, rate_limit, set_otp, verify_and_clear_otp,
-    send_sms_twilio, DEBUG_MODE
+    send_sms_twilio, DEBUG_MODE, IS_PRODUCTION
 )
 from models import (
     UserRegister, ProfileUpdate, UserLogin, GoogleAuthRequest,
@@ -58,7 +58,8 @@ from models import (
     CreatePaymentRequest, VerifyPaymentRequest, CouponCreate,
     CouponValidate, CreateOrderRequest, LogoutRequest,
     SocialAuthRequest, RefundRequest, NearestAddressRequest,
-    SupportMessage, SendEmailOtpRequest
+    SupportMessage, SendEmailOtpRequest,
+    AddressCreate, AddressUpdate, PaymentMethodCreate, NotificationPreferences,
 )
 
 # Create the main app
@@ -102,6 +103,15 @@ async def startup_db_client():
         await db.riders.create_index("id", unique=True)
         await db.riders.create_index("phone", unique=True)
         await db.riders.create_index("status")
+
+        # Admin login failure tracking (Fix 5)
+        await db.admin_login_fails.create_index("email", unique=True)
+
+        # OTP send-log TTL (Fix 6): docs auto-expire after 1h so the count query
+        # in /auth/send-otp stays fast without a housekeeping cron.
+        await db.otp_send_log.create_index("phone")
+        await db.otp_send_log.create_index("created_at", expireAfterSeconds=3600)
+
         
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})
@@ -109,7 +119,7 @@ async def startup_db_client():
             admin_email = os.environ.get("ADMIN_EMAIL", "grocereasetv@gmail.com")
             admin_password = os.environ.get("ADMIN_PASSWORD")
             if not admin_password:
-                if os.environ.get("ENV") == "production":
+                if IS_PRODUCTION:
                     raise RuntimeError("FATAL: ADMIN_PASSWORD environment variable is not set. Refusing to start in production without it.")
                 admin_password = ""
             
@@ -435,7 +445,12 @@ async def google_auth(auth_data: GoogleAuthRequest, _=Depends(rate_limit)):
                 )
         
         token = create_access_token({"user_id": db_user["id"]})
-        refresh_token = create_access_token({"user_id": db_user["id"], "type": "refresh"})
+        # 30-day refresh token — without expires_in it inherits the 30-min access-token
+        # default and the client's 14-min refresh loop force-logs-out Google users.
+        refresh_token = create_access_token(
+            {"user_id": db_user["id"], "type": "refresh"},
+            expires_in=timedelta(days=30),
+        )
         return {"token": token, "refresh_token": refresh_token, "user": {"id": db_user["id"], "name": db_user["name"], "email": db_user["email"], "phone": db_user.get("phone"), "photo": db_user.get("photo"), "is_admin": db_user.get("is_admin", False), "auth_provider": db_user.get("auth_provider", "google"), "cable_tv_linked": db_user.get("cable_tv_linked", False), "cable_tv_details": db_user.get("cable_tv_details")}}
     
     except HTTPException:
@@ -685,12 +700,17 @@ async def get_products(
         import re as _re_cat
         query["category"] = {"$regex": f"^{_re_cat.escape(category)}$", "$options": "i"}
     
-    # Search filter (searches in name, description, brand)
+    # Search filter (searches in name, description, brand).
+    # Fix 15: re.escape user input before dropping it into $regex — otherwise
+    # a query like ".*" scans the full index, and a pathological regex would
+    # take the search endpoint down (ReDoS). Cap length to prevent giant patterns.
     if search:
+        import re as _re_search
+        search_safe = _re_search.escape((search or "")[:64])
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"brand": {"$regex": search, "$options": "i"}}
+            {"name": {"$regex": search_safe, "$options": "i"}},
+            {"description": {"$regex": search_safe, "$options": "i"}},
+            {"brand": {"$regex": search_safe, "$options": "i"}},
         ]
     
     # Price range filter — params are in rupees (float); price_paise is stored in paise (int)
@@ -1186,7 +1206,7 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 ADMIN_PASSWORD_RAW = os.environ.get("ADMIN_PASSWORD", "")
 
-if os.environ.get("ENV", "development") != "development":
+if IS_PRODUCTION:
     if not ADMIN_EMAIL or (not ADMIN_PASSWORD_HASH and not ADMIN_PASSWORD_RAW):
         raise RuntimeError("FATAL: ADMIN_EMAIL and either ADMIN_PASSWORD or ADMIN_PASSWORD_HASH must be configured via environment variables in production mode.")
 else:
@@ -1203,11 +1223,34 @@ else:
         logger.info("=" * 50)
 
 # Admin login
+ADMIN_LOGIN_MAX_FAILS = 5
+ADMIN_LOGIN_LOCKOUT_MINUTES = 15
+
+
 @api_router.post("/admin/login")
-async def admin_login(login_data: UserLogin):
+async def admin_login(login_data: UserLogin, _=Depends(rate_limit)):
     email = login_data.email.lower().strip()
+
+    # Per-account lockout: an IP-only limit (rate_limit above) is bypassed by
+    # attacker rotating IPs. Track failures per admin email and lock the account
+    # after ADMIN_LOGIN_MAX_FAILS bad attempts within ADMIN_LOGIN_LOCKOUT_MINUTES.
+    fail_doc = await db.admin_login_fails.find_one({"email": email})
+    now = datetime.utcnow()
+    if fail_doc:
+        locked_until = fail_doc.get("locked_until")
+        if isinstance(locked_until, str):
+            try:
+                locked_until = datetime.fromisoformat(locked_until)
+            except Exception:
+                locked_until = None
+        if locked_until and locked_until > now:
+            wait_min = int((locked_until - now).total_seconds() / 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many failed login attempts. Account locked. Try again in {wait_min} minute(s).",
+            )
+
     db_admin = await db.admins.find_one({"email": email})
-    
     password_ok = False
     admin_id = "admin"
     admin_name = "Admin"
@@ -1245,8 +1288,35 @@ async def admin_login(login_data: UserLogin):
                 admin_role = "super-admin"
                 
     if not password_ok:
+        # Track failure. Only *lock* once the count reaches ADMIN_LOGIN_MAX_FAILS —
+        # a single typo must not lock the admin out for 15 minutes.
+        updated = await db.admin_login_fails.find_one_and_update(
+            {"email": email},
+            {
+                "$inc": {"count": 1},
+                "$set": {"last_attempt": now},
+                "$setOnInsert": {"email": email, "first_attempt": now},
+            },
+            upsert=True,
+            return_document=True,
+        )
+        new_count = int((updated or {}).get("count", 1))
+        if new_count >= ADMIN_LOGIN_MAX_FAILS:
+            await db.admin_login_fails.update_one(
+                {"email": email},
+                {"$set": {"locked_until": now + timedelta(minutes=ADMIN_LOGIN_LOCKOUT_MINUTES)}},
+            )
+            logger.warning("Admin account %s locked for %d min after %d failed attempts",
+                           email, ADMIN_LOGIN_LOCKOUT_MINUTES, new_count)
+        else:
+            logger.warning("Admin login failed for %s (attempt %d/%d)",
+                           email, new_count, ADMIN_LOGIN_MAX_FAILS)
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
-        
+
+    # Successful login — clear failure counter
+    if fail_doc:
+        await db.admin_login_fails.delete_one({"email": email})
+
     token = create_access_token({"user_id": admin_id, "role": admin_role, "is_admin": True})
     refresh_token_val = create_access_token({"user_id": admin_id, "role": admin_role, "is_admin": True, "type": "refresh"}, expires_in=timedelta(days=30))
     return {
@@ -1570,13 +1640,18 @@ async def get_addresses(user_id: str = Depends(get_current_user)):
     return {"addresses": clean_mongo_docs(addresses)}
 
 @api_router.post("/user/addresses")
-async def add_address(address_data: dict, user_id: str = Depends(get_current_user)):
-    """Add new address"""
+async def add_address(payload: AddressCreate, user_id: str = Depends(get_current_user)):
+    """Add new address. Fix 7: typed payload — client cannot inject user_id or id.
+
+    If is_default=True is requested, unset default on the user's other addresses.
+    """
+    if payload.is_default:
+        await db.addresses.update_many({"user_id": user_id}, {"$set": {"is_default": False}})
     address_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        **address_data,
-        "created_at": datetime.utcnow()
+        **payload.dict(exclude_unset=True),
+        "created_at": datetime.utcnow(),
     }
     await db.addresses.insert_one(address_dict)
     return clean_mongo_doc(address_dict)
@@ -1584,13 +1659,19 @@ async def add_address(address_data: dict, user_id: str = Depends(get_current_use
 @api_router.put("/user/addresses/{address_id}")
 async def update_address(
     address_id: str,
-    address_data: dict,
-    user_id: str = Depends(get_current_user)
+    payload: AddressUpdate,
+    user_id: str = Depends(get_current_user),
 ):
-    """Update existing address"""
+    """Update existing address. Fix 7: extra fields (user_id/id/created_at) rejected."""
+    updates = payload.dict(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields to update")
+    if updates.get("is_default") is True:
+        await db.addresses.update_many({"user_id": user_id}, {"$set": {"is_default": False}})
+    updates["updated_at"] = datetime.utcnow()
     result = await db.addresses.update_one(
         {"id": address_id, "user_id": user_id},
-        {"$set": {**address_data, "updated_at": datetime.utcnow()}}
+        {"$set": updates},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Address not found")
@@ -1633,13 +1714,15 @@ async def get_payment_methods(user_id: str = Depends(get_current_user)):
     return {"payment_methods": clean_mongo_docs(methods)}
 
 @api_router.post("/user/payment-methods")
-async def add_payment_method(method_data: dict, user_id: str = Depends(get_current_user)):
-    """Add new payment method"""
+async def add_payment_method(payload: PaymentMethodCreate, user_id: str = Depends(get_current_user)):
+    """Add new payment method. Fix 7: typed payload blocks PAN/CVV storage
+    (schema exposes only last-4 / UPI id / method type) and blocks mass
+    assignment of user_id."""
     method_dict = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
-        **method_data,
-        "created_at": datetime.utcnow()
+        **payload.dict(exclude_unset=True),
+        "created_at": datetime.utcnow(),
     }
     await db.payment_methods.insert_one(method_dict)
     return clean_mongo_doc(method_dict)
@@ -1656,15 +1739,16 @@ async def delete_payment_method(method_id: str, user_id: str = Depends(get_curre
 
 @api_router.post("/user/notification-preferences")
 async def update_notification_preferences(
-    preferences: dict,
-    user_id: str = Depends(get_current_user)
+    payload: NotificationPreferences,
+    user_id: str = Depends(get_current_user),
 ):
-    """Update notification preferences"""
+    """Update notification preferences. Fix 7: typed schema — only known
+    preference keys accepted; client cannot inject arbitrary user fields."""
     await db.users.update_one(
         {"id": user_id},
         {"$set": {
-            "notification_preferences": preferences,
-            "updated_at": datetime.utcnow()
+            "notification_preferences": payload.dict(exclude_unset=True),
+            "updated_at": datetime.utcnow(),
         }}
     )
     return {"message": "Notification preferences updated", "success": True}
@@ -1788,12 +1872,20 @@ async def send_support_message(msg: SupportMessage, user_id: str = Depends(get_c
 # SMS OTP Utilities & Routes
 FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 
+# Fix 6: OTP abuse controls
+OTP_SEND_MAX_PER_HOUR   = 3   # per phone
+OTP_VERIFY_MAX_ATTEMPTS = 5   # per OTP
+
+
 async def send_sms_fast2sms(phone: str, otp: str):
     if not FAST2SMS_API_KEY:
-        if DEBUG_MODE:
-            logger.info("[DEV MODE] OTP for %s: %s", phone, otp)
-        else:
-            logger.info("[OTP] OTP requested for %s (hidden in production)", phone)
+        # Hard-fail in production. Previous behaviour returned True and logged,
+        # so /auth/send-otp responded "OTP sent successfully" while no SMS was
+        # ever transmitted — a silent total failure of phone login.
+        if IS_PRODUCTION:
+            logger.error("SMS provider not configured (FAST2SMS_API_KEY unset) in production")
+            raise HTTPException(status_code=500, detail="SMS service is temporarily unavailable. Please try again later.")
+        logger.info("[DEV MODE] OTP for %s: %s", phone, otp)
         return True
     try:
         async with httpx.AsyncClient() as client:
@@ -1826,12 +1918,27 @@ async def send_otp(payload: SendOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
     if not phone.startswith("+91") or len(phone) != 13:
         raise HTTPException(status_code=422, detail="Invalid Indian phone number. Format: +91XXXXXXXXXX")
-        
+
+    # Per-phone send cap: the global IP rate limit is 30/min so a bot with rotating
+    # IPs could still SMS-bomb one number. Cap at OTP_SEND_MAX_PER_HOUR / phone.
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent = await db.otp_send_log.count_documents({"phone": phone, "created_at": {"$gt": one_hour_ago}})
+    if recent >= OTP_SEND_MAX_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail=f"You have requested too many OTPs. Please wait an hour before requesting another.",
+        )
+
     otp = str(random.randint(100000, 999999))
     await set_otp(phone, otp)
+    # Reset verify-attempt counter for this OTP window
+    await db.otps.update_one({"key": phone}, {"$set": {"attempts": 0}})
 
     await send_sms_fast2sms(phone, otp)
-    
+
+    # Log the send AFTER the SMS attempt so a failed send does not consume the quota.
+    await db.otp_send_log.insert_one({"phone": phone, "created_at": datetime.utcnow()})
+
     existing_user = await db.users.find_one({"phone": phone})
     return {"is_new_user": existing_user is None, "message": "OTP sent successfully"}
 
@@ -1852,7 +1959,21 @@ async def send_email_otp(payload: SendEmailOtpRequest, _=Depends(rate_limit)):
 async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
     phone = payload.phone.strip()
 
+    # Per-OTP attempt cap: 6-digit OTP has 10^6 space, but with 5m TTL and 30/min
+    # IP limit an attacker with distributed IPs could still guess. Cap attempts.
+    otp_doc = await db.otps.find_one({"key": phone})
+    if not otp_doc:
+        raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new one.")
+    attempts = int(otp_doc.get("attempts", 0))
+    if attempts >= OTP_VERIFY_MAX_ATTEMPTS:
+        await db.otps.delete_one({"key": phone})
+        raise HTTPException(
+            status_code=429,
+            detail="Too many incorrect OTP attempts. Please request a new OTP.",
+        )
+
     if not await verify_and_clear_otp(phone, payload.otp):
+        await db.otps.update_one({"key": phone}, {"$inc": {"attempts": 1}})
         raise HTTPException(status_code=400, detail="Incorrect or expired OTP. Please request a new one.")
         
     user = await db.users.find_one({"phone": phone})
@@ -1885,8 +2006,12 @@ async def verify_otp(payload: VerifyOtpRequest, _=Depends(rate_limit)):
         user_id = user["id"]
         
     token = create_access_token({"user_id": user_id})
-    refresh_token = create_access_token({"user_id": user_id, "type": "refresh"})
-    
+    # 30-day refresh token — see /auth/google note.
+    refresh_token = create_access_token(
+        {"user_id": user_id, "type": "refresh"},
+        expires_in=timedelta(days=30),
+    )
+
     return {
         "token": token,
         "access_token": token,
@@ -2021,9 +2146,12 @@ async def admin_update_user_name(email: str, name: str, admin=Depends(verify_adm
 
 @api_router.get("/admin/users/find")
 async def admin_find_user(q: str, admin=Depends(verify_admin)):
-    """Admin endpoint: find users matching a string (for debugging)."""
+    """Admin endpoint: find users matching a string (for debugging).
+    Fix 15: escape user input before $regex."""
+    import re as _re_find
+    q_safe = _re_find.escape((q or "")[:64])
     users = await db.users.find(
-        {"$or": [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]},
+        {"$or": [{"email": {"$regex": q_safe, "$options": "i"}}, {"name": {"$regex": q_safe, "$options": "i"}}]},
         {"_id": 0, "email": 1, "name": 1, "google_email": 1, "created_at": 1}
     ).limit(5).to_list(5)
     return users
@@ -2035,7 +2163,7 @@ app.include_router(stores_router, prefix="/api")
 
 
 env_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
-if os.environ.get("ENV", "development") != "development":
+if IS_PRODUCTION:
     if not env_origins:
         raise RuntimeError("FATAL: ALLOWED_ORIGINS environment variable must be configured in production mode.")
     origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]

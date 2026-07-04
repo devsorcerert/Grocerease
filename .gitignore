@@ -96,3 +96,13 @@ google-services.json
 frontend/google-services.json
 GoogleService-Info.plist
 frontend/GoogleService-Info.plist
+
+# Fix 10: never commit subscriber-identifying data. The 77k GTPL STB
+# dataset that used to live in data/stb_numbers.txt was public → anyone
+# could hijack a real customer's cable subsidy before they linked. If
+# you need the data locally, keep it under data/ (ignored below) or
+# outside the repo entirely.
+data/
+!data/README.md
+*.stb.txt
+stb_numbers.txt

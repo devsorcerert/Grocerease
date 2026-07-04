@@ -19,15 +19,74 @@ def _get_display_tier(monthly_spend: float) -> str:
     if monthly_spend >= 7000:  return "Silver"
     return "Base"
 
+# Fix 14 — order state machine.
+# Whitelist of transitions allowed from each state. "system" is a special caller
+# permitted to make any transition (background jobs, rollback path).
+#
+# _FULFILLMENT_FORWARD is deliberately permissive: real ops (and the rider app)
+# routinely skip granular steps — a rider can jump straight from "paid" to
+# "delivered" without the order ever passing through "preparing"/"packed"/
+# "reached_store"/"picked_up"/"out_for_delivery" as separate admin actions.
+# The state machine's job is to block genuinely wrong transitions (paying
+# skipped, terminal states reopened, customer cancelling after pickup — the
+# last one is enforced separately by CUSTOMER_ALLOWED_TRANSITIONS below), not
+# to force every order through every intermediate milestone.
+_FULFILLMENT_FORWARD = {
+    "preparing", "packed", "reached_store", "picked_up",
+    "out_for_delivery", "delivered", "cancelled", "refund_pending",
+}
+
+ALLOWED_TRANSITIONS: dict = {
+    "created":         {"pending_payment", "cod_confirmed", "cancelled"},
+    "pending_payment": {"paid", "cancelled"},   # payment gate — cannot skip straight to fulfilment
+    "cod_confirmed":   _FULFILLMENT_FORWARD,
+    "confirmed":       _FULFILLMENT_FORWARD,   # legacy/alias status (kpis.py, tracking-endpoint default)
+    "paid":            _FULFILLMENT_FORWARD,
+    "preparing":       _FULFILLMENT_FORWARD,
+    "packed":          _FULFILLMENT_FORWARD,
+    "reached_store":   {"picked_up", "out_for_delivery", "delivered", "cancelled"},
+    "picked_up":       {"out_for_delivery", "delivered"},
+    "out_for_delivery":{"delivered"},
+    "delivered":       {"refund_pending"},   # goods returned → refund flow
+    "refund_pending":  {"refunded"},
+    "refunded":        set(),                # terminal
+    "cancelled":       set(),                # terminal
+}
+
+
+# Which transitions the CUSTOMER (as opposed to admin/system/rider) is allowed
+# to initiate. Everything else 403s. Rider status updates come through
+# rider endpoints — this list is only for /orders/{id}/cancel today.
+CUSTOMER_ALLOWED_TRANSITIONS: dict = {
+    "created":         {"cancelled"},
+    "pending_payment": {"cancelled"},
+    "cod_confirmed":   {"cancelled"},
+    "paid":            {"cancelled"},   # up to (but not after) picking
+    "preparing":       {"cancelled"},
+}
+
+
 # Unified state machine transition function
 async def transition_order_status(order_id: str, to_status: str, changed_by: str, reason: Optional[str] = None):
     order = await db.orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-        
+
     old_status = order.get("status", "created")
     if old_status == to_status:
         return
+
+    # Fix 14: validate the transition. "system" bypass covers background jobs
+    # (expiry, refund recon, month-end burn) and the compensating rollback in
+    # create_order_core. Admins and riders go through their own endpoints which
+    # call this helper with their user_id / rider_id.
+    if changed_by != "system":
+        allowed_next = ALLOWED_TRANSITIONS.get(old_status, set())
+        if to_status not in allowed_next:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status transition: {old_status} → {to_status}",
+            )
         
     # Updates to apply
     tracking_message = f"Order status updated from {old_status} to {to_status}."
@@ -150,10 +209,24 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     address = await db.addresses.find_one({"id": payload.address_id, "user_id": user_id})
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
-        
+
+    # 2a. Fix 11 — server-side Tirupati pincode geofence (fail-closed).
+    # The client already enforces this at checkout.tsx:PILOT_PINCODES, but a
+    # direct API call could ship an order to any pincode. The server must not
+    # trust the client. Deliberately kept as a literal set for the pilot so
+    # ops can widen it in one place when we expand beyond Tirupati.
+    PILOT_PINCODES = {"517501", "517502", "517503", "517504", "517505", "517506", "517507"}
+    addr_pincode = (address.get("pincode") or "").strip()
+    if addr_pincode not in PILOT_PINCODES:
+        raise HTTPException(
+            status_code=400,
+            detail="We currently deliver only within Tirupati (pincodes 517501–517507). "
+                   "Please add a delivery address in the service area.",
+        )
+
     subtotal = 0.0
     items_to_save = []
-    
+
     # 2b. Serviceability check (Task 20)
     # If the saved address carries lat/lng, verify a store can reach it.
     # Addresses without coordinates skip the check (fail-open for pilot).
@@ -191,17 +264,49 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
         
     delivery_fee = 0.0 if subtotal >= 299.0 else 30.0
     discount = 0.0
-    
-    # 4. Process coupon
+    coupon_applied = None  # set when a coupon is actually applied — used for usage tracking below
+
+    # 4. Process coupon (Fix 12 — usage limits enforced)
     if payload.coupon_code:
-        coupon = await db.coupons.find_one({"code": payload.coupon_code.upper(), "is_active": True})
-        if coupon and datetime.utcnow() <= coupon["valid_until"] and subtotal >= coupon.get("min_order_value", 0):
-            if coupon.get("discount_percentage", 0) > 0:
-                discount = (subtotal * coupon["discount_percentage"]) / 100.0
-                if coupon.get("max_discount") and discount > coupon["max_discount"]:
-                    discount = coupon["max_discount"]
-            elif coupon.get("discount_amount", 0) > 0:
-                discount = coupon["discount_amount"]
+        code = payload.coupon_code.upper()
+        coupon = await db.coupons.find_one({"code": code, "is_active": True})
+        if not coupon:
+            raise HTTPException(status_code=400, detail="Invalid or inactive coupon code")
+        if datetime.utcnow() > coupon["valid_until"]:
+            raise HTTPException(status_code=400, detail="Coupon has expired")
+        if subtotal < coupon.get("min_order_value", 0):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum order value for this coupon is ₹{coupon['min_order_value']}",
+            )
+
+        # Global usage cap: usage_limit is optional; if set, block once used_count
+        # reaches it. Cancelled orders should NOT consume the quota so we tick
+        # used_count only after the order is safely inserted (see below).
+        global_limit = coupon.get("usage_limit")
+        if global_limit is not None and int(coupon.get("used_count", 0)) >= int(global_limit):
+            raise HTTPException(status_code=400, detail="This coupon has reached its usage limit.")
+
+        # Per-user cap: default 1 (prevents "USE10 forever" abuse).
+        per_user_limit = int(coupon.get("per_user_limit", 1))
+        user_uses = await db.orders.count_documents({
+            "user_id": user_id,
+            "coupon_code": code,
+            "status": {"$nin": ["cancelled", "refunded"]},
+        })
+        if user_uses >= per_user_limit:
+            raise HTTPException(
+                status_code=400,
+                detail="You have already used this coupon.",
+            )
+
+        if coupon.get("discount_percentage", 0) > 0:
+            discount = (subtotal * coupon["discount_percentage"]) / 100.0
+            if coupon.get("max_discount") and discount > coupon["max_discount"]:
+                discount = coupon["max_discount"]
+        elif coupon.get("discount_amount", 0) > 0:
+            discount = coupon["discount_amount"]
+        coupon_applied = coupon
                 
     total = subtotal + delivery_fee - discount
     if total < 0:
@@ -260,10 +365,22 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
     user_updated = False
     loop_credited = False
 
+    coupon_incremented = False
     try:
         reserved_items = await try_reserve_stock(items_to_save)
         await db.orders.insert_one(order_dict)
         order_inserted = True
+
+        # Fix 12: bump coupon.used_count now that the order exists. Rolled back
+        # below on any failure. Cancel/refund does NOT decrement — the per-user
+        # count query filters out cancelled/refunded, and global usage_limit is
+        # a hard cap by intent.
+        if coupon_applied is not None:
+            await db.coupons.update_one(
+                {"code": coupon_applied["code"]},
+                {"$inc": {"used_count": 1}},
+            )
+            coupon_incremented = True
 
         # Debit GETV coins from wallet (tier/monthly-limit validated inside debit_loop_balance)
         if loop_credits_used > 0:
@@ -336,6 +453,11 @@ async def create_order_core(payload: CreateOrderRequest, user_id: str, is_pendin
             await transition_order_status(order_dict["id"], "cancelled", "system", "Rollback order")
         if order_inserted:
             await db.orders.delete_one({"id": order_dict["id"]})
+        if coupon_incremented and coupon_applied is not None:
+            await db.coupons.update_one(
+                {"code": coupon_applied["code"]},
+                {"$inc": {"used_count": -1}},
+            )
         if reserved_items:
             for item in reserved_items:
                 await db.products.update_one(
@@ -402,10 +524,24 @@ async def cancel_order(order_id: str, user_id: str = Depends(get_current_user)):
     order = await db.orders.find_one({"id": order_id, "user_id": user_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-        
-    if order.get("status") in ["delivered", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Cannot cancel this order in its current status")
-        
+
+    # Fix 14: use the customer transition whitelist. Prior code let a customer
+    # cancel an order that was already picked_up / out_for_delivery, restoring
+    # stock while the rider was en route with the goods.
+    current = order.get("status", "created")
+    allowed = CUSTOMER_ALLOWED_TRANSITIONS.get(current, set())
+    if "cancelled" not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This order can no longer be cancelled — it has already been "
+                "picked up by our delivery partner. Please contact support if "
+                "you need help."
+                if current in {"packed", "reached_store", "picked_up", "out_for_delivery"}
+                else f"Cannot cancel an order in status: {current}"
+            ),
+        )
+
     await transition_order_status(order_id, "cancelled", user_id, "Order cancelled by customer")
     return {"message": "Order cancelled successfully", "success": True}
 
@@ -623,8 +759,12 @@ async def admin_update_order_status(order_id: str, payload: dict, admin=Depends(
     new_status = payload.get("status")
     if not new_status:
         raise HTTPException(status_code=400, detail="Status is required")
-        
-    # Make sure transition_order_status is called
+
+    # Fix 14: reject arbitrary strings — must be a known status name.
+    if new_status not in ALLOWED_TRANSITIONS and new_status not in {"paid", "cancelled", "refunded"}:
+        raise HTTPException(status_code=400, detail=f"Unknown status: {new_status}")
+
+    # transition_order_status enforces the whitelist for non-'system' callers.
     await transition_order_status(order_id, new_status, admin.get("user_id", "admin"), "Status updated by admin")
     return {"message": "Order status updated successfully"}
 

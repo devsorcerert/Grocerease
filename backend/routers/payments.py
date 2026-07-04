@@ -5,7 +5,7 @@ import os
 import logging
 import uuid
 from typing import Optional
-from database import db, get_current_user, verify_admin, clean_mongo_doc
+from database import db, get_current_user, verify_admin, clean_mongo_doc, IS_PRODUCTION
 from models import CreatePaymentRequest, VerifyPaymentRequest, RefundRequest
 from routers.orders import transition_order_status
 
@@ -83,8 +83,18 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
     if not client:
         raise HTTPException(status_code=500, detail="Razorpay integration not configured")
         
-    # 2. Verify signature
-    is_dev = os.environ.get("ENV", "development") != "production"
+    # 2. Bind payment to *this* order — without this an attacker can pay ₹1 on
+    # order A and use A's signature triplet to mark a ₹5,000 order B "paid".
+    if order.get("razorpay_order_id") != payload.razorpay_order_id:
+        logging.warning(
+            "Razorpay order-id mismatch: local order %s has rzp_order_id=%s, request sent %s",
+            order["id"], order.get("razorpay_order_id"), payload.razorpay_order_id,
+        )
+        raise HTTPException(status_code=400, detail="Payment does not belong to this order")
+
+    # 3. Verify signature. Mock-order bypass is DEV ONLY; IS_PRODUCTION is the
+    # single source of truth (Fix 4) so a missing ENV var can't open this gate.
+    is_dev = not IS_PRODUCTION
     is_mock_order = payload.razorpay_order_id.startswith("rzp_mock_")
 
     if is_mock_order and is_dev:
@@ -100,8 +110,54 @@ async def verify_razorpay_payment(payload: VerifyPaymentRequest, user_id: str = 
         except Exception as e:
             logging.error(f"Razorpay signature verification failed: {e}")
             raise HTTPException(status_code=400, detail="Invalid payment signature")
-        
-    # 3. Handle successful capture actions: transition status, award rewards, clear cart
+
+        # 4. Fetch the payment entity from Razorpay and confirm amount + captured state.
+        # Signature verification alone proves the triplet is well-formed — it does NOT
+        # prove the money for *this* order arrived. We must call the API.
+        try:
+            payment = client.payment.fetch(payload.razorpay_payment_id)
+        except Exception as e:
+            logging.error(f"Razorpay payment fetch failed: {e}")
+            raise HTTPException(status_code=502, detail="Could not verify payment with Razorpay")
+
+        rzp_status = payment.get("status")
+        if rzp_status != "captured":
+            logging.warning("Razorpay payment %s not captured (status=%s) for order %s",
+                            payload.razorpay_payment_id, rzp_status, order["id"])
+            raise HTTPException(status_code=400, detail=f"Payment not captured (status={rzp_status})")
+
+        expected_paise = int(round(float(order["total"]) * 100))
+        rzp_amount = int(payment.get("amount", 0))
+        if rzp_amount != expected_paise:
+            logging.error("Payment amount mismatch: order %s expected %d paise, Razorpay reports %d",
+                          order["id"], expected_paise, rzp_amount)
+            raise HTTPException(status_code=400, detail="Payment amount mismatch")
+
+        # Confirm the payment entity's order_id matches (belt-and-braces vs. signature check)
+        rzp_order_id_from_payment = payment.get("order_id")
+        if rzp_order_id_from_payment and rzp_order_id_from_payment != payload.razorpay_order_id:
+            raise HTTPException(status_code=400, detail="Payment does not belong to this order")
+
+    # 5. Prevent payment-id reuse — same payment_id can't settle two orders
+    already_used = await db.orders.find_one({
+        "razorpay_payment_id": payload.razorpay_payment_id,
+        "id": {"$ne": order["id"]},
+    })
+    if already_used:
+        logging.error("Razorpay payment %s already consumed by order %s (attempted reuse on %s)",
+                      payload.razorpay_payment_id, already_used["id"], order["id"])
+        raise HTTPException(status_code=400, detail="Payment already consumed by another order")
+
+    # Bind the payment id onto the order so reuse is blocked and reconciliation has a handle
+    await db.orders.update_one(
+        {"id": order["id"]},
+        {"$set": {
+            "razorpay_payment_id": payload.razorpay_payment_id,
+            "razorpay_payment_verified_at": datetime.utcnow(),
+        }},
+    )
+
+    # 6. Handle successful capture actions: transition status, award rewards, clear cart
     await transition_order_status(order["id"], "paid", user_id, "Razorpay payment verified")
     
     # Update user rewards and monthly spend
@@ -133,12 +189,13 @@ async def razorpay_webhook(request: Request):
     if not signature:
         raise HTTPException(status_code=400, detail="Signature missing")
         
-    # Force webhook verification in production mode
-    is_prod = os.environ.get("ENV", "development").lower() == "production"
-    if is_prod and not RAZORPAY_WEBHOOK_SECRET:
-        logging.error("FATAL: Webhook secret missing in production mode.")
+    # Force webhook verification in production mode. In production, refusing to
+    # start is the right posture — but if RAZORPAY_WEBHOOK_SECRET was unset at
+    # deploy time this route would otherwise silently accept forged webhooks.
+    if IS_PRODUCTION and not RAZORPAY_WEBHOOK_SECRET:
+        logging.error("FATAL: RAZORPAY_WEBHOOK_SECRET missing in production — rejecting webhook.")
         raise HTTPException(status_code=500, detail="Webhook misconfigured")
-        
+
     if RAZORPAY_WEBHOOK_SECRET:
         client = get_razorpay_client()
         if not client:
@@ -199,35 +256,90 @@ async def initiate_refund(payload: RefundRequest, admin=Depends(verify_admin)):
         raise HTTPException(status_code=400, detail="Only paid orders can be refunded")
         
     client = get_razorpay_client()
-    refund_id = f"rf_mock_{uuid.uuid4().hex[:12]}"
-    
-    if client and order.get("razorpay_order_id") and not order.get("razorpay_order_id", "").startswith("mock"):
+    is_prod = IS_PRODUCTION
+    razorpay_order_id = order.get("razorpay_order_id", "")
+    is_mock_order = razorpay_order_id.startswith("rzp_mock_") or razorpay_order_id.startswith("mock")
+
+    refund_id = None
+    refund_status = None  # "processed" | "pending" | "failed"
+    error_detail = None
+
+    if is_mock_order:
+        # Only dev/test data reaches here; never write a fake refund in prod.
+        if is_prod:
+            raise HTTPException(
+                status_code=400,
+                detail="This order was placed with a mock Razorpay order id and cannot be refunded via the live gateway.",
+            )
+        refund_id = f"rf_mock_{uuid.uuid4().hex[:12]}"
+        refund_status = "processed"
+
+    elif client and razorpay_order_id:
         try:
-            # Query payments for the order to get the payment ID
-            payments = client.order.payments(order["razorpay_order_id"])
-            if payments and payments.get("items"):
-                payment_id = payments["items"][0]["id"]
-                refund_amount = int(payload.amount * 100) if payload.amount else int(order["total"] * 100)
-                refund_res = client.payment.refund(payment_id, {"amount": refund_amount, "notes": {"reason": payload.reason}})
-                refund_id = refund_res["id"]
+            payments = client.order.payments(razorpay_order_id)
+            if not payments or not payments.get("items"):
+                raise RuntimeError("Razorpay reports no payments for this order")
+            payment_id = payments["items"][0]["id"]
+            refund_amount = int(payload.amount * 100) if payload.amount else int(round(float(order["total"]) * 100))
+            refund_res = client.payment.refund(
+                payment_id,
+                {"amount": refund_amount, "notes": {"reason": payload.reason}},
+            )
+            refund_id = refund_res["id"]
+            refund_status = refund_res.get("status") or "pending"
         except Exception as e:
-            logging.error(f"Razorpay API refund failed: {e}. Falling back to mock refund.")
-            
-    # Record refund in database
+            logging.error(f"Razorpay API refund failed for order {order['id']}: {e}", exc_info=True)
+            error_detail = str(e)
+            # Keep the order in refund_pending so the reconciliation job (background_jobs.reconcile_refunds)
+            # can retry. Record the failure attempt but never claim success.
+            await db.refunds.insert_one({
+                "id": str(uuid.uuid4()),
+                "order_id": order["id"],
+                "refund_id": None,
+                "amount": payload.amount or order["total"],
+                "reason": payload.reason,
+                "status": "failed",
+                "error": error_detail,
+                "created_at": datetime.utcnow(),
+            })
+            await db.orders.update_one(
+                {"id": order["id"]},
+                {"$set": {"payment_status": "refund_pending", "refund_last_error": error_detail,
+                          "refund_last_attempt_at": datetime.utcnow()}},
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"Razorpay refund could not be processed. Order marked refund_pending for retry. Error: {error_detail}",
+            )
+    else:
+        # No Razorpay client available (e.g. keys unset in production — startup should have prevented this)
+        raise HTTPException(status_code=500, detail="Razorpay integration is not configured; cannot refund.")
+
+    # Record successful refund
     refund_doc = {
         "id": str(uuid.uuid4()),
         "order_id": order["id"],
         "refund_id": refund_id,
         "amount": payload.amount or order["total"],
         "reason": payload.reason,
-        "status": "processed",
-        "created_at": datetime.utcnow()
+        "status": refund_status,   # honest — reflects Razorpay's reported state
+        "created_at": datetime.utcnow(),
     }
     await db.refunds.insert_one(refund_doc)
-    
-    # Transition order state
-    await transition_order_status(order["id"], "refunded", admin.get("user_id", "admin"), f"Refunded: {payload.reason}")
-    return {"success": True, "refund_id": refund_id, "message": "Refund processed successfully"}
+
+    # If Razorpay says "pending" the money is not yet with the customer — leave order in
+    # refund_pending for the recon job to promote once Razorpay reports "processed".
+    if refund_status == "processed":
+        await transition_order_status(order["id"], "refunded", admin.get("user_id", "admin"), f"Refunded: {payload.reason}")
+        message = "Refund processed successfully"
+    else:
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {"payment_status": "refund_pending", "refund_id": refund_id}},
+        )
+        message = "Refund initiated. Money will reach the customer in 5-7 business days."
+
+    return {"success": True, "refund_id": refund_id, "status": refund_status, "message": message}
 
 @router.get("/admin/reconciliation")
 async def payments_reconciliation(admin=Depends(verify_admin)):
