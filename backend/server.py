@@ -60,7 +60,6 @@ from models import (
     SocialAuthRequest, RefundRequest, NearestAddressRequest,
     SupportMessage, SendEmailOtpRequest,
     AddressCreate, AddressUpdate, PaymentMethodCreate, NotificationPreferences,
-    CableTVLinkInit,
 )
 
 # Create the main app
@@ -113,9 +112,6 @@ async def startup_db_client():
         await db.otp_send_log.create_index("phone")
         await db.otp_send_log.create_index("created_at", expireAfterSeconds=3600)
 
-        # STB link-attempt log TTL (Fix 8): expire after 24h.
-        await db.stb_link_attempts.create_index("user_id")
-        await db.stb_link_attempts.create_index("created_at", expireAfterSeconds=86400)
         
         # Seed default admin if empty
         admin_count = await db.admins.count_documents({})
@@ -531,80 +527,11 @@ async def get_user_notifications_legacy(user_id: str = Depends(get_current_user)
     return {"notifications": clean_mongo_docs(notifications)}
 
 # Cable TV Routes
-# Fix 8 — STB linking OTP second factor.
-# Background: with the STB dataset previously exposed in the repo, the risk is a
-# spammer registering throwaway accounts and linking real subscribers' STBs before
-# the real customer does, farming 1,000 GETV coins/month. Ideal fix requires GTPL's
-# phone-to-STB mapping so we send OTP to the SUBSCRIBER's phone. That data is not
-# available; the pragmatic fix here is:
-#   1. Require OTP to the ATTACKER's own registered phone (raises the bar to real
-#      SIM cards from real numbers — SIM-farming a national list is expensive).
-#   2. Cap link attempts per user per day.
-#   3. Fresh OTP required per link attempt (no long-lived tokens).
-STB_LINK_MAX_ATTEMPTS_PER_DAY = 3
-STB_LINK_OTP_TTL_SECONDS = 300
-
-
-@api_router.post("/cable-tv/link-init")
-async def link_cable_tv_init(payload: CableTVLinkInit, user_id: str = Depends(get_current_user)):
-    """Fix 8: send an OTP to the caller's registered phone before allowing STB
-    linking. Response is intentionally uniform whether the STB exists or not so
-    an attacker cannot use this endpoint to enumerate the STB list."""
-    stb = payload.stb_number.strip().upper()
-    if not stb:
-        raise HTTPException(status_code=422, detail="STB number is required")
-
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    phone = (user.get("phone") or "").strip()
-    if not phone.startswith("+91") or len(phone) != 13:
-        raise HTTPException(
-            status_code=400,
-            detail="Please add and verify an Indian mobile number on your profile before linking a cable TV connection.",
-        )
-
-    # Per-user daily cap.
-    one_day_ago = datetime.utcnow() - timedelta(hours=24)
-    attempts = await db.stb_link_attempts.count_documents({"user_id": user_id, "created_at": {"$gt": one_day_ago}})
-    if attempts >= STB_LINK_MAX_ATTEMPTS_PER_DAY:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many STB linking attempts. Please try again after 24 hours.",
-        )
-
-    otp = str(random.randint(100000, 999999))
-    # Namespace the OTP key so it can't be confused with the login OTP.
-    otp_key = f"stb-link:{user_id}"
-    await set_otp(otp_key, otp, expires_in_seconds=STB_LINK_OTP_TTL_SECONDS)
-    await db.stb_link_attempts.insert_one({"user_id": user_id, "stb": stb, "created_at": datetime.utcnow()})
-
-    # Best-effort SMS. In dev the OTP is logged; in prod send_sms_fast2sms raises if
-    # SMS is unconfigured (Fix 6).
-    await send_sms_fast2sms(phone, otp)
-
-    return {
-        "success": True,
-        "message": "We've sent a 6-digit code to your registered phone. Enter it to complete cable TV linking.",
-    }
-
-
 @api_router.post("/cable-tv/link")
 async def link_cable_tv(data: CableTVSTBLink, user_id: str = Depends(get_current_user)):
-    """Link a GTPL cable TV connection via STB number validation.
-
-    Fix 8: requires prior /cable-tv/link-init and a valid OTP.
-    """
+    """Link a GTPL cable TV connection via STB number validation."""
     # Normalise: strip whitespace + uppercase so hex NUIDs match regardless of case
     stb = data.stb_number.strip().upper()
-
-    # OTP gate — must match what /cable-tv/link-init sent to the user's registered phone.
-    if not data.otp or not data.otp.strip():
-        raise HTTPException(status_code=400, detail="OTP is required. Request one via /cable-tv/link-init first.")
-    otp_key = f"stb-link:{user_id}"
-    if not await verify_and_clear_otp(otp_key, data.otp.strip()):
-        raise HTTPException(status_code=400, detail="Incorrect or expired verification code. Please request a new one.")
-
     stb_doc = await db.stb_numbers.find_one({"stb_number": stb, "network": "gtpl"})
     if not stb_doc:
         raise HTTPException(
