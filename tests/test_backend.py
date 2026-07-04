@@ -10,6 +10,10 @@ os.environ["ADMIN_EMAIL"] = "grocereasetv@gmail.com"
 os.environ["ADMIN_PASSWORD"] = "admin123"
 os.environ["RAZORPAY_KEY_ID"] = "rzp_test_dummykey"
 os.environ["RAZORPAY_KEY_SECRET"] = "dummypaymentsecret"
+# MSO_SHARED_SECRET is set in tests/conftest.py (setdefault, before `from
+# server import app`) — it must land there, not here, because conftest.py's
+# module-level import runs before this file's, and loop_ledger.py reads the
+# env var once at import time.
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
@@ -270,6 +274,9 @@ def test_checkout_and_stock_reservation(client_fixture):
     user_id = asyncio.run(get_user_id())
     
     # Create test address
+    # pincode is required by the Fix 11 server-side Tirupati geofence
+    # (backend/routers/orders.py: create_order_core rejects orders whose
+    # address.pincode is not one of the pilot's 517501-517507 set).
     async def create_address():
         await db.addresses.delete_many({})
         await db.addresses.insert_one({
@@ -277,7 +284,8 @@ def test_checkout_and_stock_reservation(client_fixture):
             "user_id": user_id,
             "label": "Home",
             "full_address": "Tirupati Temple Road",
-            "landmark": "Near Gopuram"
+            "landmark": "Near Gopuram",
+            "pincode": "517501",
         })
     asyncio.run(create_address())
     
@@ -412,16 +420,40 @@ def test_razorpay_payment_verification(mock_get_client, client_fixture):
     order = resp.json()
     assert order["status"] == "pending_payment"
     assert order["payment_status"] == "pending"
-    
+
+    # Fix 1: /payments/razorpay/verify now binds to order.razorpay_order_id and
+    # fetches the payment entity from Razorpay to confirm status=captured and
+    # amount matches the order total (previously signature verification alone
+    # was trusted, which let a paid-elsewhere signature settle any order).
+    # Seed razorpay_order_id the way /payments/razorpay/create normally would,
+    # and mock payment.fetch to return a matching captured payment.
+    razorpay_order_id = "rzp_order_abc123"
+    razorpay_payment_id = "rzp_payment_xyz789"
+
+    async def seed_razorpay_order_id():
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {"razorpay_order_id": razorpay_order_id}},
+        )
+    asyncio.run(seed_razorpay_order_id())
+
+    expected_amount_paise = int(round(order["total"] * 100))
+    mock_client.payment.fetch.return_value = {
+        "id": razorpay_payment_id,
+        "order_id": razorpay_order_id,
+        "status": "captured",
+        "amount": expected_amount_paise,
+    }
+
     # Verify payment signatures
     verify_data = {
         "order_id": order["id"],
-        "razorpay_order_id": "rzp_order_abc123",
-        "razorpay_payment_id": "rzp_payment_xyz789",
+        "razorpay_order_id": razorpay_order_id,
+        "razorpay_payment_id": razorpay_payment_id,
         "razorpay_signature": "mock_sig_123"
     }
     resp = client_fixture.post("/api/payments/razorpay/verify", json=verify_data, headers=headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.text
     assert resp.json()["success"] is True
     
     # Verify order transitions to paid
@@ -776,11 +808,15 @@ def test_checkout_blocked_outside_serviceability(client_fixture):
     client_fixture.post("/api/cart/add", headers=headers,
                         json={"product_id": "prod-apple", "quantity": 1})
 
-    # Save an address outside Tirupati (Chennai coords)
+    # Save an address outside Tirupati (Chennai coords + Chennai pincode).
+    # Fix 11 added a server-side pincode geofence (517501-517507 only) that now
+    # rejects this before the store-radius check even runs — both are valid
+    # "outside serviceability" rejections, so we accept either message below.
     addr_resp = client_fixture.post("/api/user/addresses", headers=headers, json={
         "full_address": "Chennai, Tamil Nadu",
         "lat": 13.0827,
         "lng": 80.2707,
+        "pincode": "600001",
         "is_default": True,
         "label": "Home"
     })
@@ -793,7 +829,8 @@ def test_checkout_blocked_outside_serviceability(client_fixture):
         "payment_method": "COD"
     })
     assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
-    assert "don't deliver" in resp.json()["detail"].lower()
+    detail = resp.json()["detail"].lower()
+    assert "don't deliver" in detail or "tirupati" in detail
 
 
 def test_checkout_succeeds_inside_serviceability(client_fixture):
@@ -814,11 +851,12 @@ def test_checkout_succeeds_inside_serviceability(client_fixture):
     client_fixture.post("/api/cart/add", headers=headers,
                         json={"product_id": "prod-milk", "quantity": 1})
 
-    # Save an address inside Tirupati
+    # Save an address inside Tirupati (pincode required by Fix 11 geofence)
     addr_resp = client_fixture.post("/api/user/addresses", headers=headers, json={
         "full_address": "Tirupati, Andhra Pradesh",
         "lat": 13.6300,
         "lng": 79.4200,
+        "pincode": "517501",
         "is_default": True,
         "label": "Home"
     })
@@ -906,7 +944,7 @@ async def test_loop_redemption_at_checkout(client, auth_headers, user_id):
     # Seed a product and address
     r = client.post("/api/user/addresses", json={
         "full_address": "12 Test St, Tirupati",
-        "lat": 13.63, "lng": 79.42, "is_default": True
+        "lat": 13.63, "lng": 79.42, "pincode": "517501", "is_default": True
     }, headers=auth_headers)
     addr_id = r.json()["id"]
 
@@ -952,7 +990,7 @@ async def test_loop_redemption_blocked_below_spend_threshold(client, auth_header
 
     r = client.post("/api/user/addresses", json={
         "full_address": "13 Test St, Tirupati",
-        "lat": 13.63, "lng": 79.42, "is_default": True
+        "lat": 13.63, "lng": 79.42, "pincode": "517501", "is_default": True
     }, headers=auth_headers)
     addr_id = r.json()["id"]
     prod = client.get("/api/products").json()["products"][0]
@@ -991,7 +1029,7 @@ async def test_loop_redemption_capped_at_tier_max(client, auth_headers, user_id)
 
     r = client.post("/api/user/addresses", json={
         "full_address": "14 Test St, Tirupati",
-        "lat": 13.63, "lng": 79.42, "is_default": True
+        "lat": 13.63, "lng": 79.42, "pincode": "517501", "is_default": True
     }, headers=auth_headers)
     addr_id = r.json()["id"]
     prod = client.get("/api/products").json()["products"][0]

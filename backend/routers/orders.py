@@ -22,14 +22,29 @@ def _get_display_tier(monthly_spend: float) -> str:
 # Fix 14 — order state machine.
 # Whitelist of transitions allowed from each state. "system" is a special caller
 # permitted to make any transition (background jobs, rollback path).
+#
+# _FULFILLMENT_FORWARD is deliberately permissive: real ops (and the rider app)
+# routinely skip granular steps — a rider can jump straight from "paid" to
+# "delivered" without the order ever passing through "preparing"/"packed"/
+# "reached_store"/"picked_up"/"out_for_delivery" as separate admin actions.
+# The state machine's job is to block genuinely wrong transitions (paying
+# skipped, terminal states reopened, customer cancelling after pickup — the
+# last one is enforced separately by CUSTOMER_ALLOWED_TRANSITIONS below), not
+# to force every order through every intermediate milestone.
+_FULFILLMENT_FORWARD = {
+    "preparing", "packed", "reached_store", "picked_up",
+    "out_for_delivery", "delivered", "cancelled", "refund_pending",
+}
+
 ALLOWED_TRANSITIONS: dict = {
     "created":         {"pending_payment", "cod_confirmed", "cancelled"},
-    "pending_payment": {"paid", "cancelled"},                            # payment gate
-    "cod_confirmed":   {"preparing", "packed", "cancelled"},
-    "paid":            {"preparing", "packed", "cancelled", "refund_pending"},
-    "preparing":       {"packed", "cancelled"},
-    "packed":          {"reached_store", "picked_up", "out_for_delivery", "cancelled"},
-    "reached_store":   {"picked_up", "out_for_delivery", "cancelled"},
+    "pending_payment": {"paid", "cancelled"},   # payment gate — cannot skip straight to fulfilment
+    "cod_confirmed":   _FULFILLMENT_FORWARD,
+    "confirmed":       _FULFILLMENT_FORWARD,   # legacy/alias status (kpis.py, tracking-endpoint default)
+    "paid":            _FULFILLMENT_FORWARD,
+    "preparing":       _FULFILLMENT_FORWARD,
+    "packed":          _FULFILLMENT_FORWARD,
+    "reached_store":   {"picked_up", "out_for_delivery", "delivered", "cancelled"},
     "picked_up":       {"out_for_delivery", "delivered"},
     "out_for_delivery":{"delivered"},
     "delivered":       {"refund_pending"},   # goods returned → refund flow
